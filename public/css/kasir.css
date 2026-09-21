@@ -1,0 +1,976 @@
+:root{
+    --ink:#141414; --ink2:#57503E; --mist:#F6F5F0; --card:#FFFFFF;
+    --water:#E5A800; --water-dk:#8F6B00; --aqua:#FFD34D;
+    --tag:#FFC229; --tag-ink:#4A3400; --go:#1B9E62; --go-dk:#157A4C;
+    --line:#E5E0D2; --danger:#C0442B;
+    --dr-w:280px; /* lebar sidebar — dipakai drawer & jarak geser isi layar */
+  }
+  @media (max-width:400px){ :root{ --dr-w:78vw } }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0}
+  html{overflow-x:hidden} /* isi layar yang tergeser tidak bikin scroll ke samping */
+  body{min-height:100vh;background:var(--mist);color:var(--ink);
+    font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif;overflow-x:hidden}
+  .app{width:100%;min-height:100vh;display:flex;flex-direction:column;
+    transition:transform .22s}
+  .app.geser{transform:translateX(var(--dr-w))} /* menu dibuka: isi terdorong ke kanan */
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;
+    transition:transform .06s}
+  button:focus-visible{outline:3px solid var(--water);outline-offset:2px}
+  /* Umpan balik tekan untuk SEMUA tombol. Tombol bergaya "timbul" (punya
+     box-shadow) menimpa ini dengan animasi turun — lihat .btn-besar dkk. */
+  button:active{transform:scale(.96)}
+  button:disabled{opacity:.6}
+  button:disabled:active{transform:none}
+  @media (prefers-reduced-motion:reduce){
+    button, .trx-panah, .app, .drawer, .overlay{transition:none}
+  }
+
+  /* Nama halaman yang sedang dibuka, di bawah header */
+  .judul-halaman{width:100%;max-width:860px;margin:0 auto;padding:12px 20px 0;
+    font-size:17px;font-weight:900;letter-spacing:.3px;
+    display:flex;align-items:center;gap:8px}
+
+  .top{background:var(--ink);color:#fff;border-bottom:4px solid var(--tag);width:100%}
+  .top-isi{width:100%;padding:14px 20px;display:flex;
+    align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:22px;letter-spacing:1px}
+  .brand .kuning{color:var(--tag)}
+  .brand .logo{font-size:24px;line-height:1}
+
+  /* padding-bottom lega: isi paling bawah tidak tertutup tombol Tanya AI */
+  .body{flex:1;padding:20px 20px 96px;display:flex;flex-direction:column;gap:18px;max-width:860px;width:100%;margin:0 auto}
+  .hidden{display:none !important}
+
+  .cari{position:relative}
+  .cari input{width:100%;font-size:22px;font-weight:700;padding:18px 18px 18px 54px;
+    border:2.5px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink)}
+  .cari input::placeholder{color:#A8A190;font-weight:600}
+  .cari input:focus{outline:none;border-color:var(--water);box-shadow:0 0 0 4px rgba(229,168,0,.15)}
+  .cari .lup{position:absolute;left:18px;top:50%;transform:translateY(-50%);font-size:22px}
+  .hint{font-size:14px;color:var(--ink2);margin-top:6px}
+
+  .hasil{display:flex;flex-direction:column;gap:10px}
+  .kartu-mobil{display:flex;align-items:center;gap:16px;background:var(--card);
+    border:2px solid var(--line);border-radius:16px;padding:12px 16px;text-align:left;
+    transition:transform .06s;width:100%}
+  .kartu-mobil:active{transform:scale(.985)}
+  .kartu-mobil:hover{border-color:var(--water)}
+  .km-info{flex:1}
+  .km-nama{font-size:20px;font-weight:900}
+  .km-kat{font-size:13.5px;color:var(--ink2);font-weight:700;margin-top:2px}
+  .tag{background:var(--tag);color:var(--tag-ink);font-weight:900;font-size:18px;
+    padding:8px 12px;border-radius:10px;white-space:nowrap;
+    box-shadow:2px 2px 0 rgba(74,52,0,.25);display:inline-block}
+
+  .gagal{background:var(--card);border:2px dashed var(--line);border-radius:16px;
+    padding:16px;text-align:center;color:var(--ink2);font-weight:700;font-size:16px}
+
+  .sec-label{font-size:13px;font-weight:900;letter-spacing:2px;color:var(--ink2);
+    text-transform:uppercase;margin-bottom:10px}
+
+  .grid-ukuran{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .btn-ukuran{background:var(--card);border:2.5px solid var(--line);border-radius:18px;
+    padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:6px;
+    transition:transform .06s}
+  .btn-ukuran:active{transform:scale(.97)}
+  .btn-ukuran:hover{border-color:var(--water)}
+  .btn-ukuran.motor{border-color:var(--tag)}
+  .bu-label{font-size:21px;font-weight:900}
+  .bu-sub{font-size:12.5px;color:var(--ink2);font-weight:700}
+  .bu-contoh{font-size:12px;color:var(--water-dk);font-weight:700;text-align:center;line-height:1.35}
+  .bu-harga{margin-top:4px}
+
+  .kembali{align-self:flex-start;color:var(--water-dk);font-weight:900;
+    font-size:16px;padding:6px 4px;display:flex;align-items:center;gap:6px}
+
+  .konfirm-kartu{background:var(--card);border:2.5px solid var(--line);border-radius:20px;
+    padding:20px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+  .kk-nama{font-size:24px;font-weight:900}
+  .kk-kat{font-size:14px;font-weight:800;color:var(--water-dk);background:rgba(229,168,0,.1);
+    padding:4px 14px;border-radius:99px}
+
+  .layanan-list{display:flex;flex-direction:column;gap:10px}
+  .btn-layanan{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--card);border:2.5px solid var(--line);border-radius:14px;
+    padding:13px 16px;text-align:left;width:100%}
+  .btn-layanan.aktif{border-color:var(--water);background:rgba(229,168,0,.07)}
+  .bl-nama{font-size:17px;font-weight:900}
+  .bl-ket{font-size:13px;color:var(--ink2);font-weight:600;margin-top:2px}
+  .bl-tambah{font-weight:900;color:var(--water-dk);white-space:nowrap;font-size:14px}
+  .radio{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);flex:none}
+  .aktif .radio{border-color:var(--water);background:radial-gradient(circle,var(--water) 45%,transparent 50%)}
+
+  .bayar-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn-bayar{background:var(--card);border:2.5px solid var(--line);border-radius:14px;
+    padding:16px;font-size:20px;font-weight:900;text-align:center}
+  .btn-bayar.aktif{border-color:var(--go);background:rgba(27,158,98,.08);color:var(--go-dk)}
+  .btn-bayar.tf.aktif{border-color:var(--water);background:rgba(229,168,0,.08);color:var(--water-dk)}
+
+  .baris-input{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .field label{display:block;font-size:12.5px;font-weight:900;letter-spacing:1px;
+    color:var(--ink2);text-transform:uppercase;margin-bottom:6px}
+  .field input{width:100%;font-size:18px;font-weight:800;padding:13px 14px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);
+    text-transform:uppercase}
+  .field input:focus{outline:none;border-color:var(--water)}
+  .field input::placeholder{color:#A8A190;font-weight:600;text-transform:none}
+
+  .total-bar{display:flex;align-items:center;justify-content:space-between;
+    background:var(--ink);border-radius:16px;padding:16px 20px;color:#fff}
+  .tb-label{font-size:14px;font-weight:800;letter-spacing:1.5px;color:var(--aqua)}
+  .tb-nilai{font-size:30px;font-weight:900;color:var(--tag)}
+
+  .btn-besar{width:100%;padding:20px;border-radius:16px;font-size:22px;font-weight:900;
+    color:#fff;background:var(--go);box-shadow:0 4px 0 var(--go-dk);transition:transform .06s}
+  .btn-besar:active{transform:translateY(2px);box-shadow:0 2px 0 var(--go-dk)}
+  .btn-besar.biru{background:var(--water);box-shadow:0 4px 0 var(--water-dk)}
+
+  .done{display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:24px;text-align:center}
+  .done .cek{width:76px;height:76px;border-radius:50%;background:var(--go);color:#fff;
+    font-size:40px;display:flex;align-items:center;justify-content:center;font-weight:900}
+  .ringkas{font-size:16px;font-weight:700;color:var(--ink2);line-height:1.6}
+
+  .foot{padding:10px 20px 18px;text-align:center}
+  .foot button{color:#8C8574;font-weight:700;font-size:13.5px;text-decoration:underline}
+
+  .catatan{display:flex;flex-direction:column;gap:16px}
+  .cat-blok{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:16px}
+  .cat-blok h3{margin:0 0 10px;font-size:16px}
+  /* Bagian di DALAM sebuah kartu — dipakai Rekap Hari Ini yang memuat
+     laporan cuci, F&B, dan pengeluaran dalam satu kartu. Garis titik-titik
+     memisahkannya tanpa memecah kartunya. */
+  .sub-blok{margin-top:16px;padding-top:14px;border-top:2px dotted var(--line)}
+  .sub-blok h4{margin:0 0 10px;font-size:16px;font-weight:900}
+  .cat-baris{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+    border-bottom:1px solid var(--line);font-size:14.5px;font-weight:600;align-items:baseline}
+  .cat-baris:last-child{border-bottom:none}
+  .cat-baris.tebal{font-weight:900;font-size:15.5px;border-top:2px solid var(--ink);padding-top:10px}
+  .cat-kosong{color:var(--ink2);font-size:14px;font-weight:600}
+  .merah{color:var(--danger);font-weight:800}
+  .hijau{color:var(--go-dk);font-weight:800}
+  .biru-t{color:var(--water-dk);font-weight:800}
+  .waktu{color:var(--ink2);font-size:13px;font-weight:600;white-space:nowrap}
+  .chip-tf{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;
+    background:rgba(229,168,0,.12);color:var(--water-dk)}
+  .chip-cash{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;
+    background:rgba(27,158,98,.12);color:var(--go-dk)}
+  /* dipakai hanya untuk transaksi lama dari fitur cuci gratis yang sudah dihapus */
+  .chip-bonus{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;
+    background:#FFF0C2;color:var(--tag-ink)}
+
+  /* minmax(0,1fr), bukan 1fr: item grid bawaannya min-width:auto sehingga
+     MENOLAK menyusut di bawah lebar isinya — kartunya membeludak keluar
+     wadah (terukur: grid 164px, isi kartu 288px) dan angka rupiah terpotong
+     di layar sempit. minmax(0,...) juga membuat kedua kolom benar-benar sama
+     lebar; sebelumnya kolom kanan melar mengikuti label terpanjang. */
+  .stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .stat{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:14px;
+    min-width:0;container-type:inline-size}
+  .s-label{font-size:11.5px;font-weight:900;letter-spacing:1px;color:var(--ink2);text-transform:uppercase}
+  /* nowrap supaya "Rp" tidak pernah terpisah dari angkanya ("Rp" di baris
+     sendiri, "4.528.500" di bawahnya).
+     Ukuran huruf mengikuti lebar KARTU (cqw), bukan lebar layar (vw): kartu
+     Laba membentang dua kolom sementara kartu lain sempit, jadi patokan layar
+     salah sasaran — angka 8 digit tetap terpotong di kartu yang sempit
+     meski layarnya lega. Baris px di atasnya jadi cadangan untuk browser
+     lama yang belum mengerti container query. */
+  .s-nilai{font-size:18px;font-size:clamp(16px,11cqw,20px);
+    font-weight:900;margin-top:4px;white-space:nowrap}
+  /* Di lebar HP, dua kolom memaksa angka rupiah masuk kartu ~117px — cukup
+     untuk 7 digit hari ini, tapi omzet bulanan 8 digit sudah terpotong. Satu
+     kolom penuh membuat angka tetap 20px dan tidak pernah terpotong; ongkosnya
+     hanya perlu gulir sedikit lebih panjang. Tablet (>=481px, perangkat utama
+     kasir) tetap dua kolom. */
+  @media (max-width:480px){ .stat-grid{grid-template-columns:1fr} }
+  .stat.masuk .s-nilai{color:var(--water-dk)}
+  .stat.laba{grid-column:1/-1;border-color:var(--go);background:rgba(27,158,98,.06)}
+  .stat.laba .s-nilai{color:var(--go)}
+
+  .form-keluar{display:flex;gap:8px;flex-wrap:wrap}
+  .form-keluar input{flex:1;min-width:110px;font-size:16px;font-weight:700;padding:12px 14px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+  .form-keluar input:focus{outline:none;border-color:var(--water)}
+  .btn-catat{background:var(--danger);color:#fff;font-weight:900;font-size:16px;
+    padding:12px 18px;border-radius:12px}
+  .btn-export{width:100%;padding:16px;border-radius:14px;font-size:18px;font-weight:900;
+    color:#fff;background:var(--water);box-shadow:0 4px 0 var(--water-dk)}
+  .btn-export:active{transform:translateY(2px);box-shadow:0 2px 0 var(--water-dk)}
+
+  /* --- side menu --- */
+  .burger{font-size:24px;padding:4px 10px;border-radius:10px;color:#fff}
+  .burger:active{background:rgba(255,255,255,.12)}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;
+    opacity:0;pointer-events:none;transition:opacity .2s}
+  .overlay.buka{opacity:1;pointer-events:auto}
+  /* Sidebar model GESER: menu muncul dari kiri sambil mendorong isi layar
+     ke kanan (bukan menimpa). Lebarnya satu sumber: --dr-w. */
+  .drawer{position:fixed;top:0;left:0;bottom:0;width:var(--dr-w);
+    background:var(--ink);color:#fff;z-index:50;display:flex;flex-direction:column;
+    transform:translateX(-100%);transition:transform .22s}
+  .drawer.buka{transform:translateX(0)}
+  .dr-head{padding:20px;border-bottom:2px solid rgba(255,211,77,.2);
+    font-weight:900;font-size:20px;letter-spacing:1px;display:flex;
+    justify-content:space-between;align-items:center}
+  .dr-head .kuning{color:var(--tag)}
+  .dr-tutup{color:var(--aqua);font-size:22px;font-weight:900;padding:2px 8px}
+  .dr-list{flex:1;padding:12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+  .dr-item{display:flex;align-items:center;gap:14px;padding:15px 14px;border-radius:12px;
+    font-size:16.5px;font-weight:800;text-align:left;color:#EFEAD8;width:100%}
+  .dr-item:active{background:rgba(255,211,77,.12)}
+  .dr-item.aktif{background:rgba(255,211,77,.15);color:var(--aqua)}
+  .dr-item .ikon{font-size:20px;width:26px;text-align:center}
+  /* Angka merah di menu Pengaturan: ada kendaraan yang harganya ditetapkan
+     tebakan AI dan belum dibenarkan owner. */
+  .dr-tanda{margin-left:auto;background:var(--danger);color:#fff;font-size:12px;font-weight:900;
+    border-radius:99px;padding:2px 9px;min-width:20px;text-align:center}
+  .dr-sep{height:1px;background:rgba(255,211,77,.18);margin:8px 6px}
+  .dr-item.export{color:var(--tag)}
+  .dr-foot{padding:14px 20px;font-size:12px;color:#8C8574;font-weight:600;
+    border-top:2px solid rgba(255,211,77,.2)}
+
+  /* --- resi / struk --- */
+  #resi{display:none}
+  @media print{
+    @page{margin:12mm}
+    body *{visibility:hidden}
+    #resi, #resi *{visibility:visible}
+    #resi{display:block;position:absolute;left:0;top:0;width:100%;
+      font-family:'Courier New',monospace;font-size:17px;color:#000;
+      padding:6mm 4mm;box-sizing:border-box}
+    .r-tengah{text-align:center}
+    .r-judul{font-size:30px;font-weight:900;letter-spacing:2px}
+    .r-garis{border-top:2px dashed #000;margin:12px 0}
+    .r-baris{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+    .r-besar{font-size:24px;font-weight:900}
+    /* Tanda cetak ulang — harus paling mencolok sesudah nama usaha, supaya
+       salinan tidak bisa diserahkan seolah resi transaksi baru. */
+    .r-salinan{font-size:20px;font-weight:900;letter-spacing:3px;margin-top:8px}
+  }
+
+  .btn-resi{width:100%;padding:16px;border-radius:14px;font-size:19px;font-weight:900;
+    color:var(--ink);background:var(--card);border:2.5px solid var(--ink);
+    box-shadow:0 4px 0 var(--ink2)}
+  .btn-resi:active{transform:translateY(2px);box-shadow:0 2px 0 var(--ink2)}
+
+  /* --- pekerja --- */
+  .pk-pilih{display:flex;flex-wrap:wrap;gap:10px}
+  .btn-pk{background:var(--card);border:2.5px solid var(--line);border-radius:99px;
+    padding:12px 20px;font-size:17px;font-weight:900}
+  .btn-pk.aktif{border-color:var(--go);background:rgba(27,158,98,.1);color:var(--go-dk)}
+  /* Baris dua tingkat untuk daftar menu F&B & add-on: isinya terlalu banyak
+     untuk satu baris di tablet. Menggantikan scroll horizontal yang dulu
+     membuat kolom paling kanan terpotong. */
+  .item-baris{padding:12px 0;border-bottom:1.5px solid var(--line)}
+  .item-baris:last-child{border-bottom:none}
+  .item-atas{display:flex;align-items:flex-start;gap:8px}
+  .item-nama{flex:1;min-width:0;font-size:16px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}
+  .item-tag{display:inline-block;font-size:11px;font-weight:800;color:var(--ink2);
+    background:var(--mist);border:1.5px solid var(--line);border-radius:99px;
+    padding:2px 9px;white-space:nowrap;vertical-align:2px}
+  .item-aksi{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+  /* nowrap + kotak angka yang boleh menyusut: tombol status dijamin tetap
+     sebaris, dan kolom angkalah yang mengalah saat layar sempit. */
+  .item-bawah{display:flex;align-items:flex-end;gap:8px;flex-wrap:nowrap;margin-top:10px}
+  .item-bawah .mini-field{flex:1 1 0;min-width:0}
+  .item-bawah .mini-field input{width:100%;font-size:15px;font-weight:800;padding:9px 10px;
+    border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  .item-bawah .mini-field input:focus{outline:none;border-color:var(--water)}
+  /* Stok habis: angkanya merah supaya kelihatan tanpa harus dibaca satu-satu */
+  .mini-field.habis input{border-color:var(--danger);color:var(--danger)}
+  /* Stok bukan kotak isian melainkan tombol pembuka modal (lihat miniStok):
+     tampilannya sengaja dibuat sama persis dengan kotak harga di sebelahnya,
+     supaya barisnya tetap rapi walau yang satu input dan satunya tombol. */
+  .item-bawah .mini-stok{align-items:stretch;text-align:left;padding:0;
+    border:none;background:none;font:inherit;color:inherit;cursor:pointer}
+  .item-bawah .mini-stok .mini-nilai{display:block;width:100%;box-sizing:border-box;
+    font-size:15px;font-weight:800;padding:9px 10px;border:2px solid var(--line);
+    border-radius:10px;background:var(--card);color:var(--ink)}
+  .item-bawah .mini-stok:hover .mini-nilai,
+  .item-bawah .mini-stok:focus-visible .mini-nilai{border-color:var(--water);outline:none}
+  .item-bawah .mini-stok.habis .mini-nilai{border-color:var(--danger);color:var(--danger)}
+  .item-bawah .btn-hadir{flex:0 0 auto;padding:9px 14px;white-space:nowrap}
+
+  /* min-width:0 (bukan fit-content): fit-content memaksa baris selebar isinya,
+     sehingga baris panjang menembus tepi kartu alih-alih menyesuaikan diri. */
+  .pk-baris{display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:10px 0;border-bottom:1px solid var(--line);min-width:0;flex-wrap:nowrap;line-height:1.25;min-height:44px}
+  .pk-baris:last-child{border-bottom:none}
+  /* Baris deposit pekerja. Sengaja BUKAN .pk-baris: baris itu nowrap dan
+     dirancang untuk nama pendek, sedangkan satu setoran membawa tanggal +
+     catatan + nama penginput sekaligus — di lebar tablet isinya meluber dan
+     tombol hapusnya ikut terpotong. Di sini nama+jumlah di atas, keterangan
+     membungkus di bawahnya. */
+  .dp-baris{display:flex;align-items:flex-start;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .dp-baris:last-child{border-bottom:none}
+  .dp-isi{flex:1 1 auto;min-width:0}
+  .dp-atas{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    font-size:15px;font-weight:800}
+  .dp-meta{display:block;margin-top:3px;font-size:11.5px;font-weight:600;
+    color:var(--ink2);line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+  .dp-baris .btn-hapus-pk{flex:0 0 auto;margin-top:2px}
+  .pk-baris > *{display:flex;align-items:center;justify-content:center;line-height:1.25}
+  /* flex:1 supaya tombol terdorong rata kanan di SEMUA baris — kalau mengikuti
+     panjang teks, kolom tombolnya bergeser-geser tiap baris dan sulit dituju.
+     gap dipakai untuk memisah nama dari keterangan: .pk-nama ini flex
+     container, jadi spasi biasa di antara keduanya ditelan (itu sebabnya
+     tertulis "Cuci Reguler28 transaksi").
+     flex-wrap:wrap supaya nama panjang turun baris, bukan terpotong. */
+  .pk-nama{flex:1 1 auto;min-width:0;gap:6px;flex-wrap:wrap;
+    font-size:16px;font-weight:800;justify-content:flex-start}
+  .btn-edit-pk{flex:0 0 auto;font-size:18px;padding:4px 8px}
+  .pk-baris input{flex:0 0 auto;font-size:14px;font-weight:800;padding:8px 6px;border:2px solid var(--line);border-radius:10px;line-height:1;height:auto}
+  .btn-hadir{flex:0 0 auto;font-size:13px;font-weight:800;padding:8px 12px;border:2px solid var(--line);border-radius:10px;background:var(--card)}
+  .btn-hapus-pk{flex:0 0 auto;color:var(--danger);font-weight:900;font-size:16px;padding:4px 8px}
+  .btn-hadir{border:2.5px solid var(--line);border-radius:99px;padding:8px 16px;
+    font-size:14px;font-weight:900;color:var(--ink2)}
+  .btn-hadir.aktif{border-color:var(--go);background:rgba(27,158,98,.1);color:var(--go-dk)}
+  .btn-hapus-pk{color:var(--danger);font-weight:900;font-size:18px;padding:4px 8px}
+  .btn-edit-pk{color:var(--water-dk);font-weight:900;font-size:17px;padding:4px 8px}
+  /* Nominal + tombol koreksi/hapus sebuah pengeluaran, dijadikan satu kolom
+     kanan. Kalau ketiganya jadi anak langsung .cat-baris, justify-content:
+     space-between menyebar mereka rata dan angka rupiahnya melayang di tengah
+     baris, jauh dari tombol yang mengubahnya. */
+  .keluar-aksi{flex:0 0 auto;display:flex;align-items:center;gap:2px;white-space:nowrap}
+  .tarif-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  /* --- pembukuan harian --- */
+  .hari-baris{width:100%;text-align:left;background:var(--card);border:2px solid var(--line);
+    border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;
+    align-items:center;gap:10px}
+  .hari-baris.ini{border-color:var(--tag);background:#FFFBEE}
+  .hb-tgl{font-size:16px;font-weight:900}
+  .hb-sub{font-size:13px;color:var(--ink2);font-weight:700;margin-top:2px}
+  .hb-laba{font-size:17px;font-weight:900;color:var(--go-dk);white-space:nowrap}
+  .hari-detail{background:var(--card);border:2px solid var(--tag);border-radius:14px;
+    padding:14px 16px;margin-top:-6px}
+
+  /* --- kalender --- */
+  .kal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .kal-bulan{font-size:18px;font-weight:900}
+  .kal-panah{font-size:20px;font-weight:900;padding:8px 16px;border:2px solid var(--line);
+    border-radius:12px;background:var(--card)}
+  /* minmax(0,1fr), bukan 1fr: tanpa ini kolom menolak menyusut di bawah
+     ukuran minimum isinya, dan di layar sempit kolom Sab/Min terpotong. */
+  .kal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .kal-hdr{text-align:center;font-size:11px;font-weight:900;color:var(--ink2);
+    text-transform:uppercase;padding:4px 0;min-width:0;overflow:hidden}
+  .kal-hari{aspect-ratio:1;border:2px solid transparent;border-radius:10px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-size:15px;font-weight:800;color:var(--ink2);background:none;min-width:0}
+  .kal-hari.ada{background:var(--card);border-color:var(--line);color:var(--ink)}
+  .kal-hari.ini{border-color:var(--tag);background:#FFFBEE}
+  .kal-hari.pilih{border-color:var(--ink);background:var(--ink);color:#fff}
+  .kal-titik{width:6px;height:6px;border-radius:50%;background:var(--go)}
+  .kal-hari.pilih .kal-titik{background:var(--tag)}
+  .kal-kosong{aspect-ratio:1}
+
+  /* --- Tahan-untuk-rentang ---
+     Menahan tanggal di HP memunculkan pilih-teks/menu salin yang menutupi
+     kalender, dan tap-highlight bawaan membuat tahanannya terasa seperti
+     salah pencet. Keduanya dimatikan di sini. */
+  .kal-hari{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;touch-action:manipulation;
+    transition:transform .12s ease, background .12s ease}
+  /* Hari kosong di Pembukuan: tidak bisa dibuka, tapi tetap boleh jadi ujung
+     rentang — jadi bukan disabled, hanya diredupkan. */
+  .kal-hari.mati{cursor:default;opacity:.5}
+  /* Mengecil selama ditahan: satu-satunya petunjuk bahwa tahanan sedang
+     dihitung, sebelum getar menandakan sudah cukup. */
+  .kal-hari.menahan{transform:scale(.88)}
+  .kal-hari.jangkar{background:var(--go);border-color:var(--go);color:#fff}
+  .kal-hari.jangkar .kal-titik{background:#fff}
+  .kal-hari.rentang{background:rgba(27,158,98,.16);border-color:transparent;color:var(--go-dk)}
+  .kal-hari.rentang-ujung{background:var(--go);border-color:var(--go);color:#fff}
+  .kal-hari.rentang-ujung .kal-titik{background:#fff}
+
+  .kal-info{margin-top:10px;font-size:12px;font-weight:600;color:var(--ink2);
+    text-align:center;line-height:1.5}
+  .kal-info.menunggu{color:var(--go-dk);font-weight:800}
+  .kal-info.aktif{color:var(--ink);font-weight:800}
+  .kal-info-x{font-size:12px;font-weight:800;color:var(--danger);
+    padding:2px 8px;border:2px solid var(--line);border-radius:99px;background:var(--card)}
+
+  /* --- Hasil AI (inline, di bawah kolom cari) + modal pembatalan ---
+     Kelas .ai-hasil/.ai-alasan/.ai-sudah-ada/.ai-loading dipakai jawaban AI
+     yang kini tampil menyatu dengan hasil pencarian; .ai-overlay ke bawah
+     dipakai modal pembatalan transaksi & F&B. */
+  .ai-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;
+    display:none;align-items:flex-end;justify-content:center;padding:16px}
+  .ai-overlay.buka{display:flex}
+  .ai-modal{background:var(--mist);border-radius:20px 20px 16px 16px;width:100%;
+    max-width:520px;max-height:85vh;overflow-y:auto;padding:20px;
+    display:flex;flex-direction:column;gap:14px}
+  .ai-judul{display:flex;justify-content:space-between;align-items:center;
+    font-size:18px;font-weight:900}
+  .ai-tutup{font-size:20px;font-weight:900;color:var(--ink2);padding:4px 10px}
+  .ai-form{display:flex;gap:8px}
+  .ai-form input{flex:1;font-size:17px;font-weight:700;padding:13px 14px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+  .ai-form input:focus{outline:none;border-color:var(--tag)}
+  .ai-hasil{background:var(--card);border:2.5px solid var(--tag);border-radius:16px;
+    padding:18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+  .ai-alasan{font-size:13.5px;color:var(--ink2);font-weight:600;font-style:italic}
+  .ai-sudah-ada{background:#d4edda;border:2px solid #28a745;border-radius:12px;padding:10px 14px;
+    color:#155724;font-weight:800;font-size:14px;text-align:center;width:100%;box-sizing:border-box}
+  .ai-catatan{font-size:12.5px;color:var(--ink2);font-weight:600;text-align:center}
+  /* Tebakan AI yang dikalahkan katalog owner. Dulu perbedaan ini tidak pernah
+     terlihat: kartu AI cuma menyebut satu harga, dan itu harga versi AI. */
+  .ai-dikoreksi{background:#FFF6E0;border:2px solid var(--danger);border-radius:12px;
+    padding:10px 14px;color:var(--ink);font-weight:800;font-size:13.5px;text-align:center;
+    width:100%;box-sizing:border-box}
+  .ai-dikoreksi .coret{text-decoration:line-through;color:var(--ink2)}
+  /* Baris kecil di dalam kotak "tidak ketemu": memberi tahu bahwa AI sedang
+     mengantre/berjalan, supaya jeda 1,2 detik sebelum AI ditanya tidak terbaca
+     sebagai aplikasi menggantung. */
+  .ai-antre{margin-top:8px;font-size:13.5px;font-weight:700;color:var(--ink2)}
+  .ai-tebakan{font-size:13px;font-weight:900;letter-spacing:.5px;color:var(--ink2)}
+  .void-ringkas{background:var(--card);border:2px solid var(--line);border-radius:12px;
+    padding:12px 14px;font-weight:800;font-size:15px;text-align:center}
+  .ai-loading{text-align:center;font-weight:800;color:var(--ink2);padding:12px}
+  .btn-tanya-inline{margin-top:10px;background:var(--ink);color:var(--tag);
+    font-weight:900;font-size:15px;padding:12px 20px;border-radius:12px}
+
+  /* --- F&B --- */
+  .fnb-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .fnb-item{background:var(--card);border:2.5px solid var(--line);border-radius:14px;
+    padding:14px;display:flex;flex-direction:column;gap:4px;text-align:left}
+  .fnb-item:active{transform:scale(.97)}
+  .fnb-item.habis{opacity:.55;filter:grayscale(.25);cursor:not-allowed}
+  .fnb-item.habis:active{transform:none}
+  .fnb-nama{font-size:16px;font-weight:900}
+  .fnb-jenis{font-size:11.5px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:1px}
+  .fnb-harga{font-size:15px;font-weight:900;color:var(--go-dk)}
+  .fnb-stok{font-size:12px;font-weight:900;color:var(--ink2)}
+  .fnb-item.habis .fnb-stok{color:var(--danger)}
+  .fnb-qty{position:absolute;top:-8px;right:-8px;background:var(--tag);color:var(--tag-ink);
+    min-width:26px;height:26px;border-radius:99px;display:flex;align-items:center;justify-content:center;
+    font-weight:900;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  .fnb-item{position:relative}
+
+  /* --- Barang titipan (titip jual) ---
+     Warna dibedakan supaya kasir tahu ini barang orang tanpa perlu diberi
+     tahu — dan supaya owner yang melihat sekilas layar jual langsung bisa
+     memperkirakan berapa banyak raknya yang bukan miliknya. Bukan merah:
+     ini bukan peringatan, cuma kepemilikan yang berbeda. */
+  .fnb-item.titipan{border-color:#7B5BD6;background:#F7F4FF}
+  .fnb-item.titipan .fnb-jenis{color:#5B3FB0}
+  .fnb-mini.titipan{border-color:#7B5BD6;background:#F7F4FF}
+  .fm-titip{display:inline-block;font-size:10.5px;font-weight:900;color:#5B3FB0;
+    background:#EDE7FF;border-radius:99px;padding:1px 7px;margin-left:4px;white-space:nowrap}
+  .krj-baris{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .krj-baris:last-child{border-bottom:none}
+  .krj-nama{flex:1;font-size:15px;font-weight:800}
+  .btn-qty{width:34px;height:34px;border-radius:10px;border:2px solid var(--line);
+    background:var(--card);font-size:18px;font-weight:900}
+  .krj-sub{font-weight:900;white-space:nowrap;min-width:86px;text-align:right}
+
+  @media (max-width:420px){
+    .km-nama{font-size:17px}
+    .tag{font-size:15px}
+    .tb-nilai{font-size:24px}
+    .baris-input{grid-template-columns:1fr}
+  }
+
+  /* ---- Pengaturan: daftar jenis kendaraan ---- */
+  .kat-baris{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .kat-baris:last-child{border-bottom:none}
+  .kat-info{flex:1;min-width:0}
+  .kat-nama{font-size:16px;font-weight:900}
+  .kat-detail{font-size:12.5px;font-weight:600;color:var(--ink2);margin-top:2px}
+  /* form di dalam dialog SweetAlert — semua muat tanpa scroll ke samping */
+  .swal2-popup .swal2-input, .swal2-popup .swal2-select{
+    width:100%;max-width:100%;margin:6px 0;box-sizing:border-box}
+  .sw-judul{font-size:12.5px;font-weight:800;color:#57503E;text-align:left;margin:14px 2px 6px}
+  /* Stok berjalan di modal ubah stok — dipajang besar supaya kasir tidak
+     salah baca angka yang sedang dia timpa. */
+  .sw-stok-kini{font-size:26px;font-weight:900;color:var(--ink);text-align:left;margin:2px 2px 4px}
+  /* label kecil di atas tiap input dialog — biar angka tidak tampil "telanjang" */
+  .sw-field-label{font-size:12.5px;font-weight:800;color:#57503E;text-align:left;
+    margin:10px 2px 0;letter-spacing:.3px}
+  .swal2-popup .sw-field-label + .swal2-input{margin-top:4px}
+  /* Dropdown di dialog: swal2-input sendiri tidak menata <select>, jadi tanpa
+     ini tingginya meleset dari input teks di atas & bawahnya. */
+  .sw-select{width:100%;box-sizing:border-box;font-size:15px;font-weight:700;
+    padding:10px 8px;border:2px solid var(--line);border-radius:10px;
+    background:var(--card);color:var(--ink);margin-top:4px}
+  /* Pekerja & add-on dipilih dengan centang, bukan dropdown: jumlahnya sedikit
+     dan owner perlu melihat SEMUA pilihan sekaligus untuk tahu siapa yang
+     terlanjur tidak tercentang — itu yang menentukan upah orang. */
+  .sw-cek-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;
+    text-align:left;margin-top:4px;max-height:190px;overflow-y:auto}
+  .sw-cek{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;
+    padding:5px 4px;border-radius:8px;cursor:pointer}
+  .sw-cek:hover{background:rgba(229,224,210,.4)}
+  .sw-cek input{width:17px;height:17px;flex:0 0 auto;accent-color:var(--go)}
+  .sw-total-pratinjau{text-align:left;margin:12px 2px 0;font-size:13px;font-weight:800;
+    color:var(--ink2);padding:9px 11px;border-radius:10px;background:#FFFBEE;
+    border:2px solid var(--tag)}
+  .sw-total-pratinjau b{font-size:16px;color:var(--ink)}
+  /* label mungil untuk input harga di baris daftar (menu F&B, add-on) */
+  .mini-field{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+  .mini-field .mini-label{font-size:10px;font-weight:800;color:var(--ink2);
+    letter-spacing:.4px;text-transform:uppercase}
+  .sw-layanan{display:flex;align-items:center;gap:10px;padding:6px 2px;max-width:100%}
+  .sw-layanan .sw-label{flex:1;min-width:0;text-align:left;font-size:14.5px;font-weight:700}
+  .sw-layanan input[type=checkbox]{width:20px;height:20px;flex:none}
+  .sw-layanan .sw-harga, .sw-layanan .sw-upah{width:96px;flex:none;font-size:15px;font-weight:800;padding:8px 10px;
+    border:2px solid var(--line);border-radius:10px;box-sizing:border-box}
+
+  /* ---- Layanan tambahan (add-on) di layar kasir ---- */
+  .addon-list{display:flex;flex-direction:column;gap:8px}
+  .btn-addon{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+    background:var(--card);border:2.5px solid var(--line);border-radius:14px;padding:12px 14px}
+  .btn-addon.aktif{border-color:var(--go);background:rgba(27,158,98,.07)}
+  .btn-addon .cek-kotak{width:24px;height:24px;border-radius:6px;border:2.5px solid var(--line);
+    flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:900;color:var(--go-dk)}
+  .btn-addon.aktif .cek-kotak{border-color:var(--go)}
+  .ad-nama{flex:1;font-size:15.5px;font-weight:800}
+  .ad-harga{font-size:14.5px;font-weight:900;color:var(--water-dk);white-space:nowrap}
+
+  /* ---- Cari kecil + navigasi halaman (pembukuan & daftar menu) ---- */
+  .cari-kecil{width:100%;font-size:15px;font-weight:700;padding:11px 14px;margin-bottom:10px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+  .cari-kecil:focus{outline:none;border-color:var(--water)}
+  .hal-nav{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px}
+  .hal-btn{font-size:20px;font-weight:900;padding:4px 16px;border:2px solid var(--line);
+    border-radius:10px;background:var(--card)}
+  .hal-btn:disabled{opacity:.35}
+  .hal-info{font-size:13px;font-weight:700;color:var(--ink2)}
+  .chip-filter{font-size:13.5px;font-weight:800;padding:8px 14px;border:2px solid var(--line);
+    border-radius:99px;background:var(--card)}
+  .chip-filter.aktif{border-color:var(--go);background:rgba(27,158,98,.1);color:var(--go-dk)}
+
+  /* --- Tab di dalam layar Pengaturan ---
+     Empat kolom tetap, bukan baris yang bisa menggulir: dengan hanya empat tab
+     semuanya muat di layar HP, dan tab yang harus digeser dulu untuk terlihat
+     sama saja dengan tersembunyi. Ikon di atas label supaya labelnya tidak
+     perlu dipendekkan jadi singkatan. */
+  /* grid-auto-columns, bukan repeat(5,...) yang dipaku: bar ini dipakai ulang
+     oleh laporan per shift yang jumlah tabnya mengikuti berapa shift terpakai
+     hari itu — bisa dua, bisa empat. Kolomnya tetap sama lebar berapa pun. */
+  .set-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;
+    background:var(--card);border:2px solid var(--line);border-radius:14px;padding:6px;
+    position:sticky;top:0;z-index:5}
+  /* Label memakai clamp: dengan lima tab, kolom di HP tinggal ~60px dan
+     "Kendaraan" tidak muat pada 11.5px. Huruf mengecil mengikuti lebar layar
+     ketimbang labelnya dipendekkan jadi singkatan yang harus ditebak. */
+  .set-tab{display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:9px 1px;border-radius:10px;font-weight:800;
+    font-size:clamp(9px,2.7vw,11.5px);
+    color:var(--ink2);background:transparent;line-height:1.1;
+    -webkit-tap-highlight-color:transparent}
+  .set-tab-ikon{font-size:17px;line-height:1}
+  .set-tab.aktif{background:rgba(27,158,98,.12);color:var(--go-dk)}
+  .set-tab-tanda{background:var(--danger);color:#fff;font-size:9.5px;font-weight:900;
+    border-radius:99px;padding:1px 6px;margin-top:1px}
+
+  /* ---- Katalog kendaraan (Pengaturan > Kendaraan) ---- */
+  .pilih-kat{flex:1;min-width:110px;font-size:16px;font-weight:700;padding:12px 14px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+  .pilih-kat:focus{outline:none;border-color:var(--water)}
+  .item-bawah .mini-field select{width:100%;font-size:15px;font-weight:800;padding:9px 10px;
+    border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  .item-bawah .mini-field select:focus{outline:none;border-color:var(--water)}
+  /* Baris yang kategorinya masih tebakan mesin. Warnanya sengaja sama dengan
+     peringatan lain di aplikasi: ini soal uang, bukan sekadar data kurang
+     lengkap. */
+  .item-baris.perlu-cek{background:#FFF6E0;border-left:4px solid var(--danger);
+    padding-left:10px;border-radius:8px}
+  .item-baris.perlu-cek .tag-ai{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .kendaraan-cek-judul{font-size:13px;font-weight:900;color:var(--danger);margin-bottom:6px}
+  .kendaraan-lain{font-size:12.5px;color:var(--ink2);font-weight:700;padding-top:10px}
+
+  /* ---- Titip jual (Pengaturan > Makanan) ----
+     Ungu yang sama dengan tombol titipan di layar jual, supaya "barang orang"
+     punya satu warna di seluruh aplikasi. */
+  .titip-utang-total{font-size:12px;font-weight:900;color:#fff;background:var(--danger);
+    border-radius:99px;padding:2px 10px;margin-left:6px;vertical-align:2px}
+  .item-baris.punya-utang{background:#FFF6E0;border-left:4px solid var(--danger);
+    padding-left:10px;border-radius:8px}
+  .titip-utang{flex:1;font-size:13px;font-weight:800;color:var(--ink2)}
+  .titip-utang.ada{color:var(--danger)}
+  .item-baris.titipan .tag-titip,
+  .fm-titip{background:#EDE7FF;color:#5B3FB0;border-color:#D6C9FF}
+  .item-baris.titipan{background:#FBFAFF}
+  .titip-tabel{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px}
+  .titip-tabel th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--ink2);border-bottom:2px solid var(--line);padding:6px 4px}
+  .titip-tabel td{padding:6px 4px;border-bottom:1px solid var(--line);font-weight:700}
+  .titip-tabel tr.beda td{background:#FFF6E0}
+  .titip-beda{background:#FFF6E0;border:2px solid var(--danger);border-radius:10px;
+    padding:8px 12px;font-size:12.5px;font-weight:800;margin-bottom:10px;text-align:left}
+  .titip-ringkas{text-align:left;font-size:14px}
+  .titip-ringkas div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;
+    border-bottom:1px solid var(--line)}
+  .titip-ringkas div:last-child{border-bottom:none}
+  .titip-ringkas .tebal{font-weight:900}
+
+  /* Jarak antar blok di dalam satu tab; .catatan memakai flex-gap, jadi
+     pembungkus tab perlu menata anaknya sendiri. */
+  .set-grup{display:flex;flex-direction:column;gap:16px}
+
+  /* Penanda karyawan training — upahnya dihitung beda, jadi statusnya harus
+     terbaca sekilas di daftar pekerja, bukan hanya di layar pengaturan. */
+  .tag-training{font-size:10px;font-weight:900;padding:2px 7px;border-radius:99px;
+    background:rgba(229,168,0,.18);color:var(--tag-ink);letter-spacing:.5px;
+    vertical-align:middle}
+
+  /* Satu baris nominal training: nama layanan + jatah seniornya di kiri,
+     kotak isian di kanan. Jatah ditampilkan sebagai pembanding — tanpa itu
+     owner mengisi angka tanpa tahu sedang membagi berapa. */
+  /* align-items:center, BUKAN flex-end. Dengan flex-end, kolom kanan yang lebih
+     tinggi mendorong teks kiri ke bawah sehingga muncul ruang kosong di atas
+     nama layanan (terukur 32px). */
+  .tr-baris{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:6px 0;border-top:1px solid var(--line)}
+  /* Judul kolom, satu kali per kendaraan di baris nama kendaraannya. */
+  .tr-kepala{font-size:10px;font-weight:800;color:var(--ink2);
+    letter-spacing:.4px;text-transform:uppercase}
+  .tr-layanan{display:flex;flex-direction:column;gap:2px;min-width:0;
+    font-size:14px;font-weight:800}
+  .tr-jatah{font-size:11.5px;font-weight:600;color:var(--ink2)}
+  /* Gaya input .mini-field hanya berlaku di dalam .item-bawah, jadi di sini
+     harus dinyatakan sendiri — tanpa width:100% + box-sizing, input memakai
+     lebar bawaan browser (~157px) dan menembus tepi kartu. */
+  .tr-baris .mini-field{flex:0 0 auto;width:118px}
+  .tr-baris .mini-field input{width:100%;box-sizing:border-box;min-width:0;
+    font-size:15px;font-weight:800;padding:9px 10px;text-align:right;
+    border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  .tr-baris .mini-field input:focus{outline:none;border-color:var(--water)}
+  .tr-awas{font-size:11.5px;font-weight:700;color:var(--danger);padding:0 0 8px;line-height:1.35}
+
+  /* Baris rekap yang bisa dibuka (Cash / TF). Tombol, bukan div, supaya bisa
+     dijangkau keyboard dan terbaca sebagai sesuatu yang memang bisa ditekan. */
+  .baris-buka{width:100%;text-align:left;background:transparent;
+    -webkit-tap-highlight-color:transparent}
+  .baris-buka .trx-panah{font-size:11px;color:var(--ink2)}
+  /* Rincian menjorok ke dalam supaya jelas ia milik baris di atasnya, bukan
+     pos pemasukan yang berdiri sendiri. */
+  .rincian-bayar{padding-left:14px;border-left:3px solid var(--line);margin:2px 0 6px}
+  .rincian-bayar .cat-baris{padding:5px 0;font-size:13.5px;border-bottom:none}
+  .rincian-bayar .cat-baris b{font-weight:800}
+
+  .baris-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .pilih-kat{width:100%;font-size:16px;font-weight:800;padding:12px 14px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+  .pilih-kat:focus{outline:none;border-color:var(--water)}
+
+  /* ---- Dashboard: grafik (Chart.js) & peringkat ---- */
+  .grafik-box{position:relative;height:280px;width:100%}
+  .grafik-box.grafik-donat{height:240px}
+  .rank-baris{display:flex;align-items:center;gap:10px;padding:9px 0;
+    border-bottom:1px solid var(--line)}
+  .rank-baris:last-child{border-bottom:none}
+  .rank-no{flex:none;width:26px;height:26px;border-radius:50%;background:var(--mist);
+    border:2px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:900;color:var(--ink2)}
+  .rank-isi{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .rank-atas{display:flex;justify-content:space-between;gap:10px;font-size:14.5px}
+  .rank-bar{display:block;height:7px;border-radius:99px;background:var(--line);overflow:hidden}
+  .rank-bar>span{display:block;height:100%;border-radius:99px;background:var(--tag)}
+  .rank-bawah{font-size:12px;font-weight:700;color:var(--ink2)}
+
+  /* ---- Login (username & password) ---- */
+  .login-layar{position:fixed;inset:0;background:#FFFBEF;z-index:99;display:flex;
+    align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:24px}
+  .login-kotak{width:100%;max-width:340px;background:#fff;border:3px solid #141414;
+    border-radius:18px;padding:26px 22px;box-shadow:6px 6px 0 #141414;text-align:center}
+  .login-kotak h2{font-size:22px;font-weight:900;margin-bottom:4px}
+  .login-kotak p{font-size:13px;color:#8C8574;font-weight:600;margin-bottom:16px}
+  /* Dulu kotak PIN 4 digit (rata tengah, huruf renggang, mirip kotak-kotak
+     digit) — sejak login jadi username/password biasa, gaya lamanya bikin
+     placeholder "Username"/"Password" melebar sampai terpotong dari box-nya. */
+  .login-kotak input{width:100%;text-align:left;font-size:17px;letter-spacing:normal;
+    font-weight:700;padding:14px;border:3px solid #141414;border-radius:12px;margin-bottom:12px}
+  .login-kotak button{width:100%;padding:14px;font-size:16px;font-weight:900;
+    background:#FFD34D;border:3px solid #141414;border-radius:12px;cursor:pointer;
+    box-shadow:4px 4px 0 #141414;transition:transform .06s,box-shadow .06s}
+  .login-kotak button:active{transform:translate(2px,2px);box-shadow:2px 2px 0 #141414}
+  .login-err{color:#C0392B;font-weight:800;font-size:13px;min-height:18px;margin-bottom:6px}
+  .hidden-login{display:none!important}
+  /* ---- Transaksi batal ---- */
+  .trx-batal span, .trx-batal b{text-decoration:line-through;opacity:.45}
+  .trx-item{border-bottom:1px solid var(--line)}
+  .trx-item:last-child{border-bottom:none}
+  .trx-item .trx-head{cursor:pointer;border-bottom:none;-webkit-user-select:none;user-select:none;
+    border-radius:8px;transition:background .1s}
+  /* Baris riwayat bukan <button>, jadi butuh umpan balik tekan sendiri */
+  .trx-item .trx-head:active{background:rgba(20,20,20,.05)}
+  .trx-panah{display:inline-block;color:var(--ink2);font-size:12px;transition:transform .15s}
+  .trx-item.buka .trx-panah{transform:rotate(180deg)}
+  .trx-detail{display:none;margin:0 0 10px;padding:4px 12px;background:var(--bg);
+    border:1px dashed var(--line);border-radius:10px}
+  .trx-item.buka .trx-detail{display:block}
+  .trx-det-baris{padding:6px 0;font-size:13.5px}
+  .trx-batal + .trx-detail span{text-decoration:none;opacity:1}
+  .chip-batal{background:#C0392B;color:#fff;border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;text-decoration:none!important;opacity:1!important;display:inline-block}
+  .btn-void{color:#C0392B;font-weight:900;padding:0 6px;font-size:15px;background:none;border:none;cursor:pointer}
+  /* Cetak ulang resi: tombol penuh di detail transaksi cuci (Rekap &
+     Pembukuan), tombol kecil di baris riwayat F&B yang berdiri sendiri. */
+  .btn-cetak-ulang{display:block;width:100%;margin:10px 0 6px;padding:10px;border-radius:10px;
+    font-size:15px;font-weight:800;color:var(--ink);background:var(--card);
+    border:2px solid var(--line);cursor:pointer}
+  .btn-cetak-ulang:active{transform:scale(.98)}
+  .btn-cetak-mini{padding:0 4px;font-size:15px;background:none;border:none;cursor:pointer}
+  /* Pratinjau resi di layar. Kelas .r-* aslinya hanya hidup di @media print;
+     di sini dibuat versi layarnya, bentuknya meniru kertas struk supaya yang
+     terlihat sama dengan yang keluar dari printer. */
+  .resi-kertas{background:#fff;color:#000;font-family:'Courier New',monospace;font-size:14px;
+    padding:18px 16px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,.15);
+    width:100%;max-width:340px;margin:0 auto;box-sizing:border-box}
+  .resi-kertas .r-tengah{text-align:center}
+  .resi-kertas .r-judul{font-size:21px;font-weight:900;letter-spacing:2px}
+  .resi-kertas .r-garis{border-top:2px dashed #000;margin:9px 0}
+  .resi-kertas .r-baris{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
+  .resi-kertas .r-baris span:last-child{text-align:right}
+  .resi-kertas .r-besar{font-size:18px;font-weight:900}
+  .resi-kertas .r-salinan{font-size:16px;font-weight:900;letter-spacing:3px;margin-top:6px}
+
+  /* ---- Range Tanggal UI ---- */
+  .range-inputs{display:flex;flex-direction:column;gap:10px}
+  .range-input-group{display:flex;flex-direction:column;gap:6px}
+  .range-input-group label{font-size:13px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}
+  .inp-range{font-size:15px;font-weight:700;padding:11px 12px;
+    border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  .inp-range:focus{outline:none;border-color:var(--water);box-shadow:0 0 0 3px rgba(229,168,0,.1)}
+  .btn-cari{width:100%;font-size:16px;font-weight:900;padding:13px 16px;
+    border:2.5px solid var(--line);border-radius:12px;background:var(--water);color:var(--tag-ink);
+    transition:all .15s;margin-top:4px}
+  .btn-cari:active{transform:scale(.96)}
+
+  /* ---- Status shift di header ---- */
+  .shift-chip{background:rgba(27,158,98,.18);border:1.5px solid #4FD39B;color:#7BE8B8;
+    border-radius:10px;padding:6px 12px;font-weight:800;font-size:14px;white-space:nowrap}
+  .shift-chip.tutup{background:rgba(192,68,43,.2);border-color:#E8836F;color:#F3A796}
+
+  /* ---- Layar terkunci (di luar jam operasional) ---- */
+  .kunci-layar{position:fixed;inset:0;z-index:80;background:var(--ink);
+    display:flex;align-items:center;justify-content:center;padding:24px}
+  .kunci-kartu{background:var(--card);border-radius:20px;padding:28px 22px;width:100%;
+    max-width:420px;text-align:center;box-shadow:0 10px 0 rgba(0,0,0,.25)}
+  .kunci-ikon{font-size:52px;line-height:1;margin-bottom:10px}
+  .kunci-judul{font-size:22px;font-weight:900;margin-bottom:8px}
+  .kunci-pesan{font-size:15px;font-weight:600;color:var(--ink2);margin-bottom:12px}
+  .kunci-jam{font-size:15px;font-weight:700;background:var(--mist);border:2px solid var(--line);
+    border-radius:12px;padding:12px;margin-bottom:16px;line-height:1.7}
+  /* Pesan bebas dari owner. Sengaja menonjol: ini yang pertama dibaca kasir.
+     white-space:pre-line supaya baris baru yang diketik owner tetap terjaga. */
+  .kunci-catatan{font-size:17px;font-weight:800;line-height:1.5;white-space:pre-line;
+    background:#FFFBEE;border:2px dashed var(--tag);border-radius:12px;
+    padding:14px;margin-bottom:12px;overflow-wrap:anywhere}
+  /* Kolom pesan di Pengaturan */
+  .inp-pesan{width:100%;font-size:15px;font-weight:700;padding:11px 12px;resize:vertical;
+    border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);
+    font-family:inherit}
+  .inp-pesan:focus{outline:none;border-color:var(--water);box-shadow:0 0 0 3px rgba(229,168,0,.1)}
+  .pesan-sisa{font-size:12px;font-weight:700;color:var(--ink2);margin-top:4px}
+
+  /* ---- Daftar shift (owner) ---- */
+  .shift-baris{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:10px 0;border-bottom:1.5px solid var(--line)}
+  .shift-baris:last-child{border-bottom:none}
+  .shift-baris.berjalan{background:rgba(27,158,98,.06);border-radius:10px;padding:10px 8px}
+  .shift-info{flex:1;min-width:120px}
+  .shift-aksi{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+  .shift-aksi .btn-hadir{padding:7px 10px;font-size:13px;white-space:nowrap}
+  .shift-nama{font-size:15.5px;font-weight:900}
+  .shift-jam{font-size:13px;font-weight:700;color:var(--ink2);margin-top:2px}
+  .shift-tag{font-size:10.5px;font-weight:900;padding:1px 7px;border-radius:99px;
+    background:var(--go);color:#fff;vertical-align:middle}
+  .shift-waspada{font-size:13px;font-weight:700;line-height:1.55;
+    background:#FFF4E5;border:2px solid var(--water);border-radius:12px;
+    padding:11px 12px;margin-bottom:10px}
+
+  /* ---- Jadwal shift di layar terkunci ---- */
+  .kunci-jadwal-judul{font-size:12px;font-weight:900;color:var(--ink2);
+    text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .kunci-shift{font-size:15px;font-weight:800;padding:6px 0}
+  .kunci-shift + .kunci-shift{border-top:1.5px solid var(--line)}
+  .kunci-shift.berikut{color:var(--go-dk)}
+  .kunci-tag{font-size:10.5px;font-weight:900;padding:1px 7px;border-radius:99px;
+    background:var(--go);color:#fff;vertical-align:middle}
+  .kunci-sekarang{font-size:13.5px;font-weight:700;color:var(--ink2);
+    margin-top:8px;padding-top:8px;border-top:2px dashed var(--line)}
+  .btn-keluar-kunci{width:100%;margin-top:10px;font-size:14px;font-weight:800;
+    color:var(--danger);padding:10px;background:none;border:none}
+
+  /* ---- Draft cucian (belum dibayar) ---- */
+  .draft-jumlah:not(:empty){background:var(--tag);color:var(--tag-ink);border-radius:99px;
+    padding:1px 9px;font-size:13px;font-weight:900;margin-left:6px}
+  .draft-baris{display:flex;align-items:center;gap:6px;border-bottom:1.5px solid var(--line)}
+  .draft-baris:last-child{border-bottom:none}
+  .draft-utama{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+    padding:12px 4px;text-align:left;background:none;border:none}
+  .draft-nama{font-size:16px;font-weight:900}
+  .draft-sub,.draft-note,.draft-jam{font-size:12.5px;font-weight:600;color:var(--ink2)}
+  .draft-note{font-style:italic}
+  .btn-draft{width:100%;margin-top:10px;font-size:16px;font-weight:900;padding:14px;
+    border:2.5px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink2)}
+  /* Draft F&B yang sedang dibuka ditandai, supaya kasir tahu tombol Simpan
+     akan mengenai pesanan yang mana di antara beberapa draft. */
+  .draft-baris.aktif{background:rgba(27,158,98,.09);border-radius:10px}
+  .draft-tanda{font-size:12.5px;font-weight:800;color:var(--go-dk)}
+
+  /* ---- F&B di layar konfirmasi cucian ----
+     Ringkasan (.fnb-pilih) menempel di layar konfirmasi; grid menunya
+     (.fnb-mini-grid) hidup di dalam modal pemilih. */
+  .fnb-pilih-list:not(:empty){display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+  .fnb-pilih{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;
+    border:2px solid var(--go);background:rgba(27,158,98,.07);
+    border-radius:12px;padding:9px 12px}
+  .fp-kiri{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .fp-nama{font-size:14.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fp-rinci{font-size:12px;font-weight:700;color:var(--ink2)}
+  .fp-atur{display:flex;align-items:center;gap:10px;font-weight:900}
+  .fp-sub{font-size:14px;font-weight:900;color:var(--go-dk);white-space:nowrap;min-width:62px;
+    text-align:right}
+  .btn-tambah-fnb{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:13px;border:2.5px dashed var(--line);border-radius:14px;background:var(--card);
+    color:var(--ink2);font-size:15px;font-weight:800}
+  .btn-tambah-fnb:active{transform:scale(.98);border-color:var(--go);color:var(--go-dk)}
+  .btf-plus{font-size:20px;font-weight:900;line-height:1;color:var(--go-dk)}
+  /* Total + tombol Selesai menempel di dasar modal supaya tidak ikut tergulir
+     hilang saat kasir menelusuri halaman menu. */
+  .fnb-modal-kaki{position:sticky;bottom:-20px;background:var(--mist);
+    padding:10px 0 0;margin-top:-4px;display:flex;flex-direction:column;gap:10px}
+  .fnb-modal-kaki .fnb-mini-total{margin-top:0}
+  .fmt-kosong{color:var(--ink2);font-weight:700}
+
+  /* Dua kolom pasti, bukan auto-fill: di dalam modal lebarnya cuma ~303px,
+     sedangkan auto-fill minmax(150px,…) butuh 308px untuk kolom kedua — kurang
+     5px, dan seluruh grid jatuh jadi satu kolom. minmax(0,1fr) supaya nama menu
+     yang panjang membungkus, bukan melebarkan kolomnya. */
+  .fnb-mini-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .fnb-mini{border:2px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden}
+  .fnb-mini.aktif{border-color:var(--go);background:rgba(27,158,98,.07)}
+  .fm-utama{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+    padding:10px 12px;text-align:left;background:none;border:none}
+  .fm-nama{font-size:14.5px;font-weight:800}
+  .fm-harga{font-size:13px;font-weight:900;color:var(--go-dk)}
+  .fm-stok{font-size:11px;font-weight:800;color:var(--ink2)}
+  .fm-atur{display:flex;align-items:center;justify-content:center;gap:12px;
+    padding:6px;border-top:2px solid var(--line);font-weight:900}
+  .fnb-mini-total{margin-top:10px;padding:10px 12px;border-radius:10px;
+    background:rgba(27,158,98,.08);font-size:14px;font-weight:700}
+
+  /* ---- Pengeluaran ---- */
+  .chip-keluar{font-size:13px;font-weight:800;padding:8px 12px;border-radius:99px;
+    border:2px solid var(--line);background:var(--card);color:var(--ink2)}
+  .chip-keluar.aktif{border-color:var(--go);background:rgba(27,158,98,.1);color:var(--go-dk)}
+  /* Penegas tanggal yang sedang aktif — mencegah catatan masuk ke hari yang salah */
+  .keluar-tgl-aktif{font-size:13.5px;font-weight:700;color:var(--ink2);margin-bottom:10px;
+    padding:9px 12px;border-radius:10px;background:#FFFBEE;border:2px solid var(--tag)}
+
+  /* ---- Persetujuan pembatalan (owner) ---- */
+  .blok-approval{border-color:var(--danger);background:rgba(192,68,43,.05)}
+  .chip-tunggu{background:var(--water);color:var(--tag-ink);border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;display:inline-block}
+  .chip-fnb{background:rgba(62,124,177,.15);color:#2E5F8A;border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;display:inline-block}
+  /* Penanda pesanan F&B yang menempel pada sebuah cucian (satu resi).
+     chip-batal & chip-tunggu di baris yang sama tetap terbaca walau
+     barisnya dicoret — lihat aturan .trx-batal di atas. */
+  .chip-nempel{background:rgba(229,168,0,.18);color:var(--water-dk);border-radius:6px;
+    padding:1px 6px;font-size:11px;font-weight:900;display:inline-block;
+    text-decoration:none!important;opacity:1!important}
+  /* Penanda transaksi yang pernah dikoreksi owner. Sengaja ADA, karena tidak
+     seperti pembatalan yang barisnya tercoret, koreksi mengubah angka tanpa
+     meninggalkan bekas apa pun yang terlihat di riwayat. */
+  .chip-edit{background:rgba(62,124,177,.15);color:#2E5F8A;border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;display:inline-block}
+  .app-baris{padding:12px 0;border-bottom:1.5px solid var(--line)}
+  .app-baris:last-child{border-bottom:none}
+  .app-judul{font-size:15px;font-weight:800}
+  .app-sub,.app-alasan{font-size:12.5px;font-weight:600;color:var(--ink2);margin-top:2px}
+  .app-aksi{display:flex;gap:8px;margin-top:10px}
+  .btn-setuju,.btn-tolak{flex:1;font-size:14px;font-weight:900;padding:10px;border-radius:10px;color:#fff}
+  .btn-setuju{background:var(--danger)}
+  .btn-tolak{background:var(--card);border:2px solid var(--line);color:var(--ink2)}
+
+  /* Setoran buku kas: berlawanan makna dari persetujuan pembatalan di atas —
+     "Terima" itu KABAR BAIK (uang sudah masuk), bukan aksi destruktif, jadi
+     hijau bukan merah. "Tolak" yang justru butuh perhatian owner. */
+  .btn-terima-setoran,.btn-tolak-setoran{flex:1;font-size:14px;font-weight:900;padding:10px;border-radius:10px;color:#fff}
+  .btn-terima-setoran{background:var(--go)}
+  .btn-tolak-setoran{background:var(--danger)}
+
+  /* Panel aksi/status buku kas di Rekap Hari Ini, tepat di bawah tab. */
+  #rekapBukuAksi:not(:empty){margin-bottom:16px}
+  .buku-lencana{padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--card)}
+  .buku-lencana-atas{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    font-size:14.5px;font-weight:800}
+  .buku-lencana-sub{margin-top:4px;font-size:12px;font-weight:600;color:var(--ink2);line-height:1.4}
+  .buku-menunggu{border-color:var(--tag);background:rgba(255,194,41,.08)}
+  .buku-disetor{border-color:var(--go);background:rgba(27,158,98,.06)}
+  .buku-ditolak{border-color:var(--danger);background:rgba(192,68,43,.06)}
+
+  /* ---- Detail upah pekerja: satu baris per transaksi ---- */
+  .upah-kartu{border-bottom:1.5px solid var(--line)}
+  .upah-kartu:last-of-type{border-bottom:none}
+  .upah-kepala{width:100%;display:flex;align-items:center;gap:10px;padding:12px 0;
+    text-align:left;background:none;border:none}
+  .upah-nama{flex:1;display:flex;flex-direction:column;font-size:15.5px;font-weight:800}
+  .upah-sub{font-size:12.5px;font-weight:600;color:var(--ink2)}
+  .upah-detail{padding:2px 0 10px}
+  .upah-trx{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 10px;margin-bottom:6px;border-radius:10px;background:var(--mist);font-size:13.5px}
+  .upah-trx-kiri{display:flex;flex-direction:column;font-weight:700}
+  .upah-trx-sub{font-size:12px;font-weight:600;color:var(--ink2)}
+
+  /* ---- Potongan & koreksi upah (owner) ---- */
+  /* Ringkasan penyesuaian di kaki kartu upah: kotor -> potongan -> diterima.
+     Dipisah garis atas supaya jelas ini bukan salah satu baris cucian. */
+  .upah-peny{margin-top:8px;padding-top:8px;border-top:2px dashed var(--line)}
+  .upah-peny-baris{display:flex;align-items:center;justify-content:space-between;
+    gap:10px;padding:5px 10px;font-size:13.5px;font-weight:700}
+  .upah-peny-baris.tebal{font-weight:900;font-size:14.5px}
+  .upah-peny-baris .upah-trx-sub{display:block}
+  .upah-tanda-peny{color:var(--danger);font-weight:800}
+  .peny-jenis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  .btn-jenis{padding:11px;border:2px solid var(--line);border-radius:12px;
+    background:var(--card);font-size:14px;font-weight:800;color:var(--ink2)}
+  .btn-jenis.aktif{border-color:var(--danger);background:rgba(192,68,43,.08);color:var(--danger)}
+  .peny-ket{font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:10px;line-height:1.45}
+  .peny-catatan{font-size:12.5px;font-weight:600;color:var(--ink2);
+    background:rgba(229,168,0,.10);border-radius:10px;padding:9px 11px;line-height:1.45}
+  .chip-potong{background:var(--danger);color:#fff;border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;display:inline-block}
+  .chip-timpa{background:rgba(62,124,177,.15);color:#2E5F8A;border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;display:inline-block}
+
+  /* ---- Tip pada penjualan F&B ---- */
+  .chip-tip{background:rgba(27,158,98,.14);color:var(--go-dk);border-radius:6px;padding:1px 6px;
+    font-size:11px;font-weight:900;display:inline-block;
+    text-decoration:none!important;opacity:1!important}
+  /* Tip sengaja DI LUAR kotak TOTAL F&B — totalnya omzet menu. Baris ini
+     menyebut uang yang benar-benar diterima supaya kasir tidak salah tagih. */
+  .fnb-tip-info{margin-top:8px;padding:9px 12px;border-radius:10px;
+    background:rgba(27,158,98,.08);font-size:14px;font-weight:700}
+
+  /* Layar selesai: nomor antrean sudah dilepas, judulnya menggantikan */
+  .done-judul{font-size:22px;font-weight:900;margin:6px 0 4px}
+
+  /* ---- Panduan ----
+     Dipakai di HP sambil berdiri di kasir, jadi tiap pertanyaan tertutup
+     dulu (<details>): daftar pertanyaannya muat satu layar, dan yang dibuka
+     hanya yang sedang dibutuhkan. */
+  .pd-intro{font-size:13.5px;font-weight:600;color:var(--ink2);line-height:1.5}
+  .pd-item{border-top:2px dotted var(--line)}
+  .pd-item:first-of-type{border-top:0}
+  /* Segitiga bawaan browser dibuang, diganti tanda + / - di kanan supaya
+     arah bukanya jelas di layar kecil. */
+  .pd-item>summary{list-style:none;cursor:pointer;position:relative;
+    padding:13px 34px 13px 0;font-size:15px;font-weight:800;line-height:1.45}
+  .pd-item>summary::-webkit-details-marker{display:none}
+  .pd-item>summary::after{content:"+";position:absolute;right:6px;top:11px;
+    font-size:21px;font-weight:900;color:var(--ink2);line-height:1}
+  .pd-item[open]>summary::after{content:"\2212"}
+  .pd-item[open]>summary{color:var(--tag)}
+  .pd-isi{padding:0 0 14px;font-size:14px;font-weight:600;line-height:1.6;color:var(--ink2)}
+  .pd-isi p{margin:0 0 10px}
+  .pd-isi p:last-child{margin-bottom:0}
+  .pd-isi b{color:var(--ink);font-weight:900}
+  .pd-badge{background:var(--ink);color:var(--tag);border-radius:6px;padding:1px 6px;
+    font-size:10.5px;font-weight:900;letter-spacing:.5px;display:inline-block;
+    vertical-align:middle;white-space:nowrap}

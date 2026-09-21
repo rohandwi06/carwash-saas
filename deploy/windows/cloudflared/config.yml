@@ -1,0 +1,41 @@
+# =============================================================================
+# OTIN CARWASH — konfigurasi Cloudflare Tunnel (named tunnel)
+#
+# Disalin ke:  C:\Users\<user>\.cloudflared\config.yml
+#
+# BERKAS INI UNTUK TAHAP 2 — saat Anda sudah punya domain di Cloudflare.
+# Untuk uji coba tanpa domain, pakai Quick Tunnel (lihat README, Tahap 1):
+#     cloudflared tunnel --url http://localhost:8080
+#
+# GANTI yang bertanda <...> sebelum dipakai.
+# =============================================================================
+
+tunnel: <TUNNEL-ID>
+credentials-file: C:\Users\<USER>\.cloudflared\<TUNNEL-ID>.json
+
+# Jangan mengaku-ngaku HTTPS ke origin: nginx lokal memang melayani HTTP.
+# Cloudflare tetap memberi HTTPS ke pengunjung — enkripsi putus di edge,
+# lalu jalur edge->mesin ini diamankan oleh tunnel itu sendiri.
+originRequest:
+  connectTimeout: 30s
+  noTLSVerify: false
+
+ingress:
+  # --- Aplikasi kasir -------------------------------------------------
+  - hostname: kasir.<DOMAIN-ANDA>
+    service: http://localhost:8080
+
+  # --- MySQL untuk developer (Zero Trust) -----------------------------
+  # TIDAK membuka port ke internet. Hanya bisa ditembus lewat
+  #   cloudflared access tcp --hostname db.<DOMAIN-ANDA> --url localhost:3307
+  # dan HANYA oleh email yang lolos Access Policy di dashboard Zero Trust.
+  #
+  # Setelah menambahkan blok ini, WAJIB buat Access Application bertipe
+  # "Self-hosted" untuk hostname yang sama, lalu pasang policy
+  # "Allow -> Emails -> email-developer@contoh.com".
+  # Tanpa policy, hostname ini terbuka untuk siapa pun yang tahu namanya.
+  - hostname: db.<DOMAIN-ANDA>
+    service: tcp://localhost:3306
+
+  # Wajib: aturan penutup. Semua yang tidak cocok di atas ditolak.
+  - service: http_status:404

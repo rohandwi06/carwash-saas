@@ -1,9 +1,47 @@
-# .env terisi per cucian: password DB, password awal owner, APP_KEY
-rahasia/
-# paket hasil rilis.ps1 (berisi vendor/, besar, bisa dibangun ulang dari commit)
-rilis/
-# unduhan backup database cucian - data klien, bukan kode
-backup/
-*.zip
-*.sql
-*.sql.gz
+/.phpunit.cache
+/bootstrap/ssr
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+# Dump database berisi seluruh pembukuan toko (transaksi, upah, pekerja).
+# Tidak pernah boleh masuk repo - salin manual ke Drive/flashdisk saja.
+/storage/backups
+/vendor
+.env
+.env.*
+!.env.example
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+
+# legacy entries (kept from previous .gitignore)
+compiled.php
+config.php
+down
+events.scanned.php
+maintenance.php
+routes.php
+routes.scanned.php
+schedule-*
+services.json
+
+# Paket unggah ke hosting: berisi dump pembukuan + salinan vendor.
+# Jangan pernah masuk git.
+/deploy/cpanel/paket
+
+# Sisa jalannya PHPUnit - berubah tiap kali tes dijalankan, tidak perlu diversi.
+/.phpunit.result.cache
+
+# Paket update ke hosting: hasil bentukan buat-update.ps1, jangan masuk git.
+/deploy/cpanel/paket-update

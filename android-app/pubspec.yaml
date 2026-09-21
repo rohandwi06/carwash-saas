@@ -1,0 +1,49 @@
+name: otin_carwash
+description: Aplikasi kasir OTIN CARWASH untuk tablet Android.
+publish_to: 'none'
+
+# version = <versi tampilan>+<build number>.
+# Build number ini yang dibandingkan dengan /api/app-version untuk
+# menawarkan update ke tablet pelanggan. Naikkan tiap rilis.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Teks bawaan Material (date picker, dll) dalam bahasa Indonesia.
+  flutter_localizations:
+    sdk: flutter
+
+  # --- Inti ---
+  flutter_riverpod: ^2.5.1      # state + loading/error otomatis (AsyncValue)
+  http: ^1.2.0                  # klien REST ke Laravel
+  shared_preferences: ^2.2.3    # token, alamat server, halaman terakhir
+  intl: ^0.20.3                 # versi ini dipatok flutter_localizations bawaan SDK
+
+  # --- Tampilan ---
+  fl_chart: ^0.68.0             # grafik Dashboard (pengganti Chart.js)
+
+  # --- Perangkat tablet ---
+  wakelock_plus: ^1.2.5         # layar kasir tidak mati sendiri
+  package_info_plus: ^8.0.0     # baca versi app untuk cek update
+  url_launcher: ^6.3.0          # buka link unduhan APK & unduh CSV
+
+  # --- Printer struk (thermal Bluetooth ESC/POS) ---
+  # Dipisah supaya gampang dicopot kalau tablet dijual tanpa printer.
+  esc_pos_utils_plus: ^2.0.4
+  print_bluetooth_thermal: ^1.1.0
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # Belum ada aset/font kustom. Kalau nanti mau pakai font sendiri
+  # (mis. Nunito), taruh file .ttf di assets/fonts/ lalu daftarkan di sini —
+  # jangan didaftarkan sebelum filenya ada, build-nya gagal.
