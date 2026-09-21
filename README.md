@@ -44,6 +44,25 @@ kendaraan, tiga layanan, delapan add-on, tarif upah, dan enam menu F&B umum. Sem
 diubah owner sendiri dari Pengaturan — angka di `config/carwash.php` hanya
 nilai awal pemasangan.
 
+### Data contoh 30 hari
+
+Untuk demo ke calon klien atau mencoba layar dengan data yang terisi:
+
+```bash
+php artisan migrate:fresh --seed
+php artisan db:seed --class=DemoSeeder
+```
+
+Isinya 30 hari penuh sampai kemarin ditambah hari ini sampai jam sekarang:
+±16 cucian/hari (lebih ramai akhir pekan), jajan & barang titipan, buku kas
+dua shift dengan setoran yang diterima/ditolak owner, pengajuan batal dari
+kasir (satu masih menunggu), koreksi transaksi, dan potongan upah. Semua
+dicatat lewat service yang sama dengan layar kasir, jadi Rekap, Pembukuan,
+Upah, dan Dashboard saling cocok. Akun kasir: `dina` / `kasir123` dan
+`rizal` / `kasir123`. Seeder menolak jalan di produksi atau di database yang
+sudah berisi transaksi; jalankan ulang kapan saja untuk menggeser tanggalnya
+ke hari ini.
+
 ## Tes
 
 ```bash
