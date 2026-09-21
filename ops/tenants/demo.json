@@ -3,14 +3,14 @@
   "nama_bisnis": "DEMO CARWASH",
   "status": "demo",
   "paket_harga": null,
-  "domain": "demo.rapiin.id",
+  "domain": "demo.byrapiin.my.id",
   "zona_waktu": "Asia/Jakarta",
   "hosting": {
-    "jenis": "reseller",
-    "cpanel_user": "demo",
+    "jenis": "mandiri",
+    "cpanel_user": null,
     "folder_app": "rapiin-app",
-    "docroot": "public_html",
-    "prefix_db": "demo"
+    "docroot": "demo.byrapiin.my.id",
+    "prefix_db": null
   },
   "owner": {
     "nama": "Rohan"
@@ -21,5 +21,9 @@
     "pasti": true,
     "migrasi_terakhir": null
   },
-  "catatan": []
+  "catatan": [
+    "Hosting cPanel biasa ArenHost (bukan reseller), domain utama byrapiin.my.id; demo di subdomain.",
+    "Document root subdomain ~/demo.byrapiin.my.id (sejajar ~/rapiin-app, BUKAN di dalam public_html) supaya $app_base ../rapiin-app di index.php tepat.",
+    "Isi cpanel_user & prefix_db setelah akun terlihat di cPanel."
+  ]
 }
