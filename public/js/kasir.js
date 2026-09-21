@@ -433,7 +433,7 @@ const JUDUL_LAYAR = {
   layarHome:      "Kasir",
   layarConfirm:   "Detail Cucian",
   layarDone:      "Transaksi Selesai",
-  layarFnb:       "Jual Makanan/Minuman",
+  layarFnb:       "Makanan",
   layarMenuFnb:   "Pengaturan",
   layarPekerja:   "Pekerja &amp; Upah",
   layarRekap:     "Rekap Hari Ini",
@@ -3402,7 +3402,7 @@ function gambarKeranjang(){
   $("tipFnbInfo").innerHTML = 'Tip <b>'+rp(tip)+'</b> &middot; uang diterima <b>'+rp(total+tip)+'</b>';
 }
 
-/** Nominal tip yang sedang diketik di layar Jual Makanan/Minuman. */
+/** Nominal tip yang sedang diketik di layar Makanan. */
 function tipFnb(){
   const v = parseInt(($("inTipFnb")||{}).value, 10);
   return (isNaN(v) || v<0) ? 0 : v;

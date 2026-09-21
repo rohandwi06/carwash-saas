@@ -18,7 +18,7 @@ import 'widgets/nama_usaha.dart';
 /// `kasirLastPage` di web.
 enum Halaman {
   kasir('layarHome', 'Kasir', Icons.local_car_wash),
-  fnb('layarFnb', 'Makanan & Minuman', Icons.restaurant),
+  fnb('layarFnb', 'Makanan', Icons.restaurant),
   rekap('layarRekap', 'Rekap Hari Ini', Icons.receipt_long),
   pengeluaran('layarPengeluaran', 'Pengeluaran', Icons.payments_outlined),
   buku('layarBuku', 'Pembukuan', Icons.menu_book),

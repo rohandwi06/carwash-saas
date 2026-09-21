@@ -10,7 +10,7 @@
       <button class="dr-item hidden" id="drItemDashboard" data-layar="layarDashboard" onclick="pergi('layarDashboard')"><span class="ikon">&#128202;</span> Dashboard</button>
       <div class="dr-sep"></div>
       <button class="dr-item" data-layar="layarHome" onclick="pergi('layarHome')"><span class="ikon">&#128663;</span> Kasir</button>
-      <button class="dr-item" data-layar="layarFnb" onclick="pergi('layarFnb')"><span class="ikon">&#127860;</span> Jual Makanan/Minuman</button>
+      <button class="dr-item" data-layar="layarFnb" onclick="pergi('layarFnb')"><span class="ikon">&#127860;</span> Makanan</button>
       <div class="dr-sep"></div>
       <button class="dr-item" data-layar="layarRekap" onclick="pergi('layarRekap')"><span class="ikon">&#128218;</span> Rekap Hari Ini</button>
       <button class="dr-item" data-layar="layarPengeluaran" onclick="pergi('layarPengeluaran')"><span class="ikon">&#128184;</span> Pengeluaran</button>

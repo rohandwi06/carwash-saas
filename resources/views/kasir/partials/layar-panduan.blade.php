@@ -208,7 +208,7 @@
               <p>Bisa, oleh kasir maupun owner. Buka <b>Rekap Hari Ini</b> (atau <b>Pembukuan</b>
                  untuk tanggal lain) &rarr; ketuk transaksinya &rarr; <b>Lihat Resi</b> &rarr; periksa isinya &rarr; <b>Cetak Resi</b>.</p>
               <p>Untuk jajan tanpa cuci, tekan tombol &#129534; di riwayat
-                 <b>Jual Makanan/Minuman</b> hari itu.</p>
+                 <b>Makanan</b> hari itu.</p>
               <p>Resi cetak ulang bertuliskan <b>*** SALINAN ***</b>, lengkap dengan jam cetak
                  dan nama yang mencetak — supaya tidak bisa diserahkan seolah transaksi baru.
                  Transaksi yang sudah dibatalkan tidak bisa dicetak lagi.</p>
