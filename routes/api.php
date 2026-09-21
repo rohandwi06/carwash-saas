@@ -229,12 +229,13 @@ Route::middleware('pin.auth')->group(function () {
         // Akun kasir (username/password) — hanya owner yang boleh kelola
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);
-        Route::patch('/users/{user}', [UserController::class, 'update']);
-        Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        // Situs demo: akun dipakai bersama semua pengunjung - lihat BukanDemo.
+        Route::patch('/users/{user}', [UserController::class, 'update'])->middleware('bukan.demo');
+        Route::delete('/users/{user}', [UserController::class, 'destroy'])->middleware('bukan.demo');
 
         // Akun owner sendiri (ganti username/password — wajib password lama)
         Route::get('/owner-account', [OwnerAccountController::class, 'show']);
-        Route::put('/owner-account', [OwnerAccountController::class, 'update']);
+        Route::put('/owner-account', [OwnerAccountController::class, 'update'])->middleware('bukan.demo');
 
         // Profil usaha: nama di header/login/resi/CSV, alamat & telepon di resi
         Route::put('/business-profile', [BusinessProfileController::class, 'update']);

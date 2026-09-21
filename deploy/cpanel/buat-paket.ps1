@@ -16,6 +16,9 @@
                       untuk cucian baru: katalog awal saja, tanpa transaksi.
                 lokal database di .env laptop ini apa adanya. Isinya
                       pembukuan OTIN - JANGAN untuk cucian lain.
+                demo  database kosong + data contoh 30 hari (DemoSeeder), untuk
+                      situs demo. Setelah terpasang, cron demo:reset tiap malam
+                      membangunnya ulang supaya "hari ini" selalu terisi.
                 tidak tanpa berkas database (mis. hanya memperbarui kode).
 
     Kenapa vendor/ ikut dibungkus: shared hosting cPanel umumnya tidak punya
@@ -26,7 +29,7 @@
 
 param(
     [Parameter(Mandatory)] [string]$FolderApp,
-    [ValidateSet('baru', 'lokal', 'tidak')] [string]$Database = 'baru',
+    [ValidateSet('baru', 'lokal', 'demo', 'tidak')] [string]$Database = 'baru',
     [switch]$TanpaDatabase   # nama lama untuk -Database tidak
 )
 if ($TanpaDatabase) { $Database = 'tidak' }
@@ -211,6 +214,10 @@ if ($Database -ne 'tidak') {
             try {
                 & php artisan migrate:fresh --seed --force
                 if ($LASTEXITCODE -ne 0) { throw "migrate:fresh --seed gagal." }
+                if ($Database -eq 'demo') {
+                    & php artisan db:seed --class=DemoSeeder --force
+                    if ($LASTEXITCODE -ne 0) { throw "DemoSeeder gagal." }
+                }
             } finally {
                 Pop-Location
                 Remove-Item Env:DB_DATABASE
@@ -222,7 +229,7 @@ if ($Database -ne 'tidak') {
         & $dump @koneksi --single-transaction --routines --no-tablespaces "--result-file=$sql" $namaDb
         if ($LASTEXITCODE -ne 0) { throw "mysqldump gagal." }
     } finally {
-        if ($Database -eq 'baru' -and $namaDb) {
+        if ($Database -in @('baru', 'demo') -and $namaDb) {
             & $mysql @koneksi -e "DROP DATABASE IF EXISTS $namaDb"
         }
         Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue

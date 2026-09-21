@@ -11,8 +11,12 @@
     Dengan -Terapkan: juga membuat akun cPanel dan database lewat WHM API.
     Butuh config.json bagian whm terisi dan RAPIIN_WHM_TOKEN.
 
-    Sisa langkah (unggah paket, impor database cetakan, SSL, cron) masih
-    manual dan dicetak di akhir - lihat docs\ARCHITECTURE.md.
+    Sisa langkah (unggah paket, impor database, SSL, cron) masih manual dan
+    dicetak di akhir - lihat docs\ARCHITECTURE.md.
+
+    -Demo: situs demo untuk calon klien, bukan cucian. APP_ENV=demo (data
+    direset tiap malam oleh cron demo:reset, akun owner & kasir dikunci,
+    info login tampil di layar login), status 'demo', tanpa paket harga.
 #>
 
 param(
@@ -23,7 +27,8 @@ param(
     [string]$ZonaWaktu,
     [string]$OwnerUsername = 'owner',
     [switch]$Terapkan,
-    [switch]$Timpa
+    [switch]$Timpa,
+    [switch]$Demo
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,7 +53,7 @@ $pRahasia = Join-Path (Get-OpsRoot) "secrets\$Slug.env"
 if ((Test-Path $pTenant) -and -not $Timpa) {
     throw "tenants\$Slug.json sudah ada. Pakai -Timpa kalau memang mau menyiapkan ulang (password lama di secrets\ ikut diganti)."
 }
-if ((Test-Path $pTenant) -and $Timpa -and (Get-Tenant $Slug).status -ne 'disiapkan') {
+if ((Test-Path $pTenant) -and $Timpa -and (Get-Tenant $Slug).status -notin @('disiapkan', 'demo')) {
     throw "Tenant '$Slug' berstatus '$((Get-Tenant $Slug).status)' - tidak boleh ditimpa. Hanya status 'disiapkan' yang boleh."
 }
 
@@ -66,6 +71,7 @@ $isiEnv = Expand-Template 'tenant.env' @{
     NAMA_BISNIS    = $NamaBisnis
     TANGGAL        = (Get-Date -Format 'yyyy-MM-dd')
     FOLDER_APP     = $a.folder_app
+    APP_ENV        = $(if ($Demo) { 'demo' } else { 'production' })
     APP_KEY        = (New-AppKey)
     DOMAIN         = $domain
     ZONA_WAKTU     = $ZonaWaktu
@@ -83,8 +89,8 @@ Write-Utf8 $pRahasia $isiEnv
 $tenant = [ordered]@{
     slug        = $Slug
     nama_bisnis = $NamaBisnis
-    status      = 'disiapkan'
-    paket_harga = $PaketHarga
+    status      = $(if ($Demo) { 'demo' } else { 'disiapkan' })
+    paket_harga = $(if ($Demo) { $null } else { $PaketHarga })
     domain      = $domain
     zona_waktu  = $ZonaWaktu
     hosting     = [ordered]@{
@@ -145,11 +151,21 @@ if (-not $Terapkan) {
 # --- 4. Sisa langkah manual -------------------------------------------------
 Write-Host ""
 Write-Host "Langkah berikutnya (manual sampai verifikasi WHM selesai):" -ForegroundColor Cyan
-Write-Host "  1. deploy\cpanel\buat-paket.ps1 -FolderApp $($a.folder_app)  (database kosong otomatis)."
+Write-Host "  1. deploy\cpanel\buat-paket.ps1 -FolderApp $($a.folder_app)$(if ($Demo) { ' -Database demo  (berisi data contoh 30 hari).' } else { '  (database kosong otomatis).' })"
 Write-Host "     Unggah app.zip ke ~/$($a.folder_app) dan public.zip ke ~/public_html, lalu ekstrak."
 Write-Host "  2. Salin secrets\$Slug.env menjadi ~/$($a.folder_app)/.env, permission 600."
-Write-Host "  3. phpMyAdmin -> $dbNama -> impor database.sql dari paket yang sama."
+Write-Host "  3. phpMyAdmin -> $dbNama -> impor database.sql dari paket yang sama$(if ($Demo) { ' (buat dengan -Database demo)' })."
+
 Write-Host "  4. SSL/TLS Status -> Run AutoSSL untuk $domain."
-Write-Host "  5. Cron: * * * * * php ~/$($a.folder_app)/artisan schedule:run >/dev/null 2>&1"
-Write-Host "  6. Serahkan login owner: $OwnerUsername / (lihat secrets\$Slug.env) - minta langsung diganti."
-Write-Host "  7. Isi versi & mulai di tenants\$Slug.json, status -> percobaan, commit."
+if ($Demo) {
+    Write-Host "  5. Cron: 0 3 * * * php ~/$($a.folder_app)/artisan demo:reset >/dev/null 2>&1   (reset data tiap malam)"
+} else {
+    Write-Host "  5. Cron: * * * * * php ~/$($a.folder_app)/artisan schedule:run >/dev/null 2>&1"
+}
+if ($Demo) {
+    Write-Host "  6. Login owner & kasir tampil sendiri di layar login demo; akunnya dikunci dari perubahan."
+} else {
+    Write-Host "  6. Serahkan login owner: $OwnerUsername / (lihat secrets\$Slug.env) - minta langsung diganti."
+}
+Write-Host "  7. Isi versi & mulai di tenants\$Slug.json$(if (-not $Demo) { ', status -> percobaan' }), commit."
+

@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'pin.auth' => \App\Http\Middleware\PinAuth::class,
             'owner'    => \App\Http\Middleware\OwnerOnly::class,
             'shift'    => \App\Http\Middleware\ShiftGuard::class,
+            'bukan.demo' => \App\Http\Middleware\BukanDemo::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

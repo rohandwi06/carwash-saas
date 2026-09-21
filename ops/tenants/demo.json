@@ -1,0 +1,25 @@
+{
+  "slug": "demo",
+  "nama_bisnis": "DEMO CARWASH",
+  "status": "demo",
+  "paket_harga": null,
+  "domain": "demo.rapiin.id",
+  "zona_waktu": "Asia/Jakarta",
+  "hosting": {
+    "jenis": "reseller",
+    "cpanel_user": "demo",
+    "folder_app": "rapiin-app",
+    "docroot": "public_html",
+    "prefix_db": "demo"
+  },
+  "owner": {
+    "nama": "Rohan"
+  },
+  "mulai": null,
+  "versi": {
+    "commit": null,
+    "pasti": true,
+    "migrasi_terakhir": null
+  },
+  "catatan": []
+}

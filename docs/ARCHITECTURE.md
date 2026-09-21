@@ -134,7 +134,8 @@ sedang jalan di produksi.*
 - **`slug`** = nama akun cPanel = subdomain. Aturan cPanel: huruf kecil &
   angka, diawali huruf, maks 16, tanpa tanda hubung, tidak diawali `test`.
 - **`status`**: `disiapkan` → `percobaan` (gratis sebulan) → `aktif` → `berhenti`.
-  Skrip update hanya menyentuh `percobaan` dan `aktif`.
+  Situs demo berstatus `demo` (`New-Tenant.ps1 -Demo`, `APP_ENV=demo`).
+  Skrip update menyentuh `percobaan`, `aktif`, dan `demo`.
 - **`paket_harga`**: `kecil` / `sedang` / `besar` (MODEL-BISNIS bagian 4). Hanya
   catatan tagihan; fiturnya sama.
 - **`versi.commit`** ditulis oleh skrip update setelah paket naik. `pasti: false`

@@ -708,6 +708,9 @@
   /* Dulu kotak PIN 4 digit (rata tengah, huruf renggang, mirip kotak-kotak
      digit) — sejak login jadi username/password biasa, gaya lamanya bikin
      placeholder "Username"/"Password" melebar sampai terpotong dari box-nya. */
+  .login-demo{margin-top:16px;padding:12px 14px;border-radius:12px;background:#FFFBEE;
+    border:2px dashed var(--tag);font-size:13.5px;line-height:1.6;text-align:left;color:var(--ink)}
+  .login-demo code{font-family:inherit;font-weight:900;background:var(--card);padding:1px 6px;border-radius:6px}
   .login-kotak input{width:100%;text-align:left;font-size:17px;letter-spacing:normal;
     font-weight:700;padding:14px;border:3px solid #141414;border-radius:12px;margin-bottom:12px}
   .login-kotak button{width:100%;padding:14px;font-size:16px;font-weight:900;

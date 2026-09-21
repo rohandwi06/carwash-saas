@@ -10,5 +10,15 @@
            maxlength="255" placeholder="Password"
            onkeydown="if(event.key==='Enter')kirimLogin()">
     <button onclick="kirimLogin()">MASUK</button>
+    {{-- Hanya di situs demo (APP_ENV=demo): calon klien perlu bisa masuk
+         tanpa menunggu diberi tahu. Di instalasi cucian sungguhan blok ini
+         tidak pernah dirender, jadi password owner tidak ikut tampil. --}}
+    @if (app()->environment('demo'))
+      <div class="login-demo">
+        <b>Versi demo</b> &mdash; silakan dicoba, data dikembalikan tiap malam.<br>
+        Owner: <code>{{ config('carwash.owner.username') }}</code> / <code>{{ config('carwash.owner.password') }}</code><br>
+        Kasir: <code>dina</code> / <code>kasir123</code>
+      </div>
+    @endif
   </div>
 </div>

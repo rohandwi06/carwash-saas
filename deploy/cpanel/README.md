@@ -123,6 +123,33 @@ Penyebab tersering: permission `storage` bukan 755, atau PHP di bawah 8.2.
 
 ---
 
+## Situs demo
+
+Akun cPanel biasa di reseller, disiapkan dengan `-Demo`:
+
+```bash
+powershell -ExecutionPolicy Bypass -File ops\scripts\New-Tenant.ps1 -Slug demo -NamaBisnis "DEMO CARWASH" -Owner "Rohan" -Demo
+powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1 -FolderApp rapiin-app -Database demo
+```
+
+Pemasangannya sama dengan Bagian 3–8, dengan tiga beda:
+
+- `.env`-nya berisi `APP_ENV=demo`. Layar login lalu menampilkan info masuk
+  owner & kasir, dan akun owner/kasir tidak bisa diubah atau dihapus —
+  akunnya dipakai bersama semua pengunjung.
+- `database.sql` sudah berisi data contoh 30 hari.
+- Cron-nya **bukan** `schedule:run`, melainkan satu baris pada jam sepi:
+
+  ```
+  0 3 * * * /usr/local/bin/php /home/USER/rapiin-app/artisan demo:reset >> /dev/null 2>&1
+  ```
+
+  `demo:reset` menghapus seluruh database lalu membangun ulang data 30 hari
+  yang berakhir hari itu, jadi "Rekap Hari Ini" selalu terisi dan coretan
+  pengunjung hilang besok paginya. Jam cron mengikuti zona waktu server
+  (cek di cPanel → Cron Jobs). Perintah ini menolak jalan bila `APP_ENV`
+  bukan `demo`, jadi tidak bisa terpasang tak sengaja di akun cucian.
+
 ## Memperbarui cucian yang sudah jalan
 
 ```bash
