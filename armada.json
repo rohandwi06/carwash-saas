@@ -1,0 +1,16 @@
+{
+  "produk": "rapiin.id",
+  "domain_utama": "rapiin.id",
+  "repo_aplikasi": "C:/xamppp/htdocs/otin-carwash",
+  "whm": {
+    "host": "",
+    "port": 2087,
+    "reseller_user": "",
+    "paket_cpanel": "",
+    "email_kontak": ""
+  },
+  "prefix_db_panjang": 8,
+  "folder_app": "rapiin-app",
+  "zona_waktu_bawaan": "Asia/Jakarta",
+  "gemini_model": "gemini-3.5-flash"
+}

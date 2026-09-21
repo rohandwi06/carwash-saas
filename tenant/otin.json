@@ -1,0 +1,29 @@
+{
+  "slug": "otin",
+  "nama_bisnis": "OTIN CARWASH",
+  "status": "aktif",
+  "paket_harga": "sedang",
+  "domain": "otincarwash-pos.my.id",
+  "zona_waktu": "Asia/Jakarta",
+  "hosting": {
+    "jenis": "mandiri",
+    "cpanel_user": null,
+    "folder_app": "otin-carwash",
+    "docroot": "public_html",
+    "prefix_db": "otincarw"
+  },
+  "owner": {
+    "nama": "Mas Angga"
+  },
+  "mulai": "2026-07-20",
+  "versi": {
+    "commit": "222de3a",
+    "pasti": false,
+    "migrasi_terakhir": "2026_09_18_000003_add_consignment_to_products_sales_expenses"
+  },
+  "catatan": [
+    "Klien pertama, akun hosting ArenHost sendiri (bukan di bawah reseller). Tanpa Terminal.",
+    "versi.pasti=false: 71b27a2 pasti s/d 14-09; paket 18-09 (sejak 71b27a2 + SQL 3 migrasi 2026_09_18) dan 21-09 (sejak c57cf21) belum dikonfirmasi sudah diunggah. Ubah ke true setelah dicek.",
+    "Paket harga 'sedang' karena ~15,9 mobil/hari - belum pernah ditagih, catatan saja."
+  ]
+}
