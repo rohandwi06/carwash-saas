@@ -174,6 +174,29 @@
         <div class="set-grup" data-grup="akun">
           {{-- Akun owner sendiri. Password lama wajib diisi — sesi yang sudah
                terbuka saja tidak cukup untuk mengambil alih akun ini. --}}
+          <div class="cat-blok hidden" id="blokProfilUsaha">
+            <h3>&#127978; Profil usaha</h3>
+            <div class="cat-kosong" style="margin-bottom:10px">Tampil di layar login, menu, resi, dan laporan CSV. Alamat &amp; telepon hanya dicetak di resi bila diisi.</div>
+            <div class="range-input-group" style="margin-bottom:6px">
+              <label for="inUsahaNama">Nama usaha</label>
+              <input id="inUsahaNama" class="inp-range" maxlength="60" style="text-transform:none" placeholder="Nama carwash">
+            </div>
+            <div class="range-input-group" style="margin-bottom:6px">
+              <label for="inUsahaTagline">Keterangan di bawah nama (boleh kosong)</label>
+              <input id="inUsahaTagline" class="inp-range" maxlength="80" style="text-transform:none" placeholder="Cuci Mobil &amp; Motor">
+            </div>
+            <div class="range-input-group" style="margin-bottom:6px">
+              <label for="inUsahaAlamat">Alamat (boleh kosong)</label>
+              <input id="inUsahaAlamat" class="inp-range" maxlength="160" style="text-transform:none" placeholder="Jl. ...">
+            </div>
+            <div class="range-input-group" style="margin-bottom:10px">
+              <label for="inUsahaTelp">Telepon / WhatsApp (boleh kosong)</label>
+              <input id="inUsahaTelp" class="inp-range" maxlength="30" inputmode="tel" placeholder="08...">
+            </div>
+            <button class="btn-catat" style="background:var(--go);width:100%"
+                    onclick="simpanProfilUsaha()">Simpan Profil Usaha</button>
+          </div>
+
           <div class="cat-blok hidden" id="blokAkunOwner">
             <h3>&#128081; Akun owner</h3>
             <div class="cat-kosong" style="margin-bottom:10px" id="akunOwnerInfo"></div>

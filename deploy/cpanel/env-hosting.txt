@@ -1,5 +1,7 @@
 # =============================================================================
-# OTIN CARWASH — isi .env untuk shared hosting cPanel (ArenHost)
+# .env OTIN CARWASH di shared hosting cPanel (ArenHost).
+# Cucian BARU tidak memakai berkas ini: .env-nya dibuat otomatis oleh
+# ops/scripts/New-Tenant.ps1 dari ops/templates/tenant.env.
 #
 # Salin isi berkas ini menjadi:  ~/otin-carwash/.env  (BUKAN di public_html)
 #
@@ -12,6 +14,7 @@ APP_ENV=production
 APP_KEY=
 APP_DEBUG=false
 APP_URL=https://otincarwash-pos.my.id
+APP_TIMEZONE=Asia/Jakarta
 
 APP_LOCALE=en
 APP_FALLBACK_LOCALE=en

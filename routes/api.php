@@ -3,6 +3,7 @@
 use App\Http\Controllers\AddonController;
 use App\Http\Controllers\AiVehicleController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BusinessProfileController;
 use App\Http\Controllers\CashBookController;
 use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\ConsignorController;
@@ -46,6 +47,10 @@ Route::middleware('pin.auth')->group(function () {
     // Status jam operasional — sengaja DI LUAR 'shift' supaya kasir yang
     // terkunci masih bisa tahu jam berapa ia boleh masuk lagi.
     Route::get('/shift', [ShiftController::class, 'show']);
+
+    // Nama & alamat usaha untuk resi. Semua role; juga di luar 'shift'
+    // karena tidak berisi data transaksi apa pun.
+    Route::get('/business-profile', [BusinessProfileController::class, 'show']);
 
     /*
     |----------------------------------------------------------------------
@@ -230,6 +235,9 @@ Route::middleware('pin.auth')->group(function () {
         // Akun owner sendiri (ganti username/password — wajib password lama)
         Route::get('/owner-account', [OwnerAccountController::class, 'show']);
         Route::put('/owner-account', [OwnerAccountController::class, 'update']);
+
+        // Profil usaha: nama di header/login/resi/CSV, alamat & telepon di resi
+        Route::put('/business-profile', [BusinessProfileController::class, 'update']);
 
         // Penyesuaian upah: potongan (hukuman) & timpa angka upah. Owner-only
         // karena menentukan uang yang diterima orang lain sekaligus mengubah

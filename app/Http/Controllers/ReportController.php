@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FnbSale;
 use App\Models\Transaction;
 use App\Services\BookkeepingService;
+use App\Services\BusinessProfileService;
 use App\Services\StatisticsService;
 use App\Services\WageService;
 use Illuminate\Http\JsonResponse;
@@ -79,19 +80,21 @@ class ReportController extends Controller
     }
 
     /** GET /api/reports/daily/csv?date=... — unduh laporan harian */
-    public function dailyCsv(Request $request): StreamedResponse
+    public function dailyCsv(Request $request, BusinessProfileService $profil): StreamedResponse
     {
+        $usaha = $profil->name();
+        $slug  = $profil->slug();
         $date  = $request->query('date', now()->toDateString());
         $recap = $this->books->dailyRecap($date);
         $trx   = Transaction::with('workers:id,name', 'addons')
             ->whereDate('date', $date)->orderBy('queue_no')->get();
         $fnb   = FnbSale::valid()->with('items')->whereDate('date', $date)->orderBy('id')->get();
 
-        return response()->streamDownload(function () use ($recap, $trx, $fnb) {
+        return response()->streamDownload(function () use ($recap, $trx, $fnb, $usaha) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // BOM agar Excel baca UTF-8
 
-            fputcsv($out, ['LAPORAN HARIAN OTIN CARWASH', $recap['date']], ';');
+            fputcsv($out, ['LAPORAN HARIAN '.mb_strtoupper($usaha), $recap['date']], ';');
             fputcsv($out, [], ';');
             fputcsv($out, ['No', 'Kendaraan', 'Jenis', 'Layanan', 'Tambahan', 'Bayar', 'Plat', 'Pekerja', 'Tip', 'Total', 'Status', 'Dicatat oleh'], ';');
 
@@ -145,6 +148,6 @@ class ReportController extends Controller
             fputcsv($out, ['LABA BERSIH', $recap['profit']], ';');
 
             fclose($out);
-        }, "laporan-otin-carwash-{$date}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, "laporan-{$slug}-{$date}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 }

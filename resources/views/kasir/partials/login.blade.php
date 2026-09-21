@@ -1,6 +1,6 @@
 <div class="login-layar hidden-login" id="layarLogin">
   <div class="login-kotak">
-    <h2>&#128274; OTIN CARWASH</h2>
+    <h2>&#128274; <span class="nama-usaha-polos">{{ $usaha['name'] }}</span></h2>
     <p>Masuk untuk membuka kasir</p>
     <div class="login-err" id="loginErr"></div>
     <input id="inputUsername" type="text" autocomplete="username" autocapitalize="none"

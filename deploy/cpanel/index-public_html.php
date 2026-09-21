@@ -2,17 +2,18 @@
 
 /*
 |-----------------------------------------------------------------------------
-| OTIN CARWASH — entry point untuk shared hosting cPanel (ArenHost).
+| Entry point untuk shared hosting cPanel (ArenHost).
 |
-| Salin berkas ini menjadi:  ~/public_html/index.php
+| Tidak perlu disalin tangan: buat-paket.ps1 memasukkannya ke public.zip
+| sebagai ~/public_html/index.php, dengan $app_base diganti sesuai
+| -FolderApp. Nilai di bawah hanya bawaan untuk OTIN.
 |
 | Bedanya dengan public/index.php bawaan: di cPanel isi folder public/ tinggal
 | di public_html, sedangkan SISA proyek (vendor/, .env, storage/, app/) ada di
-| ~/otin-carwash — DI LUAR public_html, supaya .env dan pembukuan tidak pernah
+| ~/<folder aplikasi> — DI LUAR public_html, supaya .env dan pembukuan tidak pernah
 | bisa diunduh lewat browser. Karena itu path-nya naik ke folder induk, bukan
 | '__DIR__/../'.
 |
-| Kalau nama foldernya bukan "otin-carwash", ganti satu baris $app_base saja.
 |-----------------------------------------------------------------------------
 */
 

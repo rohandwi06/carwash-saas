@@ -144,10 +144,11 @@ if (-not $Terapkan) {
 
 # --- 4. Sisa langkah manual -------------------------------------------------
 Write-Host ""
-Write-Host "Langkah berikutnya (manual sampai New-Release.ps1 & verifikasi WHM selesai):" -ForegroundColor Cyan
-Write-Host "  1. Unggah app.zip ke ~/$($a.folder_app) dan public.zip ke ~/public_html, lalu ekstrak."
+Write-Host "Langkah berikutnya (manual sampai verifikasi WHM selesai):" -ForegroundColor Cyan
+Write-Host "  1. deploy\cpanel\buat-paket.ps1 -FolderApp $($a.folder_app)  (database kosong otomatis)."
+Write-Host "     Unggah app.zip ke ~/$($a.folder_app) dan public.zip ke ~/public_html, lalu ekstrak."
 Write-Host "  2. Salin secrets\$Slug.env menjadi ~/$($a.folder_app)/.env, permission 600."
-Write-Host "  3. phpMyAdmin -> $dbNama -> impor cetakan.sql dari rilis yang sama."
+Write-Host "  3. phpMyAdmin -> $dbNama -> impor database.sql dari paket yang sama."
 Write-Host "  4. SSL/TLS Status -> Run AutoSSL untuk $domain."
 Write-Host "  5. Cron: * * * * * php ~/$($a.folder_app)/artisan schedule:run >/dev/null 2>&1"
 Write-Host "  6. Serahkan login owner: $OwnerUsername / (lihat secrets\$Slug.env) - minta langsung diganti."

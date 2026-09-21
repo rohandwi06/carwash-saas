@@ -1,5 +1,5 @@
 /* ============================================================
-   OTIN CARWASH — Frontend API client
+   Kasir carwash — Frontend API client
    Semua data hidup di server Laravel (bukan localStorage).
    ============================================================ */
 
@@ -10,9 +10,22 @@ const API = "/api"; // sama-origin: file ini disajikan dari public/ Laravel
 const ERR_LOGIN = "Belum login.";
 const ERR_SHIFT = "Shift tutup.";
 
-let TOKEN = localStorage.getItem("otin_token") || "";
-let ROLE  = localStorage.getItem("otin_role")  || "";
-let NAMA  = localStorage.getItem("otin_name")  || "";
+/* Kunci localStorage dulu berawalan "otin" (nama cucian pertama). Aplikasi
+   ini sekarang dipakai banyak cucian, jadi kuncinya dibuat netral. Isi kunci
+   lama dipindahkan sekali di sini, supaya kasir OTIN yang sedang login tidak
+   terlempar ke layar login gara-gara pembaruan ini. */
+[["otin_token","kasir_token"], ["otin_role","kasir_role"], ["otin_name","kasir_name"],
+ ["otinLastPage","kasirLastPage"], ["otinTabPengaturan","kasirTabPengaturan"]].forEach(([lama, baru]) => {
+  try{
+    const v = localStorage.getItem(lama);
+    if(v !== null && localStorage.getItem(baru) === null) localStorage.setItem(baru, v);
+    localStorage.removeItem(lama);
+  }catch(e){ /* storage diblokir: login ulang sekali, tidak lebih */ }
+});
+
+let TOKEN = localStorage.getItem("kasir_token") || "";
+let ROLE  = localStorage.getItem("kasir_role")  || "";
+let NAMA  = localStorage.getItem("kasir_name")  || "";
 
 /* opts.penuh = true -> kembalikan SELURUH badan JSON, bukan cuma .data.
    Dipakai endpoint yang ikut mengirim ringkasan hitungan dari server
@@ -79,9 +92,9 @@ async function api(path, opts = {}) {
 /* ---------- LOGIN PIN ---------- */
 function simpanSesi(token, role, nama){
   TOKEN = token; ROLE = role; NAMA = nama || "";
-  token ? localStorage.setItem("otin_token", token) : localStorage.removeItem("otin_token");
-  role  ? localStorage.setItem("otin_role", role)   : localStorage.removeItem("otin_role");
-  NAMA  ? localStorage.setItem("otin_name", NAMA)   : localStorage.removeItem("otin_name");
+  token ? localStorage.setItem("kasir_token", token) : localStorage.removeItem("kasir_token");
+  role  ? localStorage.setItem("kasir_role", role)   : localStorage.removeItem("kasir_role");
+  NAMA  ? localStorage.setItem("kasir_name", NAMA)   : localStorage.removeItem("kasir_name");
   const badge = document.getElementById("roleBadge");
   if (badge) badge.textContent = role ? role.toUpperCase()+(NAMA?" · "+NAMA:"") : "-";
   terapkanBatasRole();
@@ -474,7 +487,7 @@ function pergi(id){
   if(id==="layarBuku") renderBuku();
   if(id==="layarDashboard") renderDashboard();
   tampilkan(id);
-  localStorage.setItem("otinLastPage", id);
+  localStorage.setItem("kasirLastPage", id);
 }
 function keHome(){ tampilkan("layarHome"); }
 
@@ -804,9 +817,17 @@ function totalTrx(trx){
    setelah transaksi tersimpan, dan untuk CETAK ULANG dari Rekap, Pembukuan,
    atau riwayat F&B — resi yang dicetak ulang diberi tanda SALINAN.
 
-   Nama usaha sengaja dikumpulkan di satu tempat: kelak diambil dari
-   pengaturan tiap cucian (docs/AUDIT-MULTITENANT.md temuan 1.1). */
-const RESI_USAHA = {nama: "OTIN CARWASH", sub: "Cuci Mobil &amp; Motor"};
+   Kepala resi (nama, keterangan, alamat, telepon) diambil dari profil usaha
+   yang diatur owner di Pengaturan -> Akun; nilainya dibawa halaman sebagai
+   window.USAHA dan diperbarui begitu owner menyimpan. */
+let USAHA = Object.assign({name:"", tagline:"", address:"", phone:""}, window.USAHA || {});
+
+function kepalaResi(){
+  return '<div class="r-tengah r-judul">'+esc(USAHA.name)+'</div>'
+    +(USAHA.tagline? '<div class="r-tengah">'+esc(USAHA.tagline)+'</div>' : '')
+    +(USAHA.address? '<div class="r-tengah">'+esc(USAHA.address)+'</div>' : '')
+    +(USAHA.phone?   '<div class="r-tengah">Telp. '+esc(USAHA.phone)+'</div>' : '');
+}
 
 /* Nomor nota = id catatannya, diberi awalan jenis. Cucian dan F&B hidup di
    tabel berbeda dengan urutan id masing-masing, jadi awalan itulah yang
@@ -873,8 +894,7 @@ function isiResi(d, salinan){
   const waktu = new Date(d.waktu || Date.now());
   const sekarang = new Date();
   $("resi").innerHTML =
-    '<div class="r-tengah r-judul">'+RESI_USAHA.nama+'</div>'
-    +'<div class="r-tengah">'+RESI_USAHA.sub+'</div>'
+    kepalaResi()
     +(salinan? '<div class="r-tengah r-salinan">*** SALINAN ***</div>' : '')
     +GARIS_RESI
     +barisResi("No. Nota", d.nomor)
@@ -4037,6 +4057,50 @@ async function muatUlangKatalog(){
   await renderKendaraan();
   await renderAddonPengaturan();
 }
+/* ---------- PROFIL USAHA (khusus owner) ----------
+   Nama tampil di header, menu, layar login, judul tab, resi, dan laporan CSV.
+   Alamat & telepon hanya di resi, dan hanya kalau diisi. */
+async function renderProfilUsaha(){
+  const blok = $("blokProfilUsaha");
+  if(!blok) return;
+  if(ROLE!=="owner"){ blok.classList.add("hidden"); return; }
+  blok.classList.remove("hidden");
+  try{
+    const p = await api("/business-profile");
+    $("inUsahaNama").value    = p.name    || "";
+    $("inUsahaTagline").value = p.tagline || "";
+    $("inUsahaAlamat").value  = p.address || "";
+    $("inUsahaTelp").value    = p.phone   || "";
+  }catch(e){ gagal(e); }
+}
+
+async function simpanProfilUsaha(){
+  const body = {
+    name:    $("inUsahaNama").value.trim(),
+    tagline: $("inUsahaTagline").value.trim(),
+    address: $("inUsahaAlamat").value.trim(),
+    phone:   $("inUsahaTelp").value.trim(),
+  };
+  if(!body.name){ alert("Nama usaha tidak boleh kosong"); $("inUsahaNama").focus(); return; }
+  try{
+    terapkanProfilUsaha(await api("/business-profile",{method:"PUT",body}));
+    Swal.fire({toast:true, position:"top-end", icon:"success", title:"Profil usaha tersimpan",
+      showConfirmButton:false, timer:1800});
+  }catch(e){ gagal(e); }
+}
+
+/** Nama baru langsung terlihat tanpa memuat ulang halaman. Susunannya sama
+    dengan resources/views/kasir/partials/brand.blade.php. */
+function terapkanProfilUsaha(p){
+  USAHA = Object.assign(USAHA, p);
+  const kata = USAHA.name.trim().split(/\s+/);
+  const akhir = kata.length > 1 ? kata.pop() : "";
+  const html = esc(kata.join(" ")) + (akhir? ' <span class="kuning">'+esc(akhir)+'</span>' : '');
+  document.querySelectorAll(".nama-usaha").forEach(el => el.innerHTML = html);
+  document.querySelectorAll(".nama-usaha-polos").forEach(el => el.textContent = USAHA.name);
+  document.title = USAHA.name + " — Kasir";
+}
+
 /* ---------- AKUN OWNER (khusus owner) ----------
    Owner mengubah username/password-nya sendiri. Password lama WAJIB diisi:
    sesi yang tertinggal terbuka di tablet tidak boleh cukup untuk mengambil
@@ -4172,7 +4236,7 @@ function setTabPengaturan(tab, gulirKeAtas = true){
     b.classList.toggle("aktif", b.dataset.tab === tab));
   document.querySelectorAll(".set-grup").forEach(g =>
     g.classList.toggle("hidden", g.dataset.grup !== tab));
-  localStorage.setItem("otinTabPengaturan", tab);
+  localStorage.setItem("kasirTabPengaturan", tab);
   // Pindah tab = layar berganti isi; kalau posisi gulir dibiarkan, tab pendek
   // seperti Shift terbuka di tengah-tengah halaman.
   const layar = $("layarMenuFnb");
@@ -4277,12 +4341,13 @@ let produkSemua = [], menuCari = "", menuFilter = "semua";
    mulai dari pucuk) dan setiap kali SELESAI MENYIMPAN sesuatu di layar itu
    (default false — posisi gulir owner dibiarkan apa adanya). */
 async function renderMenuFnb(gulirKeAtas = false){
-  setTabPengaturan(localStorage.getItem("otinTabPengaturan") || "kendaraan", gulirKeAtas);
+  setTabPengaturan(localStorage.getItem("kasirTabPengaturan") || "kendaraan", gulirKeAtas);
   try{
     renderKatalog();
     renderKendaraan();
     renderPenitip();
     renderAddonPengaturan();
+    renderProfilUsaha();
     renderAkunOwner();
     renderAkunKasir();
     renderKaryawanTraining();
@@ -4765,7 +4830,7 @@ async function mulaiAplikasi(){
     // Layar dibuka DULUAN supaya tidak ada layar kosong selama data dimuat —
     // isinya terisi sendiri begitu siap. pergi() yang membelokkan kalau
     // halaman terakhir ternyata layar owner sementara yang login kasir.
-    const lastPage = localStorage.getItem("otinLastPage") || layarAwal();
+    const lastPage = localStorage.getItem("kasirLastPage") || layarAwal();
     pergi(lastPage);
     const [cfg, pk, pr] = await Promise.all([
       api("/config"), api("/workers"), api("/products?active=1"),

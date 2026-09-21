@@ -2,7 +2,7 @@
   <div class="top-isi">
     <div style="display:flex;align-items:center;gap:6px">
       <button class="burger" onclick="bukaMenu()" aria-label="Buka menu">&#9776;</button>
-      <div class="brand"><span class="logo">&#128167;</span><span>OTIN <span class="kuning">CARWASH</span></span></div>
+      <div class="brand"><span class="logo">&#128167;</span>@include('kasir.partials.brand')</div>
     </div>
     {{-- Menggantikan chip antrean: sekarang menunjukkan toko buka sampai jam
          berapa. Diisi JS lewat renderChipShift(); disembunyikan bila jam

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OTIN CARWASH — Kasir Cuci Mobil & Motor</title>
+<title>{{ $usaha['name'] }} — Kasir</title>
 <link rel="stylesheet" href="{{ asset('css/kasir.css') }}?v={{ filemtime(public_path('css/kasir.css')) }}">
 </head>
 <body>
@@ -74,6 +74,9 @@
 {{-- Chart.js disimpan lokal, bukan dari CDN: aplikasi ini dipakai di jaringan
      toko yang bisa saja tanpa internet. --}}
 <script src="{{ asset('js/chart.min.js') }}"></script>
+{{-- Profil usaha dibawa langsung di halaman: layar login sudah butuh nama
+     usaha sebelum ada token untuk memanggil API. --}}
+<script>window.USAHA = @json($usaha);</script>
 <script src="{{ asset('js/kasir.js') }}?v={{ filemtime(public_path('js/kasir.js')) }}"></script>
 </body>
 </html>

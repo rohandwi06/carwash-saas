@@ -62,10 +62,16 @@ return [
     | Here you may specify the default timezone for your application, which
     | will be used by the PHP date and date-time functions.
     |
-    | Asia/Jakarta (WIB), BUKAN UTC bawaan Laravel. Aplikasi ini melayani satu
-    | toko di Indonesia dan membandingkan JAM DINDING dengan jadwal shift yang
-    | diketik owner dalam waktu setempat. Dengan UTC, cucian jam 16:14 WIB
-    | dinilai terjadi jam 09:14 dan digolongkan ke shift yang salah.
+    | Waktu setempat cucian, BUKAN UTC bawaan Laravel. Aplikasi membandingkan
+    | JAM DINDING dengan jadwal shift yang diketik owner dalam waktu setempat.
+    | Dengan UTC, cucian jam 16:14 WIB dinilai terjadi jam 09:14 dan
+    | digolongkan ke shift yang salah.
+    |
+    | Tiap cucian memasang aplikasi ini di hosting-nya sendiri, jadi zonanya
+    | diatur per instalasi lewat APP_TIMEZONE: Asia/Jakarta (WIB),
+    | Asia/Makassar (WITA), atau Asia/Jayapura (WIT). Isi SEKALI saat
+    | pemasangan — menggantinya setelah ada data menggeser jam semua catatan
+    | lama, karena waktu disimpan sebagai jam dinding tanpa zona.
     |
     | Waktu yang terlanjur tersimpan saat masih UTC sudah digeser +7 jam oleh
     | migrasi 2026_07_27_000013. Mengembalikan nilai ini ke UTC tanpa
@@ -73,7 +79,7 @@ return [
     |
     */
 
-    'timezone' => 'Asia/Jakarta',
+    'timezone' => env('APP_TIMEZONE', 'Asia/Jakarta'),
 
     /*
     |--------------------------------------------------------------------------

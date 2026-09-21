@@ -84,16 +84,22 @@ di kode aplikasi.
 | tabel `settings` | nama bisnis, jam shift, akun owner (ter-hash) | owner sendiri, dari Pengaturan |
 | tabel katalog | harga, layanan, kategori, upah, produk F&B | owner sendiri |
 
-**Yang harus dikerjakan di aplikasi agar kontrak ini berlaku**
-(Tahap 1 audit, sisa setelah keputusan satu-cPanel-per-cucian):
+**Sudah dikerjakan di aplikasi (2026-09-21)** — tidak ada lagi nama cucian
+tertulis di kode:
 
-1. `business_name` dibaca dari `settings`, 8 titik hardcoded dicabut (audit 1.1).
-   Nilai awalnya diambil dari `APP_NAME` supaya instalasi baru langsung bernama benar.
-2. `config/app.php` membaca `env('APP_TIMEZONE', 'Asia/Jakarta')` (audit 1.5).
-   Hanya boleh diisi saat provisioning — mengganti zona waktu cucian yang sudah
-   punya data menggeser semua jam lama (lihat komentar migrasi `2026_07_27_000013`).
-3. `APP_NAME` di `env-hosting.txt` jadi satu-satunya tempat nama cucian untuk
-   hal di luar database (nama berkas backup, judul CSV).
+1. **Profil usaha** (`BusinessProfileService`, tabel `settings`): nama,
+   keterangan, alamat, telepon. Diatur owner di Pengaturan → Akun. Sebelum
+   pernah diatur, nama diambil dari `APP_NAME` — OTIN tetap bernama sama
+   tanpa migrasi data. Dipakai di judul tab, header, menu, layar login, resi,
+   judul & nama berkas CSV, dan nama berkas backup.
+2. **Zona waktu**: `config/app.php` membaca `env('APP_TIMEZONE', 'Asia/Jakarta')`.
+   Diisi sekali saat pemasangan — menggantinya setelah ada data menggeser jam
+   semua catatan lama (lihat komentar migrasi `2026_07_27_000013`).
+3. **Kunci localStorage** tidak lagi berawalan `otin`; kunci lama dipindahkan
+   sekali di awal `kasir.js`, jadi kasir OTIN tidak ter-logout.
+4. **`buat-paket.ps1 -FolderApp <folder>`**: `$app_base` di `index.php` ikut
+   folder aplikasi, dan bawaannya `-Database baru` — database kosong hasil
+   `migrate:fresh --seed`, bukan dump database lokal (yang berisi pembukuan OTIN).
 
 ---
 
@@ -164,7 +170,7 @@ akan dilakukan. Dengan `-Terapkan`:
 7. Cetak sisa langkah manual (lihat bawah).
 
 **Langkah yang masih manual** sampai WHM API ArenHost terverifikasi:
-unggah & ekstrak paket rilis, impor database cetakan, AutoSSL, satu baris cron.
+unggah & ekstrak paket, impor `database.sql`, AutoSSL, satu baris cron.
 
 ### 2. Rilis — `ops/scripts/New-Release.ps1` *(berikutnya)*
 
@@ -176,9 +182,10 @@ Membangun **satu paket untuk semua cucian** dari aplikasi di repo ini pada satu 
 - `releases/<commit>/public.zip` — isi `public/` dengan `index.php` versi cPanel
   (`deploy/cpanel/index-public_html.php`), baris `$app_base` diganti ke
   `folder_app` dari `config.json` — OTIN memakai `otin-carwash`, cucian baru `rapiin-app`.
-- `releases/<commit>/cetakan.sql` — **database cetakan**: `migrate:fresh --seed`
+- `releases/<commit>/database.sql` — database kosong: `migrate:fresh --seed`
   dijalankan di MySQL lokal lalu di-dump. Ini jawaban untuk hosting tanpa
   Terminal: cucian baru cukup impor satu berkas, bukan menjalankan artisan.
+  **Sudah bisa dibuat sekarang** lewat `buat-paket.ps1 -Database baru`.
 - `releases/<commit>/migrasi/*.sql` — satu berkas SQL idempotent per migrasi
   (`IF NOT EXISTS`, cara yang sudah dipakai di `update-migrasi.sql`).
 
@@ -223,8 +230,8 @@ Nomor 1 menentukan hampir semua otomasi. Cek itu dulu sebelum menulis `New-Relea
 
 ## Urutan pengerjaan
 
-1. **Sekarang, di aplikasi:** `business_name` di settings + `APP_TIMEZONE`.
-   OTIN ikut menikmati; tidak ada kerja terbuang.
+1. **Sudah:** aplikasi bebas nama cucian (profil usaha, `APP_TIMEZONE`,
+   paket dengan database kosong). OTIN ikut menikmati lewat paket update biasa.
 2. **Sudah:** daftar tenant + `New-Tenant.ps1` di `ops/`.
    OTIN tercatat sebagai tenant pertama — versinya berhenti ditebak.
 3. **Setelah beli reseller & cek verifikasi #1–#3:** jalankan `New-Tenant.ps1

@@ -1,5 +1,5 @@
 <#
-    OTIN CARWASH - menyiapkan paket UPDATE untuk situs cPanel yang SUDAH jalan.
+    Menyiapkan paket UPDATE untuk situs cPanel yang SUDAH jalan.
 
     Bedanya dengan buat-paket.ps1 (deploy pertama): skrip ini TIDAK membuat
     dump database. Situs produksi sudah berisi pembukuan yang tidak ada di
@@ -15,7 +15,7 @@
 
     Hasilnya di  deploy\cpanel\paket-update\  :
 
-      1. update-app.zip     -> extract di  ~/otin-carwash
+      1. update-app.zip     -> extract di  ~/<folder aplikasi> (OTIN: otin-carwash)
       2. update-public.zip  -> extract di  ~/public_html
       3. update-migrasi.sql -> HANYA kalau ada migrasi baru, dan HANYA dipakai
                                bila hosting tidak punya Terminal/SSH
@@ -60,7 +60,7 @@ $proyek = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $paket  = Join-Path $PSScriptRoot 'paket-update'
 Push-Location $proyek
 
-Write-Host "=== Paket UPDATE OTIN CARWASH ===" -ForegroundColor Cyan
+Write-Host "=== Paket UPDATE ===" -ForegroundColor Cyan
 Write-Host "Membandingkan folder kerja dengan: $Sejak"
 
 # --- Berkas apa saja yang berubah ------------------------------------------
@@ -82,7 +82,7 @@ if ($semua.Count -eq 0) { Write-Host "Tidak ada perubahan. Berhenti." -Foregroun
 # satu berkas pun yang dijalankan hosting PHP. Perlu disebut di sini karena
 # $baru di atas menyapu SEMUA berkas untracked -- selama folder itu belum
 # di-commit, tanpa baris ini 64 berkas Dart/Gradle ikut terekstrak ke
-# ~/otin-carwash pada setiap update.
+# folder aplikasi di server pada setiap update.
 # ops/ sama sekali tidak boleh: berisi daftar semua cucian, dan
 # ops/secrets/ (untracked, jadi ikut tersapu $baru) berisi .env tiap cucian.
 #
@@ -110,7 +110,7 @@ if ($sisiApp) {
 }
 if ($sisiPublic) {
     # public/index.php TIDAK boleh ikut: di server yang dipakai versi cPanel
-    # (index-public_html.php) yang path-nya menunjuk ke ~/otin-carwash.
+    # (index-public_html.php) yang path-nya menunjuk ke folder aplikasi.
     $pub = $sisiPublic | Where-Object { $_ -ne 'public/index.php' }
     if ($sisiPublic -contains 'public/index.php') {
         Write-Host "[!] public/index.php berubah - JANGAN diunggah apa adanya." -ForegroundColor Yellow
@@ -118,7 +118,7 @@ if ($sisiPublic) {
     }
     if ($pub) {
         # Nama entri dipotong prefix "public/" supaya extract-nya pas di public_html.
-        $tmp = Join-Path $env:TEMP ('otin-pub-' + [guid]::NewGuid().ToString('N').Substring(0,8))
+        $tmp = Join-Path $env:TEMP ('carwash-pub-' + [guid]::NewGuid().ToString('N').Substring(0,8))
         New-Item -ItemType Directory -Path $tmp -Force | Out-Null
         foreach ($f in $pub) {
             $rel = $f.Substring('public/'.Length)
@@ -139,7 +139,7 @@ if ($sisiPublic) {
 if ($semua -contains 'composer.lock') {
     Write-Host ""
     Write-Host "[!] composer.lock berubah - vendor/ tidak ikut paket update." -ForegroundColor Yellow
-    Write-Host "    Pakai buat-paket.ps1 -TanpaDatabase dan unggah otin-app.zip penuh." -ForegroundColor Yellow
+    Write-Host "    Pakai buat-paket.ps1 -FolderApp <folder> -Database tidak, lalu unggah app.zip penuh." -ForegroundColor Yellow
 }
 
 $migrasi = $semua | Where-Object { $_ -like 'database/migrations/*' }

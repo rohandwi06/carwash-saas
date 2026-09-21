@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\BusinessProfileService;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -7,4 +8,6 @@ use Illuminate\Support\Facades\Route;
 | dipecah per layar di resources/views/kasir/partials/.
 | CSS & JS statis tetap di public/css & public/js.
 */
-Route::get('/', fn () => view('kasir.index'));
+Route::get('/', fn (BusinessProfileService $profil) => view('kasir.index', [
+    'usaha' => $profil->profile(),
+]));

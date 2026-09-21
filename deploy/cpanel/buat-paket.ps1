@@ -1,14 +1,22 @@
 <#
-    OTIN CARWASH - menyiapkan berkas yang akan diunggah ke cPanel.
+    Menyiapkan paket PENUH yang diunggah ke satu akun cPanel.
 
     Jalankan dari folder proyek:
-        powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1
+        powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1 -FolderApp rapiin-app
 
     Hasilnya 3 berkas di folder  deploy\cpanel\paket\  :
 
-      1. otin-app.zip        -> di-extract ke  ~/otin-carwash     (di LUAR public_html)
-      2. otin-public.zip     -> di-extract ke  ~/public_html
-      3. otin-database.sql   -> diimpor lewat phpMyAdmin
+      1. app.zip        -> di-extract ke  ~/<FolderApp>     (di LUAR public_html)
+      2. public.zip     -> di-extract ke  ~/public_html
+      3. database.sql   -> diimpor lewat phpMyAdmin
+
+    -FolderApp  nama folder aplikasi di server. Cucian baru: rapiin-app
+                (sama dengan ops/config.json). OTIN: otin-carwash.
+    -Database   baru  (bawaan) database KOSONG hasil migrate:fresh --seed,
+                      untuk cucian baru: katalog awal saja, tanpa transaksi.
+                lokal database di .env laptop ini apa adanya. Isinya
+                      pembukuan OTIN - JANGAN untuk cucian lain.
+                tidak tanpa berkas database (mis. hanya memperbarui kode).
 
     Kenapa vendor/ ikut dibungkus: shared hosting cPanel umumnya tidak punya
     composer, jadi dependensi harus dibawa dari sini. .env, storage/logs,
@@ -17,8 +25,12 @@
 #>
 
 param(
-    [switch]$TanpaDatabase   # lewati dump MySQL (mis. MySQL lokal sedang mati)
+    [Parameter(Mandatory)] [string]$FolderApp,
+    [ValidateSet('baru', 'lokal', 'tidak')] [string]$Database = 'baru',
+    [switch]$TanpaDatabase   # nama lama untuk -Database tidak
 )
+if ($TanpaDatabase) { $Database = 'tidak' }
+if ($FolderApp -notmatch '^[A-Za-z0-9._-]+$') { throw "FolderApp '$FolderApp' tidak sah." }
 
 $ErrorActionPreference = 'Stop'
 
@@ -79,15 +91,15 @@ function Buat-Zip {
 
 $proyek = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $paket  = Join-Path $PSScriptRoot 'paket'
-$kerja  = Join-Path $env:TEMP ('otin-paket-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+$kerja  = Join-Path $env:TEMP ('carwash-paket-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 
-Write-Host "=== Menyiapkan paket unggah OTIN CARWASH ===" -ForegroundColor Cyan
+Write-Host "=== Menyiapkan paket unggah -> ~/$FolderApp (database: $Database) ===" -ForegroundColor Cyan
 Write-Host "Proyek: $proyek"
 
 # HANYA berkas hasil bungkusan yang dibuang. Folder ini pernah dikosongkan
 # seluruhnya, dan itu ikut menghapus catatan password owner yang disimpan
 # pengguna di sini (30 Agustus 2026) - jangan diulangi.
-foreach ($lama in 'otin-app.zip', 'otin-public.zip', 'otin-database.sql') {
+foreach ($lama in 'app.zip', 'public.zip', 'database.sql', 'otin-app.zip', 'otin-public.zip', 'otin-database.sql') {
     $j = Join-Path $paket $lama
     if (Test-Path $j) { Remove-Item $j -Force }
 }
@@ -116,7 +128,7 @@ $kecualiFolder = @(
     (Join-Path $proyek 'android-app'),
     (Join-Path $proyek 'public')          # dibungkus terpisah ke public_html
 )
-$kecualiBerkas = @('.env', '*.sqlite', 'start-otin.bat', 'start-tunnel.bat')
+$kecualiBerkas = @('.env', '*.sqlite', 'start-tunnel.bat')
 
 $aplikasi = Join-Path $kerja 'app-root'
 robocopy $proyek $aplikasi /E /XD $kecualiFolder /XF $kecualiBerkas /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -131,32 +143,89 @@ foreach ($d in 'logs', 'backups', 'framework\cache\data', 'framework\sessions', 
     Set-Content -Path (Join-Path $t '.keep') -Value '' -Encoding utf8
 }
 
-Buat-Zip $aplikasi (Join-Path $paket 'otin-app.zip')
+Buat-Zip $aplikasi (Join-Path $paket 'app.zip')
 
 # --- 2. Isi public_html -----------------------------------------------------
 $pub = Join-Path $kerja 'public-root'
 robocopy (Join-Path $proyek 'public') $pub /E /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy public/ gagal (kode $LASTEXITCODE)." }
 
-# index.php diganti versi cPanel: path-nya menunjuk ke ~/otin-carwash.
-Copy-Item (Join-Path $PSScriptRoot 'index-public_html.php') (Join-Path $pub 'index.php') -Force
+# index.php diganti versi cPanel, dengan $app_base menunjuk ke ~/<FolderApp>.
+$index = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'index-public_html.php'))
+$baris = '$app_base = __DIR__.''/../' + $FolderApp + ''';'
+$indexBaru = [regex]::Replace($index, '(?m)^\$app_base = .*;', $baris.Replace('$', '$$'))
+if (-not $indexBaru.Contains($baris)) { throw 'Baris $app_base di index-public_html.php tidak ditemukan.' }
+[IO.File]::WriteAllText((Join-Path $pub 'index.php'), $indexBaru, (New-Object Text.UTF8Encoding($false)))
 
-Buat-Zip $pub (Join-Path $paket 'otin-public.zip')
+Buat-Zip $pub (Join-Path $paket 'public.zip')
 
-# --- 3. Dump database lokal -------------------------------------------------
-if (-not $TanpaDatabase) {
-    $dump = 'C:\xampp\mysql\bin\mysqldump.exe'
-    if (-not (Test-Path $dump)) {
-        Write-Host "[!] mysqldump tidak ditemukan - lewati dump database." -ForegroundColor Yellow
-    } else {
-        $sql = Join-Path $paket 'otin-database.sql'
+# --- 3. Database ------------------------------------------------------------
+# Kredensial MySQL diambil dari .env laptop ini, bukan ditulis di skrip:
+# root XAMPP di laptop ini berpassword.
+function Baca-Env {
+    $h = @{}
+    foreach ($b in Get-Content (Join-Path $proyek '.env')) {
+        if ($b -match '^\s*([A-Z_]+)\s*=\s*(.*)$') { $h[$Matches[1]] = $Matches[2].Trim().Trim('"') }
+    }
+    $h
+}
+
+# mysql/mysqldump dicari di samping PHP yang dipakai (XAMPP: <xampp>\php\php.exe
+# dan <xampp>\mysql\bin\), baru ke PATH - sama seperti BackupDatabase.php.
+function Cari-MySql([string]$Nama) {
+    $php = (Get-Command php -ErrorAction SilentlyContinue).Source
+    if ($php) {
+        $calon = Join-Path (Split-Path -Parent (Split-Path -Parent $php)) "mysql\bin\$Nama.exe"
+        if (Test-Path $calon) { return $calon }
+    }
+    $c = Get-Command $Nama -ErrorAction SilentlyContinue
+    if ($c) { return $c.Source }
+    throw "$Nama tidak ditemukan. Nyalakan XAMPP atau tambahkan mysql\bin ke PATH."
+}
+
+if ($Database -ne 'tidak') {
+    $envLokal = Baca-Env
+    $mysql    = Cari-MySql 'mysql'
+    $dump     = Cari-MySql 'mysqldump'
+    $sql      = Join-Path $paket 'database.sql'
+    $koneksi  = @("--host=$($envLokal.DB_HOST)", "--port=$($envLokal.DB_PORT)", "--user=$($envLokal.DB_USERNAME)")
+    $namaDb   = $null
+    # Password lewat variabel lingkungan supaya tidak terlihat di daftar proses.
+    $env:MYSQL_PWD = $envLokal.DB_PASSWORD
+
+    try {
+        if ($Database -eq 'lokal') {
+            $namaDb = $envLokal.DB_DATABASE
+            Write-Host "[!] Mendump database LOKAL '$namaDb' - isinya pembukuan nyata." -ForegroundColor Yellow
+        } else {
+            # Database sementara: dibuat, diisi migrasi + seeder, di-dump, lalu dibuang.
+            $namaDb = 'carwash_cetakan_' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+            & $mysql @koneksi -e "CREATE DATABASE $namaDb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            if ($LASTEXITCODE -ne 0) { throw "Gagal membuat database sementara $namaDb." }
+
+            # Variabel lingkungan proses menang atas isi .env (dotenv Laravel
+            # tidak menimpa nilai yang sudah ada), jadi artisan menulis ke
+            # database sementara, bukan ke database kerja di .env.
+            $env:DB_DATABASE = $namaDb
+            Push-Location $proyek
+            try {
+                & php artisan migrate:fresh --seed --force
+                if ($LASTEXITCODE -ne 0) { throw "migrate:fresh --seed gagal." }
+            } finally {
+                Pop-Location
+                Remove-Item Env:DB_DATABASE
+            }
+        }
+
         # --no-tablespaces: user MySQL shared hosting tidak punya hak PROCESS,
         # tanpa flag ini dump berisi perintah yang ditolak saat diimpor.
-        & $dump --host=127.0.0.1 --user=root --single-transaction --routines `
-                --no-tablespaces --result-file=$sql otin_carwash
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "[!] mysqldump gagal. Nyalakan MySQL XAMPP lalu ulangi." -ForegroundColor Yellow
+        & $dump @koneksi --single-transaction --routines --no-tablespaces "--result-file=$sql" $namaDb
+        if ($LASTEXITCODE -ne 0) { throw "mysqldump gagal." }
+    } finally {
+        if ($Database -eq 'baru' -and $namaDb) {
+            & $mysql @koneksi -e "DROP DATABASE IF EXISTS $namaDb"
         }
+        Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue
     }
 }
 

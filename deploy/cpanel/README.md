@@ -1,4 +1,11 @@
-# Deploy OTIN CARWASH ke shared hosting cPanel (ArenHost)
+# Deploy ke shared hosting cPanel (ArenHost)
+
+> Panduan ini ditulis saat memasang OTIN, cucian pertama, jadi contohnya
+> memakai folder `otin-carwash` dan domain OTIN. Untuk cucian baru: akun,
+> database, dan `.env` disiapkan `ops/scripts/New-Tenant.ps1`; paketnya
+> dibuat dengan `buat-paket.ps1 -FolderApp rapiin-app` (database kosong
+> otomatis); sisanya sama mulai Bagian 4, dengan `rapiin-app` menggantikan
+> `otin-carwash`.
 
 Domain: **otincarwash-pos.my.id** — aplikasi kasir dipasang di domain utama.
 
@@ -76,16 +83,16 @@ nanti dipakai di `.env`.
 ## Bagian 3 — Siapkan berkas di laptop
 
 ```bash
-powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1
+powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1 -FolderApp otin-carwash -Database lokal
 ```
 
 Hasilnya di `deploy\cpanel\paket\`:
 
 | Berkas | Tujuan di server |
 |---|---|
-| `otin-app.zip` | `~/otin-carwash` (**di luar** `public_html`) |
-| `otin-public.zip` | `~/public_html` |
-| `otin-database.sql` | diimpor lewat phpMyAdmin |
+| `app.zip` | `~/otin-carwash` (**di luar** `public_html`) |
+| `public.zip` | `~/public_html` |
+| `database.sql` | diimpor lewat phpMyAdmin |
 
 `vendor/` sengaja ikut dibungkus — shared hosting tidak punya composer.
 `.env` sengaja **tidak** ikut; dibuat langsung di server (Bagian 5).
@@ -97,8 +104,8 @@ Hasilnya di `deploy\cpanel\paket\`:
 cPanel → **File Manager**:
 
 1. Di `home` (sejajar dengan `public_html`), **+ Folder** → `otin-carwash`.
-2. Masuk ke sana → Upload `otin-app.zip` → klik kanan → **Extract** → hapus zip-nya.
-3. Masuk `public_html` → Upload `otin-public.zip` → **Extract** → hapus zip-nya.
+2. Masuk ke sana → Upload `app.zip` → klik kanan → **Extract** → hapus zip-nya.
+3. Masuk `public_html` → Upload `public.zip` → **Extract** → hapus zip-nya.
 
 Susunan akhir yang benar:
 
@@ -141,7 +148,7 @@ Setelah tersimpan: klik kanan `.env` → Change Permissions → **600**.
 ## Bagian 6 — Impor database & migrasi
 
 **Impor data yang sudah ada:** cPanel → **phpMyAdmin** → pilih database
-`prefix_otin_carwash` → tab **Import** → pilih `otin-database.sql` → Go.
+`prefix_otin_carwash` → tab **Import** → pilih `database.sql` → Go.
 
 Kalau file `.sql` lebih besar dari batas upload phpMyAdmin, kompres jadi
 `.zip` dulu — phpMyAdmin bisa membaca zip langsung.
@@ -158,7 +165,7 @@ migrasi. Untuk itu butuh terminal:
   php artisan config:cache && php artisan route:cache && php artisan view:cache
   ```
 
-- **Tanpa Terminal:** impor `otin-database.sql` saja sudah cukup untuk
+- **Tanpa Terminal:** impor `database.sql` saja sudah cukup untuk
   penyalaan pertama — struktur tabel dan data ikut di dalamnya, jadi migrasi
   tidak diperlukan. Yang perlu diingat: setiap update kode yang menambah
   migrasi harus di-dump ulang dari laptop lalu diimpor lagi, atau minta

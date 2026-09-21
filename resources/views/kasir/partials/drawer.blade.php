@@ -1,6 +1,6 @@
 <div class="overlay" id="overlay" onclick="tutupMenu()"></div>
   <nav class="drawer" id="drawer" aria-label="Menu utama">
-    <div class="dr-head"><span>OTIN <span class="kuning">CARWASH</span></span>
+    <div class="dr-head">@include('kasir.partials.brand')
       <button class="dr-tutup" onclick="tutupMenu()" aria-label="Tutup menu">&#10005;</button>
     </div>
     <div class="dr-list">
@@ -31,5 +31,5 @@
            ditutup manual — kalau tidak, pertanyaannya lari ke owner. --}}
       <button class="dr-item" data-layar="layarPanduan" onclick="pergi('layarPanduan')"><span class="ikon">&#10067;</span> Panduan</button>
     </div>
-    <div class="dr-foot">Terhubung ke server OTIN.<br>Login: <b id="roleBadge">-</b> &middot; <a href="#" onclick="keluarApp();return false" style="color:#C0392B;font-weight:900">Keluar</a></div>
+    <div class="dr-foot">Terhubung ke server.<br>Login: <b id="roleBadge">-</b> &middot; <a href="#" onclick="keluarApp();return false" style="color:#C0392B;font-weight:900">Keluar</a></div>
   </nav>

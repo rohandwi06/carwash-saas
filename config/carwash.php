@@ -2,7 +2,7 @@
 
 /*
 |--------------------------------------------------------------------------
-| Konfigurasi bisnis OTIN CARWASH
+| Konfigurasi bisnis carwash
 |--------------------------------------------------------------------------
 | PERHATIAN: 'categories', 'services', dan 'default_wages' di bawah ini
 | hanya NILAI AWAL saat aplikasi pertama dipasang — isinya sudah disalin ke

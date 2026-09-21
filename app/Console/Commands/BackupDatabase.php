@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\BusinessProfileService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
@@ -63,7 +64,7 @@ class BackupDatabase extends Command
         }
 
         $conn = config('database.connections.mysql');
-        $target = $dir.'/otin-'.now()->format('Y-m-d_His').'.sql';
+        $target = $dir.'/'.app(BusinessProfileService::class)->slug().'-'.now()->format('Y-m-d_His').'.sql';
 
         $cmd = [
             $mysqldump,
@@ -102,7 +103,7 @@ class BackupDatabase extends Command
             return null;
         }
 
-        $target = $dir.'/otin-'.now()->format('Y-m-d_His').'.sqlite';
+        $target = $dir.'/'.app(BusinessProfileService::class)->slug().'-'.now()->format('Y-m-d_His').'.sqlite';
 
         $pdo = new \PDO('sqlite:'.$source);
         $pdo->exec("VACUUM INTO '".str_replace("'", "''", $target)."'");
