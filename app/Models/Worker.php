@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Worker extends Model
 {
@@ -30,11 +29,6 @@ class Worker extends Model
     public function transactions(): BelongsToMany
     {
         return $this->belongsToMany(Transaction::class)->withPivot('wage_share');
-    }
-
-    public function deposits(): HasMany
-    {
-        return $this->hasMany(WorkerDeposit::class);
     }
 
     /**

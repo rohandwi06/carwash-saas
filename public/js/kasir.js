@@ -29,7 +29,7 @@ let NAMA  = localStorage.getItem("kasir_name")  || "";
 
 /* opts.penuh = true -> kembalikan SELURUH badan JSON, bukan cuma .data.
    Dipakai endpoint yang ikut mengirim ringkasan hitungan dari server
-   (mis. /worker-deposits dengan 'summary'), supaya angka uang tetap
+   (mis. /consignors dengan total utang), supaya angka uang tetap
    dihitung di satu tempat saja dan frontend tidak menjumlahkan ulang.
    Ia dilepas dari opts sebelum diteruskan ke fetch, yang tidak mengenalnya. */
 
@@ -472,7 +472,7 @@ function pergi(id){
   if(LAYAR_OWNER.includes(id) && ROLE!=="owner") id = layarAwal();
   if(id==="layarFnb") renderFnb();
   if(id==="layarMenuFnb") renderMenuFnb(true);
-  if(id==="layarPekerja"){ initDepositRange(); renderPekerja(); renderUpahKalender(); }
+  if(id==="layarPekerja"){ initTanggalPenyesuaian(); renderPekerja(); renderUpahKalender(); }
   // Masuk layar Rekap selalu mulai dari "Semua". Penyaring yang tertinggal
   // dari kunjungan sebelumnya membuat owner membaca laba sebagian hari dan
   // mengiranya laba sehari penuh — risiko salah baca angka uang.
@@ -1071,10 +1071,9 @@ async function renderPekerja(){
     $("daftarPekerja").innerHTML = pekerja.length===0
       ? '<div class="cat-kosong">Belum ada pekerja. Tambahkan nama di atas.</div>'
       : pekerja.map(barisPekerja).join("");
-    // Deposit menumpang daftar 'pekerja' yang baru dimuat di atas untuk isi
-    // dropdown penyetor — karena itu dipanggil di sini, bukan di pergi().
-    renderDeposit();
-    renderPenyesuaian();   // dropdown-nya menumpang daftar yang sama
+    // Dropdown pekerja di Potongan & koreksi upah menumpang daftar yang baru
+    // dimuat di atas — karena itu dipanggil di sini, bukan di pergi().
+    renderPenyesuaian();
   }catch(e){ gagal(e); }
 }
 
@@ -1243,24 +1242,13 @@ async function editPekerja(id){
   }catch(e){ gagal(e); }
 }
 
-/* ---------- DEPOSIT PEKERJA KE KAS (khusus owner) ----------
-   Setoran uang dari pekerja. Yang dicatat: siapa penyetornya (worker_name
-   disalin di server, jadi tetap terbaca walau pekerjanya kelak dihapus) dan
-   siapa yang menginputnya (created_by).
-
-   Angka ini SENGAJA tidak masuk rekap/laba — uangnya bukan hasil cucian.
-   Lihat catatan di WorkerDepositController. */
-let depositKalTahun = new Date().getFullYear();
-let depositKalBulan = new Date().getMonth();
-let depositTglPilih = null;          // null = tampilkan sebulan penuh
-
-function initDepositRange(){
-  if($("inDepositTgl") && !$("inDepositTgl").value) $("inDepositTgl").value = hariIni();
+/* Tanggal form Potongan & koreksi upah diisi hari ini saat layar dibuka. */
+function initTanggalPenyesuaian(){
   if($("inPenyTgl") && !$("inPenyTgl").value) $("inPenyTgl").value = hariIni();
 }
 
 /* ---------- PENYESUAIAN UPAH: potongan (hukuman) & timpa angka ----------
-   Owner-only, sama seperti Deposit. Aturan hitungnya ada di server
+   Owner-only. Aturan hitungnya ada di server
    (WageService::terapkanPenyesuaian): 'timpa' menetapkan angka dasar, lalu
    'potongan' menguranginya, dan hasilnya tidak pernah minus.
 
@@ -1372,142 +1360,6 @@ async function hapusPenyesuaian(id){
 async function segarkanUpahTerlihat(tgl){
   await renderUpahKalender();
   if(upahTglPilih === tgl) await pilihTglUpah(tgl);
-}
-
-function gantiBulanDeposit(d){
-  depositKalBulan += d;
-  if(depositKalBulan<0){ depositKalBulan=11; depositKalTahun--; }
-  if(depositKalBulan>11){ depositKalBulan=0; depositKalTahun++; }
-  depositTglPilih = null;
-  renderDeposit();
-}
-
-/**
- * Blok deposit: dropdown penyetor, kalender, dan daftar setoran.
- * Tanpa argumen = tampilkan bulan yang sedang dibuka di kalender.
- */
-async function renderDeposit(){
-  const blok = $("blokDeposit");
-  if(!blok) return;
-  if(ROLE!=="owner"){ blok.classList.add("hidden"); return; }
-  blok.classList.remove("hidden");
-
-  // Dropdown penyetor memakai daftar pekerja yang sudah dimuat renderPekerja().
-  $("inDepositPekerja").innerHTML = pekerja.length===0
-    ? '<option value="">— belum ada pekerja —</option>'
-    : '<option value="">— pilih pekerja —</option>'
-      + pekerja.map(p => '<option value="'+p.id+'">'+esc(p.name)+'</option>').join("");
-
-  const [awal, akhir] = batasBulan(depositKalTahun, depositKalBulan);
-  await muatDeposit(
-    depositTglPilih ? {date: depositTglPilih} : {from: awal, to: akhir},
-    {gambarKalender: true},
-  );
-}
-
-/** Rentang deposit yang dipilih dengan tahan-lalu-ketuk di kalender. */
-function depositRange(dari, sampai){
-  depositTglPilih = null;
-  muatDeposit({from: dari, to: sampai});
-}
-
-/** Satu tanggal diketuk di kalender deposit. */
-function depositSatuHari(tgl){
-  depositTglPilih = (depositTglPilih === tgl ? null : tgl);  // ketuk ulang = kembali sebulan
-  renderDeposit();
-}
-
-/**
- * Ambil & tampilkan setoran untuk sebuah filter.
- * Kalendernya digambar ulang HANYA saat menampilkan sebulan penuh — kalau
- * ikut digambar ulang setelah memilih rentang, titik-titiknya berubah
- * mengikuti hasil filter dan bulan yang sedang dilihat jadi tampak kosong.
- */
-async function muatDeposit(filter, opsi){
-  const q = new URLSearchParams(filter).toString();
-  try{
-    const res = await api("/worker-deposits?"+q, {penuh:true});
-    const rows = res.data, sum = res.summary;
-
-    if(opsi && opsi.gambarKalender) gambarKalenderDeposit(rows);
-
-    if(rows.length===0){
-      $("daftarDeposit").innerHTML = '<div class="cat-kosong">Belum ada deposit pada periode ini.</div>';
-      return;
-    }
-
-    // Ringkasan per penyetor dulu — pertanyaan pertama owner biasanya
-    // "siapa sudah setor berapa", bukan rincian tiap barisnya.
-    let html = '<div class="cat-baris tebal"><span>TOTAL DEPOSIT</span><b class="hijau">'+rp(sum.total)+'</b></div>';
-    html += sum.per_worker.map(w =>
-      '<div class="cat-baris"><span>'+esc(w.worker_name)+' <span class="waktu">'+w.count+'x setor</span></span>'
-      +'<b>'+rp(w.total)+'</b></div>').join("");
-
-    html += '<div style="margin:12px 0 6px;font-size:12px;color:var(--ink2);font-weight:700">Rincian setoran</div>';
-    html += rows.map(d =>
-      '<div class="dp-baris">'
-      +'<span class="dp-isi">'
-      +  '<span class="dp-atas"><span>'+esc(d.worker_name)+'</span>'
-      +    '<b class="hijau">'+rp(d.amount)+'</b></span>'
-      +  '<span class="dp-meta">'+fmtTgl(tglSaja(d.date))
-      +    (d.note ? ' &middot; '+esc(d.note) : '')
-      +    (d.created_by ? ' &middot; input: '+esc(d.created_by) : '')
-      +  '</span>'
-      +'</span>'
-      +'<button class="btn-hapus-pk" onclick="hapusDeposit('+d.id+')" title="Hapus">&#10005;</button>'
-      +'</div>').join("");
-
-    $("daftarDeposit").innerHTML = html;
-  }catch(e){ gagal(e); }
-}
-
-/**
- * Gambar kalender deposit; titik hijau = hari yang ada setorannya.
- * Titiknya diambil dari baris yang baru saja dimuat, jadi tidak perlu
- * permintaan kedua ke server hanya untuk menandai tanggal.
- */
-function gambarKalenderDeposit(rows){
-  const perTgl = {};
-  (rows||[]).forEach(d => { perTgl[tglSaja(d.date)] = true; });
-
-  $("depositKalJudul").textContent = NAMA_BULAN[depositKalBulan]+" "+depositKalTahun;
-
-  const jmlHari = new Date(depositKalTahun, depositKalBulan+1, 0).getDate();
-  let html = kepalaKalender() + awalanKalender(depositKalTahun, depositKalBulan);
-  for(let t=1;t<=jmlHari;t++){
-    const tgl = depositKalTahun+"-"+String(depositKalBulan+1).padStart(2,"0")+"-"+String(t).padStart(2,"0");
-    html += selKalender(tgl, t, {ada: !!perTgl[tgl], pilih: tgl===depositTglPilih});
-  }
-  $("depositKalGrid").innerHTML = html;
-  pasangKalender("depositKalGrid", {
-    info: "depositKalInfo",
-    onSingle: depositSatuHari,
-    onRange: depositRange,
-    onClear: () => { depositTglPilih = null; renderDeposit(); },
-  });
-  tandaiRentang("depositKalGrid");
-}
-
-async function tambahDeposit(){
-  const worker_id = parseInt($("inDepositPekerja").value, 10);
-  const amount = parseInt($("inDepositJumlah").value, 10);
-  if(!worker_id){ $("inDepositPekerja").focus(); return; }
-  if(!amount || amount<1){ $("inDepositJumlah").focus(); return; }
-  const body = {worker_id, amount, note: $("inDepositCatatan").value.trim() || null};
-  const tgl = $("inDepositTgl").value;
-  if(tgl) body.date = tgl;
-  try{
-    await api("/worker-deposits",{method:"POST",body});
-    $("inDepositJumlah").value=""; $("inDepositCatatan").value="";
-    await renderDeposit();
-    Swal.fire({toast:true, position:"top-end", icon:"success", title:"Deposit dicatat",
-      text: rp(amount), showConfirmButton:false, timer:2000});
-  }catch(e){ gagal(e); }
-}
-
-async function hapusDeposit(id){
-  if(!await konfirmasiHapus()) return;
-  try{ await api("/worker-deposits/"+id,{method:"DELETE"}); renderDeposit(); }catch(e){ gagal(e); }
 }
 
 /* ---------- UPAH PEKERJA: KALENDER + RANGE TANGGAL ---------- */

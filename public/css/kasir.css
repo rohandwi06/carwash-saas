@@ -298,11 +298,9 @@
      sehingga baris panjang menembus tepi kartu alih-alih menyesuaikan diri. */
   .pk-baris{display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:10px 0;border-bottom:1px solid var(--line);min-width:0;flex-wrap:nowrap;line-height:1.25;min-height:44px}
   .pk-baris:last-child{border-bottom:none}
-  /* Baris deposit pekerja. Sengaja BUKAN .pk-baris: baris itu nowrap dan
-     dirancang untuk nama pendek, sedangkan satu setoran membawa tanggal +
-     catatan + nama penginput sekaligus — di lebar tablet isinya meluber dan
-     tombol hapusnya ikut terpotong. Di sini nama+jumlah di atas, keterangan
-     membungkus di bawahnya. */
+  /* Baris dengan keterangan panjang (daftar pekerja + biodatanya). Sengaja
+     BUKAN .pk-baris: baris itu nowrap dan dirancang untuk nama pendek. Di
+     sini nama di atas, keterangan membungkus di bawahnya. */
   .dp-baris{display:flex;align-items:flex-start;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
   .dp-baris:last-child{border-bottom:none}
   .dp-isi{flex:1 1 auto;min-width:0}

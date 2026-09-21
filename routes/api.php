@@ -25,7 +25,6 @@ use App\Http\Controllers\WageRateController;
 use App\Http\Controllers\WashCategoryController;
 use App\Http\Controllers\WashServiceController;
 use App\Http\Controllers\WorkerController;
-use App\Http\Controllers\WorkerDepositController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -247,9 +246,5 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/wage-adjustments', [WageAdjustmentController::class, 'store']);
         Route::delete('/wage-adjustments/{wageAdjustment}', [WageAdjustmentController::class, 'destroy']);
 
-        // Deposit pekerja ke kas — input & lihat hanya owner
-        Route::get('/worker-deposits', [WorkerDepositController::class, 'index']);
-        Route::post('/worker-deposits', [WorkerDepositController::class, 'store']);
-        Route::delete('/worker-deposits/{workerDeposit}', [WorkerDepositController::class, 'destroy']);
     });
 });

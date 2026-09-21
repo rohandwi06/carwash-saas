@@ -400,40 +400,6 @@ class PekerjaRepo {
         UpahPekerja.fromJson,
       );
 
-  // --- Deposit pekerja ke kas (owner) ---
-  /// Memakai [ApiClient.getPenuh] karena server ikut mengirim `summary` —
-  /// totalnya dihitung di sana, app tidak menjumlahkan ulang.
-  Future<({List<DepositPekerja> daftar, int total})> deposit({
-    String? dari,
-    String? sampai,
-    int? idPekerja,
-  }) async {
-    final r = await _api.getPenuh('/worker-deposits', query: {
-      if (dari != null) 'from': dari,
-      if (sampai != null) 'to': sampai,
-      if (idPekerja != null) 'worker_id': idPekerja,
-    },);
-    return (
-      daftar: asList(r['data'], DepositPekerja.fromJson),
-      total: asInt(asMap(r['summary'])['total']),
-    );
-  }
-
-  Future<void> tambahDeposit({
-    required int idPekerja,
-    required int jumlah,
-    String? catatan,
-    String? tanggal,
-  }) =>
-      _api.post('/worker-deposits', body: {
-        'worker_id': idPekerja,
-        'amount': jumlah,
-        if (catatan != null) 'note': catatan,
-        if (tanggal != null) 'date': tanggal,
-      },);
-
-  Future<void> hapusDeposit(int id) => _api.delete('/worker-deposits/$id');
-
   // --- Penyesuaian upah (owner) ---
   Future<List<PenyesuaianUpah>> penyesuaian({
     String? dari,

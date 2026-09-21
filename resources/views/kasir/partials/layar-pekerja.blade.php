@@ -9,39 +9,8 @@
           <div id="daftarPekerja"></div>
         </div>
 
-        {{-- Deposit pekerja ke kas. Owner-only: blok ini disembunyikan
-             renderDeposit() untuk role lain, dan API-nya pun owner-only. --}}
-        <div class="cat-blok hidden" id="blokDeposit">
-          <h3>&#128176; Deposit pekerja ke kas</h3>
-          <div class="form-keluar" style="margin-bottom:6px">
-            <select id="inDepositPekerja" class="inp-range" style="flex:1"></select>
-            <input id="inDepositJumlah" type="number" inputmode="numeric" placeholder="Jumlah (Rp)">
-          </div>
-          <div class="form-keluar" style="margin-bottom:6px">
-            <input id="inDepositCatatan" placeholder="Catatan (opsional)" maxlength="160">
-            <input id="inDepositTgl" type="date" class="inp-range">
-          </div>
-          <button class="btn-catat" style="background:var(--go);width:100%;margin-bottom:12px"
-                  onclick="tambahDeposit()">&#10133; Catat Deposit</button>
-
-          {{-- Kalender deposit: sama seperti Pembukuan, Upah, dan Pengeluaran.
-               Ketuk satu tanggal untuk melihat setoran hari itu, tahan lalu
-               ketuk tanggal lain untuk rentang. Menggantikan sepasang input
-               tanggal + tombol Cari yang dulu ada di sini. --}}
-          <div class="kal-nav">
-            <button class="kal-panah" onclick="gantiBulanDeposit(-1)">&#8249;</button>
-            <div class="kal-bulan" id="depositKalJudul"></div>
-            <button class="kal-panah" onclick="gantiBulanDeposit(1)">&#8250;</button>
-          </div>
-          <div class="kal-grid" id="depositKalGrid"></div>
-          <div class="kal-info" id="depositKalInfo"></div>
-
-          <div id="daftarDeposit" style="margin-top:12px"></div>
-        </div>
-
-        {{-- Potongan & koreksi upah. Owner-only sama seperti blok Deposit di
-             atas: disembunyikan renderPenyesuaian() untuk role lain, dan
-             API-nya pun owner-only. --}}
+        {{-- Potongan & koreksi upah. Owner-only: disembunyikan
+             renderPenyesuaian() untuk role lain, dan API-nya pun owner-only. --}}
         <div class="cat-blok hidden" id="blokPenyesuaian">
           <h3>&#9878;&#65039; Potongan &amp; koreksi upah</h3>
           <div class="peny-jenis">

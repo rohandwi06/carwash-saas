@@ -178,34 +178,6 @@ class UpahHarian {
       );
 }
 
-/// Setoran pekerja ke kas (khusus owner).
-class DepositPekerja {
-  const DepositPekerja({
-    required this.id,
-    required this.idPekerja,
-    required this.namaPekerja,
-    required this.jumlah,
-    required this.catatan,
-    required this.tanggal,
-  });
-
-  final int id;
-  final int idPekerja;
-  final String namaPekerja;
-  final int jumlah;
-  final String? catatan;
-  final String tanggal;
-
-  factory DepositPekerja.fromJson(Map<String, dynamic> j) => DepositPekerja(
-        id: asInt(j['id']),
-        idPekerja: asInt(j['worker_id']),
-        namaPekerja: asStr(j['worker_name'] ?? asMap(j['worker'])['name']),
-        jumlah: asInt(j['amount']),
-        catatan: asStrNull(j['note'] ?? j['description']),
-        tanggal: asStr(j['date']),
-      );
-}
-
 /// Penyesuaian upah: potongan (hukuman) atau penimpaan angka upah.
 class PenyesuaianUpah {
   const PenyesuaianUpah({

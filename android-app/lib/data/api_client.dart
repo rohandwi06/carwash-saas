@@ -89,7 +89,7 @@ class ApiClient {
 
   /// Sama seperti [get] tapi mengembalikan SELURUH badan JSON, bukan cuma
   /// `.data`. Dipakai endpoint yang ikut mengirim ringkasan hitungan dari
-  /// server (mis. `/worker-deposits` dengan `summary`), supaya angka uang
+  /// server (mis. `/consignors` dengan total utang), supaya angka uang
   /// tetap dihitung di satu tempat dan app tidak menjumlahkan ulang sendiri.
   Future<Map<String, dynamic>> getPenuh(
     String path, {
