@@ -38,7 +38,8 @@ class VehicleController extends Controller
     }
 
     /**
-     * GET /api/vehicles?q=calya — katalog lengkap untuk layar Pengaturan (owner).
+     * GET /api/vehicles?q=calya&page=2 — katalog per halaman untuk layar
+     * Pengaturan (owner), 20 mobil per halaman kecuali per_page diisi.
      *
      * Katalog ini menentukan harga tiap mobil yang dicari kasir, tapi sampai
      * sekarang tidak ada satu pun layar untuk mengubahnya: isinya ditanam
@@ -48,32 +49,55 @@ class VehicleController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $q = trim((string) $request->query('q', ''));
+        $data = $request->validate([
+            'q'        => ['nullable', 'string', 'max:100'],
+            'page'     => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+        $q       = trim((string) ($data['q'] ?? ''));
+        $perPage = (int) ($data['per_page'] ?? 20);
+
+        $query = Vehicle::query()
+            ->when($q !== '', fn ($b) => $b->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($q).'%']))
+            ->orderByDesc('needs_review')   // yang belum dicek owner naik ke atas
+            ->orderBy('name')
+            ->orderBy('id');                // nama kembar tidak berpindah halaman
+
+        // Halaman di luar jangkauan (mis. owner menghapus mobil terakhir di
+        // halaman terakhir) dijepit ke halaman terakhir yang ada, bukan
+        // dijawab dengan daftar kosong yang terlihat seperti katalog hilang.
+        $total    = (clone $query)->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page     = min((int) ($data['page'] ?? 1), $lastPage);
+
+        $halaman = $query->forPage($page, $perPage)->get();
 
         // Berapa kali nama ini benar-benar dipakai — owner perlu tahu mana
         // baris yang menyangkut uang dan mana yang cuma menuh-menuhi daftar.
+        // Dihitung hanya untuk mobil di halaman ini, bukan seluruh katalog.
         $pakai = Transaction::selectRaw('vehicle_name, COUNT(*) as n')
-            ->whereNotNull('vehicle_name')
+            ->whereIn('vehicle_name', $halaman->pluck('name'))
             ->whereNull('voided_at')
             ->groupBy('vehicle_name')
             ->pluck('n', 'vehicle_name');
 
-        $rows = Vehicle::query()
-            ->when($q !== '', fn ($b) => $b->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($q).'%']))
-            ->orderByDesc('needs_review')   // yang belum dicek owner naik ke atas
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Vehicle $v) => [
+        return response()->json([
+            'data' => $halaman->map(fn (Vehicle $v) => [
                 'id'           => $v->id,
                 'name'         => $v->name,
                 'category'     => $v->category,
                 'needs_review' => (bool) $v->needs_review,
                 'used_count'   => (int) ($pakai[$v->name] ?? 0),
-            ]);
-
-        return response()->json([
-            'data' => $rows,
-            'meta' => ['needs_review' => Vehicle::where('needs_review', true)->count()],
+            ]),
+            'meta' => [
+                // Seluruh katalog, bukan hasil saringan: peringatan "belum
+                // dicek" tidak boleh hilang hanya karena owner sedang mencari.
+                'needs_review' => Vehicle::where('needs_review', true)->count(),
+                'page'         => $page,
+                'per_page'     => $perPage,
+                'total'        => $total,
+                'last_page'    => $lastPage,
+            ],
         ]);
     }
 

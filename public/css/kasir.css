@@ -595,7 +595,20 @@
     padding-left:10px;border-radius:8px}
   .item-baris.perlu-cek .tag-ai{background:var(--danger);color:#fff;border-color:var(--danger)}
   .kendaraan-cek-judul{font-size:13px;font-weight:900;color:var(--danger);margin-bottom:6px}
-  .kendaraan-lain{font-size:12.5px;color:var(--ink2);font-weight:700;padding-top:10px}
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding-top:12px;margin-top:4px;border-top:2px dashed var(--line)}
+  .pager-btn{padding:10px 12px;border:2px solid var(--line);border-radius:12px;
+    background:var(--card);font-size:14px;font-weight:800;white-space:nowrap}
+  .pager-btn:disabled{opacity:.35}
+  .pager-info{flex:1;text-align:center;font-size:12.5px;font-weight:700;color:var(--ink2);line-height:1.35}
+  .pager-sendiri{padding-top:10px}
+  /* Di HP keterangan di tengah terjepit jadi tiga baris sempit di antara dua
+     tombol; keterangan naik ke atas satu baris, tombol berbagi lebar. */
+  @media (max-width:480px){
+    .pager{flex-wrap:wrap}
+    .pager-info{order:-1;flex-basis:100%}
+    .pager-btn{flex:1}
+  }
 
   /* ---- Titip jual (Pengaturan > Makanan) ----
      Ungu yang sama dengan tombol titipan di layar jual, supaya "barang orang"

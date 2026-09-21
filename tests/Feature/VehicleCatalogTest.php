@@ -174,6 +174,55 @@ class VehicleCatalogTest extends TestCase
             ->assertJsonPath('meta.needs_review', 1);
     }
 
+    public function test_daftar_katalog_dibagi_per_halaman(): void
+    {
+        Vehicle::query()->delete();
+        foreach (range(1, 45) as $i) {
+            Vehicle::create(['name' => sprintf('Mobil %02d', $i), 'category' => 'kecil']);
+        }
+
+        $this->getJson('/api/vehicles', $this->ownerHeader())
+            ->assertOk()
+            ->assertJsonCount(20, 'data')
+            ->assertJsonPath('data.0.name', 'Mobil 01')
+            ->assertJsonPath('meta.page', 1)
+            ->assertJsonPath('meta.total', 45)
+            ->assertJsonPath('meta.last_page', 3);
+
+        $this->getJson('/api/vehicles?page=3', $this->ownerHeader())
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('data.0.name', 'Mobil 41');
+    }
+
+    /** Mobil terakhir di halaman terakhir dihapus: jangan jawab daftar kosong. */
+    public function test_halaman_kebablasan_dijepit_ke_halaman_terakhir(): void
+    {
+        Vehicle::query()->delete();
+        foreach (range(1, 21) as $i) {
+            Vehicle::create(['name' => sprintf('Mobil %02d', $i), 'category' => 'kecil']);
+        }
+
+        $this->getJson('/api/vehicles?page=9', $this->ownerHeader())
+            ->assertOk()
+            ->assertJsonPath('meta.page', 2)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Mobil 21');
+    }
+
+    public function test_pencarian_ikut_dibagi_halaman_dan_peringatan_tetap_seluruh_katalog(): void
+    {
+        Vehicle::query()->delete();
+        foreach (range(1, 25) as $i) {
+            Vehicle::create(['name' => sprintf('Toyota %02d', $i), 'category' => 'kecil']);
+        }
+        Vehicle::create(['name' => 'Honda Tebakan', 'category' => 'kecil', 'needs_review' => true]);
+
+        $this->getJson('/api/vehicles?q=toyota&page=2', $this->ownerHeader())
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.total', 25)
+            ->assertJsonPath('meta.needs_review', 1);
+    }
+
     public function test_kategori_harus_ada_di_daftar_jenis_kendaraan(): void
     {
         $this->withHeaders($this->ownerHeader())

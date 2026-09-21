@@ -3919,6 +3919,13 @@ async function hapusAddon(id){
    cara membetulkan yang salah adalah SQL manual. */
 let kendaraanCariTimer = null;
 
+/* Halaman yang sedang dibuka. Sengaja tidak di-reset saat daftar digambar
+   ulang sesudah owner mengubah jenis/nama atau menghapus mobil: owner yang
+   sedang merapikan halaman 3 harus tetap di halaman 3. Yang me-reset ke 1
+   hanya kata cari yang berubah. Server menjepit halaman yang kebablasan
+   (mis. mobil terakhir di halaman terakhir baru dihapus). */
+let kendaraanHalaman = 1;
+
 /** Pilihan jenis kendaraan sesuai katalog owner yang berlaku sekarang. */
 function opsiKategori(terpilih){
   return Object.entries(CFG.categories).map(([slug, k]) =>
@@ -3931,7 +3938,9 @@ async function renderKendaraan(){
   const q = ($("cariKendaraan").value || "").trim();
   try{
     if(!CFG) CFG = await api("/config");
-    const r = await api("/vehicles"+(q? "?q="+encodeURIComponent(q) : ""), {penuh:true});
+    const r = await api("/vehicles?page="+kendaraanHalaman+(q? "&q="+encodeURIComponent(q) : ""), {penuh:true});
+    const m = r.meta || {};
+    kendaraanHalaman = m.page || 1;
 
     // Dropdown "tambah" diisi sekali saja: mengisi ulang tiap render akan
     // membuang pilihan yang sedang diketik owner. Pilihan pertamanya sengaja
@@ -3950,17 +3959,34 @@ async function renderKendaraan(){
       : '<div class="kendaraan-cek-judul">&#9888; '+perluCek+' mobil di bawah ini jenisnya dari tebakan AI '
         + 'dan belum kamu benarkan. Selama belum dicek, harganya ditentukan mesin.</div>';
 
-    const BATAS = 40;   // tablet: daftar 100 baris berat digulir, bukan dibaca
     const daftar = r.data;
     $("daftarKendaraan").innerHTML = daftar.length===0
       ? '<div class="cat-kosong">'+(q? 'Tidak ada mobil bernama "'+esc(q)+'" di daftar.'
                                      : 'Katalog masih kosong.')+'</div>'
-      : daftar.slice(0, BATAS).map(barisKendaraan).join("")
-        + (daftar.length>BATAS
-            ? '<div class="kendaraan-lain">&hellip; dan '+(daftar.length-BATAS)
-              +' mobil lain. Ketik namanya di kotak cari untuk menemukannya.</div>'
-            : "");
+      : daftar.map(barisKendaraan).join("") + pagerKendaraan(m, q);
   }catch(e){ gagal(e); }
+}
+
+/* Tombol halaman di BAWAH daftar: owner sampai ke sana setelah selesai
+   membaca halaman ini. Satu halaman saja = cukup jumlahnya, tanpa tombol. */
+function pagerKendaraan(m, q){
+  const total = m.total || 0, hal = m.page || 1, akhir = m.last_page || 1;
+  const jumlah = total+" mobil"+(q? ' cocok dengan "'+esc(q)+'"' : "");
+  if(akhir<=1) return '<div class="pager-info pager-sendiri">'+jumlah+'</div>';
+  return '<div class="pager">'
+    + '<button class="pager-btn" '+(hal<=1?"disabled":"")+' onclick="keHalamanKendaraan('+(hal-1)+')">&lsaquo; Sebelumnya</button>'
+    + '<span class="pager-info">Halaman '+hal+' dari '+akhir+' &middot; '+jumlah+'</span>'
+    + '<button class="pager-btn" '+(hal>=akhir?"disabled":"")+' onclick="keHalamanKendaraan('+(hal+1)+')">Berikutnya &rsaquo;</button>'
+    + '</div>';
+}
+
+/* Pindah halaman lalu gulir ke awal daftar — tombolnya di bawah, dan tanpa
+   gulir owner mendarat di ekor halaman baru. */
+async function keHalamanKendaraan(hal){
+  kendaraanHalaman = Math.max(1, hal);
+  await renderKendaraan();
+  const cari = $("cariKendaraan");
+  if(cari) cari.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 /* Jumlah pemakaian ikut di baris ATAS bersama nama, bukan di sebelah dropdown:
@@ -3986,7 +4012,9 @@ function barisKendaraan(v){
 
 function jadwalCariKendaraan(){
   clearTimeout(kendaraanCariTimer);
-  kendaraanCariTimer = setTimeout(renderKendaraan, 250);
+  // Kata cari baru = daftar baru; halaman 4 dari pencarian lama tidak
+  // berarti apa-apa untuk hasil yang sekarang.
+  kendaraanCariTimer = setTimeout(() => { kendaraanHalaman = 1; renderKendaraan(); }, 250);
 }
 
 async function tambahKendaraan(){
