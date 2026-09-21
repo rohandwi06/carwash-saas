@@ -57,7 +57,7 @@
             <input id="inPenyJumlah" type="number" inputmode="numeric" placeholder="Jumlah (Rp)">
           </div>
           <div class="form-keluar" style="margin-bottom:6px">
-            <input id="inPenyAlasan" placeholder="Alasan (telat, merusak alat...)" maxlength="160">
+            <input id="inPenyAlasan" placeholder="Alasan" maxlength="160">
             <input id="inPenyTgl" type="date" class="inp-range">
           </div>
           <button class="btn-catat" style="background:var(--danger);width:100%;margin-bottom:12px"
@@ -74,6 +74,7 @@
              menampilkan upah hari mana pun, termasuk hari ini, jadi keduanya
              menjawab pertanyaan yang sama dua kali. --}}
         <div class="cat-blok">
+          <h3>&#128181; Upah pekerja</h3>
           <div class="kal-nav">
             <button class="kal-panah" onclick="gantiBulanUpah(-1)">&#8249;</button>
             <div class="kal-bulan" id="upahKalJudul"></div>
