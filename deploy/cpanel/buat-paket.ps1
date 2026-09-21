@@ -128,7 +128,7 @@ $kecualiFolder = @(
     (Join-Path $proyek 'android-app'),
     (Join-Path $proyek 'public')          # dibungkus terpisah ke public_html
 )
-$kecualiBerkas = @('.env', '*.sqlite', 'start-tunnel.bat')
+$kecualiBerkas = @('.env', '*.sqlite')
 
 $aplikasi = Join-Path $kerja 'app-root'
 robocopy $proyek $aplikasi /E /XD $kecualiFolder /XF $kecualiBerkas /NFL /NDL /NJH /NJS /NP | Out-Null

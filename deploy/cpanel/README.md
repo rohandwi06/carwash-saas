@@ -1,213 +1,102 @@
-# Deploy ke shared hosting cPanel (ArenHost)
+# Memasang di shared hosting cPanel (ArenHost)
 
-> Panduan ini ditulis saat memasang OTIN, cucian pertama, jadi contohnya
-> memakai folder `otin-carwash` dan domain OTIN. Untuk cucian baru: akun,
-> database, dan `.env` disiapkan `ops/scripts/New-Tenant.ps1`; paketnya
-> dibuat dengan `buat-paket.ps1 -FolderApp rapiin-app` (database kosong
-> otomatis); sisanya sama mulai Bagian 4, dengan `rapiin-app` menggantikan
-> `otin-carwash`.
+Satu cucian = satu akun cPanel. Contoh di bawah memakai cucian `budi`
+dengan domain `budi.rapiin.id` dan folder aplikasi `rapiin-app`.
+(OTIN, cucian pertama, memakai folder `otin-carwash` di akun hosting
+sendiri — ganti nama folder itu bila memperbarui OTIN.)
 
-Domain: **otincarwash-pos.my.id** — aplikasi kasir dipasang di domain utama.
-
-Panduan ini menggantikan mode LAN ([`DEPLOY.md`](../../DEPLOY.md)) dan mode
-tunnel ([`../windows/README.md`](../windows/README.md)). Setelah selesai,
-laptop toko **tidak perlu hidup lagi** — kasir buka `https://otincarwash-pos.my.id`
-dari HP mana pun.
-
----
-
-## Apa yang berubah dibanding sekarang
-
-| | Sebelum (laptop toko) | Sesudah (hosting) |
+| Langkah | Alat | Hasil |
 |---|---|---|
-| Server | Laptop toko + XAMPP | Server ArenHost |
-| Alamat | IP lokal / URL tunnel yang berubah tiap nyala | `https://otincarwash-pos.my.id` tetap |
-| Laptop mati | Kasir mati | Kasir tetap jalan |
-| Backup | `storage/backups` di laptop | lihat **Bagian 7** — caranya berbeda |
+| 1 | `ops/scripts/New-Tenant.ps1` | akun cPanel + database + `ops/secrets/budi.env` |
+| 2 | `deploy/cpanel/buat-paket.ps1` | `app.zip`, `public.zip`, `database.sql` |
+| 3–8 | cPanel (bagian di bawah) | aplikasi jalan di `https://budi.rapiin.id` |
 
 ---
 
-## Bagian 0 — WAJIB dulu: kunci akun owner
-
-Aplikasi ini lahir untuk LAN toko. Begitu ada di internet, password lemah
-adalah lubang terbesar. Cek dulu di laptop:
+## 1. Siapkan akun & `.env`
 
 ```bash
-powershell -ExecutionPolicy Bypass -File deploy\windows\scripts\preflight-keamanan.ps1
+powershell -ExecutionPolicy Bypass -File ops\scripts\New-Tenant.ps1 -Slug budi -NamaBisnis "BUDI CARWASH" -Owner "Pak Budi" -Terapkan
 ```
 
-Yang **wajib** beres sebelum upload (sisanya soal MySQL lokal, tidak relevan
-di hosting):
+Tanpa `-Terapkan` (atau bila API WHM belum bisa dipakai), buat sendiri di
+WHM → Create a New Account, lalu cPanel → **MySQL Databases**: database,
+user, dan **ALL PRIVILEGES**. cPanel menambahkan prefix username di depan
+nama database & user — salin persis yang tampil ke `ops/secrets/budi.env`.
 
-- `OWNER_PASSWORD` minimal 12 karakter acak — yang sekarang cuma 4 digit.
-- `GEMINI_API_KEY` harus key baru (yang lama pernah bocor).
-- `APP_KEY` sudah diganti (statusnya sudah OK).
-
----
-
-## Bagian 1 — Arahkan domain ke hosting
-
-Di panel domain `.my.id` (tempat domain dibeli), ganti **nameserver** ke
-nameserver ArenHost — ada di email aktivasi hosting, bentuknya seperti
-`ns1.arenhost.id` / `ns2.arenhost.id`.
-
-Propagasi 15 menit sampai beberapa jam. Cek dari laptop:
+## 2. Buat paket
 
 ```bash
-nslookup otincarwash-pos.my.id
-```
-
-Kalau IP yang keluar sudah sama dengan IP di email hosting, lanjut.
-
-> Kalau domain dipasang sebagai **Addon Domain**, bukan domain utama akun,
-> folder tujuannya bukan `~/public_html` melainkan `~/otincarwash-pos.my.id`.
-> Sesuaikan di semua langkah di bawah; baris `$app_base` di
-> `index-public_html.php` tetap menunjuk ke `~/otin-carwash`.
-
----
-
-## Bagian 2 — Buat database di cPanel
-
-cPanel → **MySQL Databases**:
-
-1. Create Database: `otin_carwash` → jadi `prefix_otin_carwash`.
-2. Add New User: `otin` → jadi `prefix_otin`. Pakai password acak panjang,
-   **catat**.
-3. Add User To Database → centang **ALL PRIVILEGES**.
-
-Salin ketiga nilai persis seperti yang tampil (lengkap dengan prefix-nya) —
-nanti dipakai di `.env`.
-
----
-
-## Bagian 3 — Siapkan berkas di laptop
-
-```bash
-powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1 -FolderApp otin-carwash -Database lokal
+powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-paket.ps1 -FolderApp rapiin-app
 ```
 
 Hasilnya di `deploy\cpanel\paket\`:
 
 | Berkas | Tujuan di server |
 |---|---|
-| `app.zip` | `~/otin-carwash` (**di luar** `public_html`) |
+| `app.zip` | `~/rapiin-app` (**di luar** `public_html`) |
 | `public.zip` | `~/public_html` |
 | `database.sql` | diimpor lewat phpMyAdmin |
 
-`vendor/` sengaja ikut dibungkus — shared hosting tidak punya composer.
-`.env` sengaja **tidak** ikut; dibuat langsung di server (Bagian 5).
+- `vendor/` ikut dibungkus — shared hosting tidak punya composer.
+- `.env`, `ops/`, `docs/`, `deploy/`, `tests/`, `android-app/` **tidak pernah**
+  ikut: paket ini diunggah ke akun milik satu klien.
+- `database.sql` adalah database **kosong** (migrasi + katalog awal), dibuat di
+  database sementara lalu dibuang. `-Database lokal` mendump database laptop
+  apa adanya — hanya untuk memindahkan data cucian yang sama, jangan pernah
+  untuk cucian lain.
 
----
-
-## Bagian 4 — Unggah & extract
+## 3. Unggah & ekstrak
 
 cPanel → **File Manager**:
 
-1. Di `home` (sejajar dengan `public_html`), **+ Folder** → `otin-carwash`.
+1. Di `home` (sejajar dengan `public_html`) buat folder `rapiin-app`.
 2. Masuk ke sana → Upload `app.zip` → klik kanan → **Extract** → hapus zip-nya.
 3. Masuk `public_html` → Upload `public.zip` → **Extract** → hapus zip-nya.
 
-Susunan akhir yang benar:
-
 ```
 home/
-├── otin-carwash/        <- app, config, routes, vendor, storage, .env
-│   ├── vendor/
-│   ├── storage/
-│   └── .env             (dibuat di Bagian 5)
+├── rapiin-app/          <- app, config, routes, vendor, storage, .env
 └── public_html/
-    ├── index.php        <- versi cPanel, menunjuk ke ../otin-carwash
+    ├── index.php        <- menunjuk ke ../rapiin-app (ditulis buat-paket.ps1)
     ├── .htaccess
     └── css/  js/  favicon.ico  robots.txt
 ```
 
-**Inti keamanannya:** `.env`, `storage/` (pembukuan & backup), dan `vendor/`
-berada di luar `public_html`, jadi tidak ada URL yang bisa mengunduhnya.
+`.env`, `storage/` (pembukuan & backup), dan `vendor/` berada di luar
+`public_html`, jadi tidak ada URL yang bisa mengunduhnya.
 
-Lalu set permission (klik kanan → Change Permissions):
+Permission (klik kanan → Change Permissions): `rapiin-app/storage` beserta
+isinya dan `rapiin-app/bootstrap/cache` → **755**.
 
-- folder `otin-carwash/storage` beserta seluruh isinya → **755**
-- `otin-carwash/bootstrap/cache` → **755**
+## 4. `.env`
 
----
+File Manager → `rapiin-app` → **+ File** → `.env` → Edit → tempel isi
+`ops/secrets/budi.env` → simpan → Change Permissions → **600**.
 
-## Bagian 5 — Buat `.env` di server
+## 5. Database
 
-File Manager → masuk `otin-carwash` → **+ File** → nama `.env` → klik kanan →
-**Edit**. Tempel isi [`env-hosting.txt`](env-hosting.txt), lalu ganti semua
-yang bertanda `<...>` dengan nilai dari Bagian 2 dan password owner baru.
+cPanel → **phpMyAdmin** → pilih database cucian → **Import** →
+`database.sql` → Go. Tidak perlu Terminal atau `php artisan migrate`.
 
-`APP_KEY` diisi di Bagian 6. Kalau tidak ada terminal SSH sama sekali, salin
-`APP_KEY` yang sudah ada di `.env` laptop — kuncinya valid, dan aman dipakai
-karena nilainya bukan lagi yang pernah bocor di GitHub.
+## 6. PHP & cron
 
-Setelah tersimpan: klik kanan `.env` → Change Permissions → **600**.
+- **MultiPHP Manager**: domain ini **PHP 8.2 atau lebih baru** (Laravel 12
+  menolak jalan di bawahnya).
+- **Cron Jobs** → Add New:
 
----
-
-## Bagian 6 — Impor database & migrasi
-
-**Impor data yang sudah ada:** cPanel → **phpMyAdmin** → pilih database
-`prefix_otin_carwash` → tab **Import** → pilih `database.sql` → Go.
-
-Kalau file `.sql` lebih besar dari batas upload phpMyAdmin, kompres jadi
-`.zip` dulu — phpMyAdmin bisa membaca zip langsung.
-
-**Kalau mau mulai dari nol** (tanpa data lama), lewati impor dan jalankan
-migrasi. Untuk itu butuh terminal:
-
-- cPanel → **Terminal** (kalau ArenHost mengaktifkannya):
-
-  ```bash
-  cd ~/otin-carwash
-  php artisan key:generate --force
-  php artisan migrate --force
-  php artisan config:cache && php artisan route:cache && php artisan view:cache
+  ```
+  * * * * * /usr/local/bin/php /home/USER/rapiin-app/artisan schedule:run >> /dev/null 2>&1
   ```
 
-- **Tanpa Terminal:** impor `database.sql` saja sudah cukup untuk
-  penyalaan pertama — struktur tabel dan data ikut di dalamnya, jadi migrasi
-  tidak diperlukan. Yang perlu diingat: setiap update kode yang menambah
-  migrasi harus di-dump ulang dari laptop lalu diimpor lagi, atau minta
-  ArenHost mengaktifkan SSH.
+  Ganti `USER` dengan username cPanel; path PHP bisa berbeda (lihat
+  MultiPHP Manager).
 
-> Jangan jalankan `config:cache` sebelum `.env` final — perubahan `.env`
-> setelah itu tidak terbaca sampai `php artisan config:clear`.
+## 7. HTTPS
 
----
-
-## Bagian 7 — Backup
-
-`php artisan db:backup` memanggil `mysqldump` lewat `proc_open`, dan shared
-hosting **sering mematikan `proc_open`**. Jadi jangan mengandalkan itu di sini.
-Dua lapis penggantinya:
-
-1. **Backup manual dari cPanel** — cPanel → **Backup Wizard** → Download MySQL
-   Database, seminggu sekali, simpan ke Google Drive. Ini yang paling penting:
-   backup yang tersimpan di server yang sama bukan backup.
-
-2. **Cron scheduler Laravel** (untuk rotasi backup & tugas terjadwal lain,
-   kalau `proc_open` ternyata hidup). cPanel → **Cron Jobs** → Add New:
-
-   ```
-   * * * * * /usr/local/bin/php /home/PREFIX/otin-carwash/artisan schedule:run >> /dev/null 2>&1
-   ```
-
-   Ganti `PREFIX` dengan nama user cPanel. Path PHP bisa berbeda — lihat
-   pilihan di **MultiPHP Manager** atau tanya support ArenHost. Pastikan
-   versi PHP domain ini **8.2 atau lebih baru**; Laravel 12 menolak jalan
-   di bawah itu.
-
----
-
-## Bagian 8 — Nyalakan HTTPS
-
-cPanel → **SSL/TLS Status** → centang domain → **Run AutoSSL**. Tunggu sampai
-hijau (butuh domain sudah mengarah ke hosting, Bagian 1).
-
-Setelah HTTPS hidup, tambahkan paksa-HTTPS di baris paling atas
-`public_html/.htaccess`, **sebelum** blok `<IfModule mod_rewrite.c>` yang
-sudah ada:
+cPanel → **SSL/TLS Status** → centang domain → **Run AutoSSL**. Setelah hijau,
+tambahkan di baris paling atas `public_html/.htaccess`, **sebelum** blok
+`<IfModule mod_rewrite.c>`:
 
 ```apache
 RewriteEngine On
@@ -215,35 +104,45 @@ RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 ```
 
-Ini wajib: `.env` sudah diset `SESSION_SECURE_COOKIE=true`, jadi lewat HTTP
-polos login tidak akan pernah nyangkut.
+Wajib: `.env` menyetel `SESSION_SECURE_COOKIE=true`, jadi lewat HTTP polos
+login tidak akan pernah nyangkut.
+
+## 8. Uji sebelum diserahkan
+
+1. Buka `https://budi.rapiin.id` — harus layar login bernama cucian itu,
+   bukan error 500 atau daftar folder.
+2. Masuk owner dengan kredensial dari `.env`, lalu **langsung ganti
+   password** di Pengaturan → Akun → Akun owner. Sejak itu password
+   tersimpan ter-hash dan `OWNER_PASSWORD` di `.env` tidak dipakai lagi.
+3. Pengaturan → Akun → **Profil usaha**: alamat & telepon untuk resi.
+4. Buat akun kasir, catat satu transaksi uji, lalu batalkan.
+5. Buka dari HP lewat data seluler, bukan WiFi.
+
+**Error 500:** baca baris terbawah `rapiin-app/storage/logs/laravel.log`.
+Penyebab tersering: permission `storage` bukan 755, atau PHP di bawah 8.2.
 
 ---
 
-## Bagian 9 — Uji sebelum dipakai kasir
+## Memperbarui cucian yang sudah jalan
 
-1. Buka `https://otincarwash-pos.my.id` — harus muncul layar login, bukan error
-   500 dan bukan daftar folder.
-2. Login owner dengan kredensial dari `.env`.
-3. **Langsung ganti password owner dari dalam aplikasi**: menu ☰ → Pengaturan
-   → Akun owner. Sejak itu password tersimpan ter-hash di database, dan
-   `OWNER_PASSWORD` di `.env` tidak dipakai lagi.
-4. Buat ulang akun kasir bila perlu (Pengaturan → Akun kasir).
-5. Catat satu transaksi uji, lalu void — pastikan tersimpan.
-6. Buka dari HP kasir lewat data seluler (bukan WiFi toko) — memastikan
-   benar-benar lewat internet.
+```bash
+powershell -ExecutionPolicy Bypass -File deploy\cpanel\buat-update.ps1 -Sejak <commit-yang-terpasang>
+```
 
-**Kalau error 500:** File Manager → `otin-carwash/storage/logs/laravel.log`,
-baca baris paling bawah. Penyebab tersering: permission `storage` bukan 755,
-atau versi PHP masih di bawah 8.2.
+Commit yang terpasang tercatat di `ops/tenants/<slug>.json` (`versi.commit`).
+Hasilnya `update-app.zip` (ekstrak di folder aplikasi) dan `update-public.zip`
+(ekstrak di `public_html`). Skrip ini **tidak** mengirim database — situs yang
+jalan sudah berisi pembukuan yang tidak ada di laptop.
 
----
+Bila ada migrasi baru dan hosting tanpa Terminal: jalankan SQL-nya di
+phpMyAdmin (contoh: `update-migrasi.sql`, diambil dari
+`php artisan migrate --pretend`, setiap perintah `IF NOT EXISTS` supaya aman
+diulang). Setelah naik, perbarui `versi.commit` dan `versi.migrasi_terakhir`
+di `ops/tenants/<slug>.json`.
 
-## Bagian 10 — Setelah pindah
+## Backup
 
-- Laptop toko **jangan** lagi menjalankan `start-tunnel.bat`. Dua salinan
-  aplikasi dengan dua database terpisah = pembukuan pecah dua.
-- Matikan tugas terjadwal tunnel yang sudah terpasang di laptop
-  (Task Scheduler → tugas bernama `OtinCarwash Tunnel`).
-- XAMPP lokal tetap boleh dipakai untuk **mengembangkan**, tapi datanya sejak
-  sekarang cuma data uji — yang asli ada di hosting.
+`php artisan db:backup` memanggil `mysqldump` lewat `proc_open`, dan shared
+hosting sering mematikannya. Jangan mengandalkan itu: unduh backup database
+dari cPanel → **Backup Wizard** seminggu sekali dan simpan di luar hosting
+(Google Drive). Backup yang tersimpan di server yang sama bukan backup.
