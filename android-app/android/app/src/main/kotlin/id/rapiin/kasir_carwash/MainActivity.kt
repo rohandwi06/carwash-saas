@@ -1,4 +1,4 @@
-package com.otincarwash.otin_carwash
+package id.rapiin.kasir_carwash
 
 import io.flutter.embedding.android.FlutterActivity
 

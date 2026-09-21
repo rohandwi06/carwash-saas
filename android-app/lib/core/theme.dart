@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Palet OTIN CARWASH — disalin apa adanya dari `:root` di public/css/kasir.css
+/// Palet kasir — disalin apa adanya dari `:root` di public/css/kasir.css
 /// supaya app tablet dan web kasir terlihat satu produk. Kalau warna di web
 /// diubah, ubah di sini juga; sengaja tidak diambil dari server karena warna
 /// adalah identitas merek, bukan data toko.
@@ -46,7 +46,7 @@ const double lebarIsi = 860;
 /// AppBarThemeData) di Flutter versi baru, dan app ini harus tetap ter-build
 /// di SDK tablet yang mungkin lebih tua/baru. Kartu memakai [kotakKartu] di
 /// bawah, header memakai widget sendiri di ui/widgets/header.dart.
-ThemeData temaOtin() {
+ThemeData temaKasir() {
   const skema = ColorScheme.light(
     primary: Warna.water,
     onPrimary: Colors.white,

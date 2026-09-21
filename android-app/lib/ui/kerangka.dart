@@ -11,10 +11,11 @@ import 'screens/layar_pekerja.dart';
 import 'screens/layar_pengaturan.dart';
 import 'screens/layar_pengeluaran.dart';
 import 'screens/layar_rekap.dart';
+import 'widgets/nama_usaha.dart';
 
 /// Halaman utama aplikasi. Nilai `id` disimpan ke penyimpanan tablet supaya
 /// kasir kembali ke layar terakhirnya setelah app ditutup — sama seperti
-/// `otinLastPage` di web.
+/// `kasirLastPage` di web.
 enum Halaman {
   kasir('layarHome', 'Kasir', Icons.local_car_wash),
   fnb('layarFnb', 'Makanan & Minuman', Icons.restaurant),
@@ -213,7 +214,7 @@ class _Header extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 8, 16, 10),
           // Lebar header diukur, bukan diasumsikan. Di tablet mendatar semua
           // muat; di layar sempit (HP, atau tablet berdiri) tulisan
-          // "OTIN CARWASH" + judul halaman + lencana role melebihi lebar dan
+          // Nama cucian + judul halaman + lencana role melebihi lebar dan
           // memicu overflow. Yang dikorbankan duluan adalah wordmark-nya:
           // merek sudah jelas dari ikon tetesnya, sedangkan judul halaman dan
           // siapa yang sedang login keduanya informasi yang dipakai kerja.
@@ -258,7 +259,7 @@ class _Header extends StatelessWidget {
 class _Brand extends StatelessWidget {
   const _Brand({this.ringkas = false});
 
-  /// Hanya ikon tetesnya, tanpa tulisan "OTIN CARWASH". Dipakai header di
+  /// Hanya ikon tetesnya, tanpa nama cucian. Dipakai header di
   /// layar sempit; drawer selalu memakai bentuk penuh karena di sana ruangnya
   /// tersedia dan merek memang pantas ditegaskan sekali.
   final bool ringkas;
@@ -270,22 +271,7 @@ class _Brand extends StatelessWidget {
         const Text('💧', style: TextStyle(fontSize: 22)),
         if (!ringkas) ...[
           const SizedBox(width: 6),
-          const Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: 'OTIN', style: TextStyle(color: Warna.tag)),
-                TextSpan(
-                  text: ' CARWASH',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1,
-            ),
-          ),
+          const Flexible(child: NamaUsaha()),
         ],
       ],
     );

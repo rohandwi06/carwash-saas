@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../../state/providers.dart';
+import '../widgets/nama_usaha.dart';
 
 /// Layar pertama di tablet yang baru dinyalakan: ke server mana app ini
 /// menembak.
@@ -53,23 +54,7 @@ class _LayarServerState extends ConsumerState<LayarServer> {
               children: [
                 const Text('💧', style: TextStyle(fontSize: 46)),
                 const SizedBox(height: 8),
-                const Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(text: 'OTIN', style: TextStyle(color: Warna.tag)),
-                      TextSpan(
-                        text: ' CARWASH',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
-                  ),
-                ),
+                const NamaUsaha(ukuran: 30, jarakHuruf: 1.5, rataTengah: true),
                 const SizedBox(height: 26),
                 const Text(
                   'Alamat server',
@@ -92,7 +77,7 @@ class _LayarServerState extends ConsumerState<LayarServer> {
                   textInputAction: TextInputAction.go,
                   onSubmitted: (_) => _simpan(),
                   decoration: const InputDecoration(
-                    hintText: 'otin-carwash.com',
+                    hintText: 'namacucian.rapiin.id',
                     prefixIcon: Icon(Icons.dns_outlined),
                   ),
                 ),

@@ -6,7 +6,7 @@
 |
 | Tidak perlu disalin tangan: buat-paket.ps1 memasukkannya ke public.zip
 | sebagai ~/public_html/index.php, dengan $app_base diganti sesuai
-| -FolderApp. Nilai di bawah hanya bawaan untuk OTIN.
+| -FolderApp. Nilai di bawah hanya bawaan.
 |
 | Bedanya dengan public/index.php bawaan: di cPanel isi folder public/ tinggal
 | di public_html, sedangkan SISA proyek (vendor/, .env, storage/, app/) ada di
@@ -22,7 +22,7 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-$app_base = __DIR__.'/../otin-carwash';
+$app_base = __DIR__.'/../rapiin-app';
 
 if (file_exists($maintenance = $app_base.'/storage/framework/maintenance.php')) {
     require $maintenance;

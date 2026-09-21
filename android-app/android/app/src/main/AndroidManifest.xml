@@ -17,7 +17,7 @@
     <!-- Tablet tanpa printer tetap harus bisa dipasangi aplikasi ini. -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <application
-        android:label="OTIN Carwash"
+        android:label="Kasir Carwash"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

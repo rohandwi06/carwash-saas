@@ -1,5 +1,5 @@
 -- ===================================================================
---  OTIN CARWASH — migrasi "katalog kendaraan" + "titip jual"
+--  Migrasi 2026_09_18: "katalog kendaraan" + "titip jual"
 --  cPanel → phpMyAdmin → pilih database → tab SQL → tempel SEMUA → Go
 --
 --  WAJIB BACKUP DULU: phpMyAdmin → database yang sama → tab Export → Go.
@@ -15,7 +15,7 @@
 --  Sintaks ini khusus MariaDB — server hosting ini MariaDB.
 --
 --  Kalau hosting punya Terminal, ini semua tidak perlu. Cukup:
---      cd ~/otin-carwash && php artisan migrate --force
+--      cd ~/<folder aplikasi> && php artisan migrate --force
 --
 --  SQL di bawah diambil dari `php artisan migrate --pretend`, lalu
 --  diuji di salinan skema produksi: hasil akhirnya identik dengan yang

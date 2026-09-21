@@ -12,8 +12,9 @@ use Illuminate\Support\Str;
  * Tiap cucian memasang aplikasi yang sama di hosting-nya sendiri, jadi nama
  * usaha tidak boleh tertulis di kode (docs/AUDIT-MULTITENANT.md temuan 1.1).
  * Owner mengaturnya dari Pengaturan; sebelum pernah diatur, nama diambil
- * dari APP_NAME di .env — itu sebabnya OTIN, yang .env produksinya sudah
- * berisi APP_NAME="OTIN CARWASH", tetap bernama sama tanpa migrasi data.
+ * dari APP_NAME di .env — pemasangan baru langsung bernama benar, dan
+ * instalasi lama yang .env-nya sudah berisi APP_NAME tetap bernama sama
+ * tanpa migrasi data.
  */
 class BusinessProfileService
 {
@@ -67,7 +68,7 @@ class BusinessProfileService
         return $this->profile()['name'];
     }
 
-    /** Nama usaha dalam bentuk aman untuk nama berkas: "OTIN CARWASH" -> "otin-carwash". */
+    /** Nama usaha dalam bentuk aman untuk nama berkas: "BUDI CARWASH" -> "budi-carwash". */
     public function slug(): string
     {
         return Str::slug($this->name()) ?: 'carwash';

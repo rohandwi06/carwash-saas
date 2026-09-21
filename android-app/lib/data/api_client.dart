@@ -44,7 +44,7 @@ class ApiClient {
   }) : _klien = klien ?? http.Client();
 
   /// Alamat server TANPA `/api` dan tanpa garis miring di akhir,
-  /// mis. `https://otin.example.com`. Bisa berbeda tiap tablet karena tiap
+  /// mis. `https://budi.rapiin.id`. Bisa berbeda tiap tablet karena tiap
   /// cucian punya servernya sendiri.
   final String baseUrl;
   final String? token;

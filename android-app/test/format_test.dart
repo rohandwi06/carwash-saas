@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otin_carwash/core/format.dart';
+import 'package:kasir_carwash/core/format.dart';
 
 /// Aturan format yang HARUS sama persis dengan web (public/js/kasir.js).
 /// Kalau salah satunya berubah sendiri, plat nomor yang sama akan tersimpan

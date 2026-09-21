@@ -1,5 +1,5 @@
-{{-- Nama usaha dengan kata terakhir berwarna kuning ("OTIN CARWASH" ->
-     OTIN <kuning>CARWASH</kuning>). Satu kata saja tampil polos.
+{{-- Nama usaha dengan kata terakhir berwarna kuning ("BUDI CARWASH" ->
+     BUDI <kuning>CARWASH</kuning>). Satu kata saja tampil polos.
      Diisi ulang oleh JS (terapkanProfilUsaha) begitu owner mengganti nama. --}}
 @php
     $kata  = preg_split('/\s+/', trim($usaha['name']));

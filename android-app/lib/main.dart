@@ -34,20 +34,20 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [sesiStoreProvider.overrideWithValue(sesi)],
-      child: const AplikasiOtin(),
+      child: const AplikasiKasir(),
     ),
   );
 }
 
-class AplikasiOtin extends StatelessWidget {
-  const AplikasiOtin({super.key});
+class AplikasiKasir extends StatelessWidget {
+  const AplikasiKasir({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OTIN CARWASH',
+      title: 'Kasir Carwash',
       debugShowCheckedModeBanner: false,
-      theme: temaOtin(),
+      theme: temaKasir(),
       locale: const Locale('id'),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

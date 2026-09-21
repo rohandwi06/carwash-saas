@@ -1,5 +1,5 @@
 # =====================================================================
-#  OTIN CARWASH — penyiapan proyek Android (jalankan SEKALI)
+#  Kasir Carwash — penyiapan proyek Android (jalankan SEKALI)
 #
 #  Kode Dart-nya sudah lengkap di lib/, tapi folder android/ (Gradle,
 #  manifest, ikon) belum ada karena itu bagian yang HARUS dibuat oleh
@@ -22,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 Write-Host ''
-Write-Host '=== OTIN CARWASH — penyiapan Android ===' -ForegroundColor Yellow
+Write-Host '=== Kasir Carwash — penyiapan Android ===' -ForegroundColor Yellow
 Write-Host ''
 
 # --- 1. Flutter ada? -------------------------------------------------
@@ -48,7 +48,7 @@ if (Test-Path 'android') {
 
     # flutter create MENIMPA lib/main.dart dan pubspec.yaml kalau proyeknya
     # belum pernah dibuat olehnya. Disalin dulu, dikembalikan setelahnya.
-    $aman = Join-Path $env:TEMP "otin-backup-$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $aman = Join-Path $env:TEMP "kasir-backup-$(Get-Date -Format 'yyyyMMddHHmmss')"
     New-Item -ItemType Directory -Force -Path $aman | Out-Null
     Copy-Item -Recurse -Force 'lib' $aman
     Copy-Item -Force 'pubspec.yaml' $aman
@@ -57,7 +57,7 @@ if (Test-Path 'android') {
     }
 
     Write-Host '[3/6] Membuat kerangka Android (Gradle, manifest, ikon)...' -ForegroundColor Cyan
-    flutter create --platforms=android --project-name otin_carwash --org com.otincarwash .
+    flutter create --platforms=android --project-name kasir_carwash --org id.rapiin .
 
     Write-Host '[4/6] Mengembalikan kode aplikasi...' -ForegroundColor Cyan
     Remove-Item -Recurse -Force 'lib'
@@ -112,7 +112,7 @@ if (-not (Test-Path $manifest)) {
         )
 
         # Nama yang muncul di bawah ikon aplikasi.
-        $isi = $isi -replace 'android:label="otin_carwash"', 'android:label="OTIN Carwash"'
+        $isi = $isi -replace 'android:label="kasir_carwash"', 'android:label="Kasir Carwash"'
 
         Set-Content -Path $manifest -Value $isi -NoNewline
         Write-Host '      Izin ditambahkan.' -ForegroundColor Green

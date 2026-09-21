@@ -8,7 +8,8 @@ use Illuminate\Http\Request;
 
 /**
  * Profil usaha yang tampil di header, layar login, resi, dan laporan CSV.
- * Semua role boleh membaca (kasir mencetak resi); hanya owner yang mengubah.
+ * Membaca tidak perlu login (layar login tablet butuh nama cucian); hanya
+ * owner yang mengubah.
  */
 class BusinessProfileController extends Controller
 {

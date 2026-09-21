@@ -5,6 +5,8 @@ import '../../core/cetak.dart';
 import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../data/models/transaksi.dart';
+import '../../data/models/usaha.dart';
+import '../../state/providers.dart';
 import '../widgets/kartu.dart';
 import 'layar_kasir.dart';
 
@@ -29,7 +31,8 @@ class _LayarSelesaiState extends ConsumerState<LayarSelesai> {
 
   Future<void> _cetak() async {
     setState(() => _mencetak = true);
-    final hasil = await Pencetak.cetakStruk(widget.transaksi);
+    final usaha = await ref.read(profilUsahaProvider.future);
+    final hasil = await Pencetak.cetakStruk(widget.transaksi, usaha: usaha);
     if (!mounted) return;
     setState(() => _mencetak = false);
 
@@ -129,21 +132,26 @@ class _LayarSelesaiState extends ConsumerState<LayarSelesai> {
   }
 
   Widget _struk(Transaksi t) {
+    final usaha = ref.watch(profilUsahaProvider).valueOrNull ?? ProfilUsaha.bawaan;
     final waktu = t.dibuatPada ?? DateTime.now();
     final fnb = t.itemFnb;
 
     return Kartu(
       child: Column(
         children: [
-          const Text(
-            'OTIN CARWASH',
-            style: TextStyle(
+          Text(
+            usaha.nama,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,
               letterSpacing: 1,
             ),
           ),
-          const Text('Cuci Mobil & Motor', style: Teks.kecil),
+          if (usaha.keterangan.isNotEmpty) Text(usaha.keterangan, style: Teks.kecil),
+          if (usaha.alamat.isNotEmpty)
+            Text(usaha.alamat, style: Teks.kecil, textAlign: TextAlign.center),
+          if (usaha.telepon.isNotEmpty) Text('Telp. ${usaha.telepon}', style: Teks.kecil),
           const _Garis(),
           BarisNilai(label: tglPanjang(waktu), nilai: jam(waktu)),
           const _Garis(),

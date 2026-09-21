@@ -4,6 +4,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/transaksi.dart';
+import '../data/models/usaha.dart';
 import 'format.dart';
 
 /// Pencetak struk ke printer thermal Bluetooth (ESC/POS, kertas 58mm).
@@ -14,12 +15,21 @@ import 'format.dart';
 /// tidak ada satu pun jalur di sini yang boleh melempar keluar — semuanya
 /// kembali sebagai [HasilCetak] yang bisa ditampilkan apa adanya ke kasir.
 class Pencetak {
-  static const _kPrinter = 'otin_printer_mac';
+  static const _kPrinter = 'kasir_printer_mac';
+
+  /// Nama kunci sebelum app ini dipakai banyak cucian. Dibaca sekali lalu
+  /// dipindah, supaya tablet lama tidak perlu memilih printer ulang.
+  static const _kPrinterLama = 'otin_printer_mac';
 
   /// MAC printer yang dipilih owner, disimpan supaya kasir tidak perlu
   /// memilih ulang tiap kali mencetak.
   static Future<String?> printerTersimpan() async {
     final p = await SharedPreferences.getInstance();
+    final lama = p.getString(_kPrinterLama);
+    if (lama != null) {
+      if (p.getString(_kPrinter) == null) await p.setString(_kPrinter, lama);
+      await p.remove(_kPrinterLama);
+    }
     return p.getString(_kPrinter);
   }
 
@@ -61,8 +71,7 @@ class Pencetak {
   /// Mencetak satu struk transaksi cuci.
   static Future<HasilCetak> cetakStruk(
     Transaksi trx, {
-    String namaToko = 'OTIN CARWASH',
-    String subJudul = 'Cuci Mobil & Motor',
+    ProfilUsaha usaha = ProfilUsaha.bawaan,
   }) async {
     final mac = await printerTersimpan();
     if (mac == null) {
@@ -90,7 +99,7 @@ class Pencetak {
         }
       }
 
-      final bytes = await _susunStruk(trx, namaToko, subJudul);
+      final bytes = await _susunStruk(trx, usaha);
       final terkirim = await PrintBluetoothThermal.writeBytes(bytes);
 
       return terkirim
@@ -103,8 +112,7 @@ class Pencetak {
 
   static Future<List<int>> _susunStruk(
     Transaksi trx,
-    String namaToko,
-    String subJudul,
+    ProfilUsaha usaha,
   ) async {
     final profil = await CapabilityProfile.load();
     final gen = Generator(PaperSize.mm58, profil);
@@ -113,7 +121,7 @@ class Pencetak {
     var b = <int>[];
 
     b += gen.text(
-      namaToko,
+      usaha.nama,
       styles: const PosStyles(
         align: PosAlign.center,
         bold: true,
@@ -121,7 +129,16 @@ class Pencetak {
         width: PosTextSize.size2,
       ),
     );
-    b += gen.text(subJudul, styles: const PosStyles(align: PosAlign.center));
+    // Keterangan, alamat, dan telepon hanya tercetak bila owner mengisinya.
+    for (final baris in [
+      usaha.keterangan,
+      usaha.alamat,
+      if (usaha.telepon.isNotEmpty) 'Telp. ${usaha.telepon}',
+    ]) {
+      if (baris.isNotEmpty) {
+        b += gen.text(baris, styles: const PosStyles(align: PosAlign.center));
+      }
+    }
     b += gen.hr();
 
     b += _baris(gen, tglPanjang(waktu), jam(waktu));

@@ -5,6 +5,7 @@ import '../models/katalog.dart';
 import '../models/laporan.dart';
 import '../models/pekerja.dart';
 import '../models/transaksi.dart';
+import '../models/usaha.dart';
 
 /// Lapisan repository: SATU-SATUNYA tempat layar boleh menyentuh server.
 ///
@@ -69,6 +70,15 @@ class AuthRepo {
     final r = await _api.get('/me');
     return HasilLogin.fromJson(asMap(r));
   }
+}
+
+/// Profil usaha tidak perlu login: layar login sudah menampilkan nama cucian.
+class UsahaRepo {
+  const UsahaRepo(this._api);
+  final ApiClient _api;
+
+  Future<ProfilUsaha> profil() async =>
+      ProfilUsaha.fromJson(asMap(await _api.get('/business-profile')));
 }
 
 class ShiftRepo {

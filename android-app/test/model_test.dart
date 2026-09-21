@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otin_carwash/data/models/json_util.dart';
-import 'package:otin_carwash/data/models/katalog.dart';
-import 'package:otin_carwash/data/models/laporan.dart';
-import 'package:otin_carwash/data/models/transaksi.dart';
+import 'package:kasir_carwash/data/models/json_util.dart';
+import 'package:kasir_carwash/data/models/katalog.dart';
+import 'package:kasir_carwash/data/models/laporan.dart';
+import 'package:kasir_carwash/data/models/transaksi.dart';
 
 /// Fokus tes ini: JAWABAN SERVER YANG BENTUKNYA TIDAK SERAGAM.
 ///

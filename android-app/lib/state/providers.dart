@@ -8,6 +8,7 @@ import '../data/models/katalog.dart';
 import '../data/models/laporan.dart';
 import '../data/models/pekerja.dart';
 import '../data/models/transaksi.dart';
+import '../data/models/usaha.dart';
 import '../data/repositories/repo.dart';
 import '../data/session.dart';
 
@@ -75,6 +76,7 @@ final apiProvider = Provider<ApiClient>((ref) {
 });
 
 final authRepoProvider = Provider((ref) => AuthRepo(ref.watch(apiProvider)));
+final usahaRepoProvider = Provider((ref) => UsahaRepo(ref.watch(apiProvider)));
 final shiftRepoProvider = Provider((ref) => ShiftRepo(ref.watch(apiProvider)));
 final katalogRepoProvider =
     Provider((ref) => KatalogRepo(ref.watch(apiProvider)));
@@ -94,6 +96,19 @@ final aiRepoProvider = Provider((ref) => AiRepo(ref.watch(apiProvider)));
    lewat AsyncValue — tidak ada satu pun layar yang menulis `isLoading`
    sendiri. Untuk menyegarkan: ref.invalidate(providerNya).
    ------------------------------------------------------------------ */
+
+/// Nama & alamat cucian untuk header, login, dan struk. Tablet yang belum
+/// diberi alamat server memakai [ProfilUsaha.bawaan] tanpa bertanya ke mana pun;
+/// server yang tidak terjangkau juga jatuh ke sana, supaya layar login tetap
+/// bisa dipakai untuk mencoba lagi.
+final profilUsahaProvider = FutureProvider<ProfilUsaha>((ref) async {
+  if (!ref.watch(sesiProvider.select((s) => s.serverSiap))) return ProfilUsaha.bawaan;
+  try {
+    return await ref.watch(usahaRepoProvider).profil();
+  } catch (_) {
+    return ProfilUsaha.bawaan;
+  }
+});
 
 final konfigProvider =
     FutureProvider<Konfig>((ref) => ref.watch(katalogRepoProvider).konfig());

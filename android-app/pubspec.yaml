@@ -1,5 +1,5 @@
-name: otin_carwash
-description: Aplikasi kasir OTIN CARWASH untuk tablet Android.
+name: kasir_carwash
+description: Aplikasi kasir carwash (rapiin.id) untuk tablet Android.
 publish_to: 'none'
 
 # version = <versi tampilan>+<build number>.

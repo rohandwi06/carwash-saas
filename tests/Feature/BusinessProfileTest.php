@@ -60,6 +60,19 @@ class BusinessProfileTest extends TestCase
             ->assertJsonPath('data.phone', '0812');
     }
 
+    public function test_profil_terbaca_tanpa_login_untuk_layar_login_tablet(): void
+    {
+        app(BusinessProfileService::class)->update(['name' => 'Budi Carwash', 'phone' => '0812']);
+
+        $this->getJson('/api/business-profile')
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Budi Carwash')
+            ->assertJsonPath('data.phone', '0812');
+
+        // Mengubah tetap wajib owner.
+        $this->putJson('/api/business-profile', ['name' => 'Diambil alih'])->assertUnauthorized();
+    }
+
     public function test_kasir_tidak_boleh_mengubah_profil(): void
     {
         $this->putJson('/api/business-profile', ['name' => 'Diambil alih'], $this->header('kasir'))

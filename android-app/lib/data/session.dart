@@ -1,8 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Isi sesi yang bertahan walau app ditutup. Padanan `localStorage` di
-/// kasir.js (`otin_token`, `otin_role`, `otin_name`, `otinLastPage`) plus satu
-/// hal yang tidak ada di web: alamat server.
+/// kasir.js (`kasir_token`, `kasir_role`, `kasir_name`, `kasirLastPage`) plus
+/// satu hal yang tidak ada di web: alamat server.
 ///
 /// Alamat server harus bisa diatur karena tiap cucian yang membeli tablet
 /// punya servernya sendiri. Di web ini tidak perlu — file JS-nya disajikan
@@ -50,14 +50,33 @@ class SesiStore {
   SesiStore(this._prefs);
   final SharedPreferences _prefs;
 
-  static const _kToken = 'otin_token';
-  static const _kRole = 'otin_role';
-  static const _kNama = 'otin_name';
-  static const _kBase = 'otin_base_url';
-  static const _kHalaman = 'otinLastPage';
+  static const _kToken = 'kasir_token';
+  static const _kRole = 'kasir_role';
+  static const _kNama = 'kasir_name';
+  static const _kBase = 'kasir_base_url';
+  static const _kHalaman = 'kasirLastPage';
 
-  static Future<SesiStore> buka() async =>
-      SesiStore(await SharedPreferences.getInstance());
+  /// Nama kunci sebelum app ini dipakai banyak cucian (berawalan "otin").
+  /// Dipindahkan sekali saat app dibuka, supaya tablet yang sudah terpasang
+  /// tidak kehilangan alamat server dan login-nya.
+  static const _kunciLama = {
+    'otin_token': _kToken,
+    'otin_role': _kRole,
+    'otin_name': _kNama,
+    'otin_base_url': _kBase,
+    'otinLastPage': _kHalaman,
+  };
+
+  static Future<SesiStore> buka() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final e in _kunciLama.entries) {
+      final nilai = prefs.getString(e.key);
+      if (nilai == null) continue;
+      if (prefs.getString(e.value) == null) await prefs.setString(e.value, nilai);
+      await prefs.remove(e.key);
+    }
+    return SesiStore(prefs);
+  }
 
   Sesi baca() => Sesi(
         token: _prefs.getString(_kToken) ?? '',
@@ -88,7 +107,7 @@ class SesiStore {
 
   Future<void> simpanHalaman(String id) => _prefs.setString(_kHalaman, id);
 
-  /// Owner mengetik "otin.example.com" atau "192.168.1.5:8000"; keduanya harus
+  /// Owner mengetik "budi.rapiin.id" atau "192.168.1.5:8000"; keduanya harus
   /// jadi URL yang sah. Tanpa skema dianggap https, kecuali alamat IP LAN yang
   /// hampir pasti http — server di dalam toko jarang punya sertifikat.
   static String _rapikan(String mentah) {

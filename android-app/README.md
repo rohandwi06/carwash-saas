@@ -1,4 +1,4 @@
-# OTIN CARWASH — Aplikasi Android
+# Kasir Carwash — Aplikasi Android
 
 Aplikasi kasir untuk tablet Android, memakai backend Laravel yang sama dengan
 web kasir. Dibangun dengan Flutter.
@@ -175,7 +175,7 @@ Ketika siap, tambahkan di `routes/api.php`:
 Route::get('/app-version', fn () => response()->json(['data' => [
     'version'   => '1.0.1',
     'build'     => 2,          // dibandingkan dengan buildNumber di pubspec.yaml
-    'url'       => 'https://contoh.com/otin/app-release.apk',
+    'url'       => 'https://contoh.com/kasir/app-release.apk',
     'notes'     => 'Perbaikan hitungan tip di struk.',
     'mandatory' => false,
 ]]));

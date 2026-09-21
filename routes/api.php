@@ -35,6 +35,11 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
+// Nama, keterangan, alamat, telepon usaha. Publik karena layar login (web
+// maupun tablet Android) sudah harus menampilkan nama cucian sebelum ada
+// token - dan isinya memang dicetak di setiap resi.
+Route::get('/business-profile', [BusinessProfileController::class, 'show'])->middleware('throttle:60,1');
+
 /*
 |--------------------------------------------------------------------------
 | Wajib login (PIN kasir ATAU owner)
@@ -47,10 +52,6 @@ Route::middleware('pin.auth')->group(function () {
     // Status jam operasional — sengaja DI LUAR 'shift' supaya kasir yang
     // terkunci masih bisa tahu jam berapa ia boleh masuk lagi.
     Route::get('/shift', [ShiftController::class, 'show']);
-
-    // Nama & alamat usaha untuk resi. Semua role; juga di luar 'shift'
-    // karena tidak berisi data transaksi apa pun.
-    Route::get('/business-profile', [BusinessProfileController::class, 'show']);
 
     /*
     |----------------------------------------------------------------------
