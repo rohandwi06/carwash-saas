@@ -11,9 +11,10 @@
           <span class="lup">&#128269;</span>
           <input id="inputCari" placeholder="Ketik nama mobil&hellip; salah eja tidak apa-apa" aria-label="Cari nama mobil" autocomplete="off">
         </div>
-        <div class="hint">Contoh: ketik <b>penter</b> &rarr; tetap ketemu <b>Panther</b>.
-          Boleh rapat tanpa spasi: <b>mazdarx7</b> &rarr; <b>Mazda RX-7</b>.
-          Cocokkan gambarnya dengan kendaraan di depan Anda.</div>
+        {{-- Tiap contoh diikat nowrap: di HP "Mazda RX-7" sempat terpotong
+             di tanda hubungnya jadi "RX-" / "7." --}}
+        <div class="hint">Contoh: <span style="white-space:nowrap"><b>penter</b> &rarr; <b>Panther</b></span>,
+          <span style="white-space:nowrap"><b>mazdarx7</b> &rarr; <b>Mazda RX-7</b></span>.</div>
       </div>
 
       <div id="hasilCari" class="hasil" style="margin-bottom:18px"></div>
