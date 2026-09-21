@@ -105,12 +105,12 @@ $kecualiFolder = @(
     (Join-Path $proyek 'storage\framework\sessions'),
     (Join-Path $proyek 'storage\framework\views'),
     (Join-Path $proyek 'tests'),
-    # armada\ berisi daftar SEMUA cucian dan armada\rahasia\ berisi .env
+    # ops\ berisi daftar SEMUA cucian dan ops\secrets\ berisi .env
     # (password database & owner) tiap cucian. Paket ini diunggah ke hosting
     # milik satu klien - kalau ikut, klien itu bisa membaca rahasia klien lain
     # dari File Manager. docs\ (bahan jualan), deploy\ (skrip laptop), dan
     # android-app\ dikecualikan dengan alasan yang sama seperti di buat-update.ps1.
-    (Join-Path $proyek 'armada'),
+    (Join-Path $proyek 'ops'),
     (Join-Path $proyek 'docs'),
     (Join-Path $proyek 'deploy'),
     (Join-Path $proyek 'android-app'),

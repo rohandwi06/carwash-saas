@@ -83,8 +83,8 @@ if ($semua.Count -eq 0) { Write-Host "Tidak ada perubahan. Berhenti." -Foregroun
 # $baru di atas menyapu SEMUA berkas untracked -- selama folder itu belum
 # di-commit, tanpa baris ini 64 berkas Dart/Gradle ikut terekstrak ke
 # ~/otin-carwash pada setiap update.
-# armada/ sama sekali tidak boleh: berisi daftar semua cucian, dan
-# armada/rahasia/ (untracked, jadi ikut tersapu $baru) berisi .env tiap cucian.
+# ops/ sama sekali tidak boleh: berisi daftar semua cucian, dan
+# ops/secrets/ (untracked, jadi ikut tersapu $baru) berisi .env tiap cucian.
 #
 # tests/ juga bukan urusan server: tidak pernah dijalankan di produksi.
 #
@@ -95,7 +95,7 @@ if ($semua.Count -eq 0) { Write-Host "Tidak ada perubahan. Berhenti." -Foregroun
 # File Manager tetap bisa membacanya.
 $semua = $semua | Where-Object {
     $_ -notmatch '^\.env' -and $_ -notmatch '^storage/(logs|backups)/' -and $_ -notmatch '^deploy/' -and
-    $_ -notmatch '^android-app/' -and $_ -notmatch '^armada/' -and $_ -notmatch '^tests/' -and $_ -notmatch '^docs/' -and
+    $_ -notmatch '^android-app/' -and $_ -notmatch '^ops/' -and $_ -notmatch '^tests/' -and $_ -notmatch '^docs/' -and
     $_ -notin @('.gitignore', '.gitattributes', '.editorconfig', '.phpunit.result.cache', 'phpunit.xml')
 }
 

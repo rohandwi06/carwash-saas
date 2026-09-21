@@ -23,12 +23,12 @@ carwash-saas/  (satu repo)
 │   deploy/cpanel/                                   paket zip untuk cPanel
 │   docs/                                            rancangan & bahan jualan
 │
-└── armada/                                          ARMADA
-        armada.json      setelan bersama: domain utama, WHM, prefix DB
-        tenant/*.json    daftar cucian: siapa, di mana, versi berapa
-        templat/         .env per cucian
-        bin/             tenant-baru, daftar-tenant, (rilis, update)
-        rahasia/         .env terisi per cucian — TIDAK masuk git
+└── ops/                                             ARMADA (banyak cucian)
+        config.json      setelan bersama: domain utama, WHM, prefix DB
+        tenants/*.json   daftar cucian: siapa, di mana, versi berapa
+        templates/       .env per cucian
+        scripts/         New-Tenant, Get-Tenants, (release, update)
+        secrets/         .env terisi per cucian — TIDAK masuk git
                  │
                  │ WHM API (buat akun, database)  +  unggah paket
                  ▼
@@ -44,10 +44,10 @@ carwash-saas/  (satu repo)
 
 ### Aturan satu repo
 
-- **Aplikasi di root, armada di `armada/`.** Skrip `deploy/cpanel/` dan semua
+- **Aplikasi di root, armada di `ops/`.** Skrip `deploy/cpanel/` dan semua
   path Laravel tetap seperti di `otin-carwash`, tidak ada yang perlu disesuaikan.
-- **`armada/`, `docs/`, `deploy/`, `android-app/` tidak pernah ikut ke hosting.**
-  Paket diunggah ke akun milik SATU klien; `armada/rahasia/` berisi password
+- **`ops/`, `docs/`, `deploy/`, `android-app/` tidak pernah ikut ke hosting.**
+  Paket diunggah ke akun milik SATU klien; `ops/secrets/` berisi password
   semua klien. Pengecualiannya ada di `buat-paket.ps1` dan `buat-update.ps1` —
   jangan dihapus.
 - **OTIN bukan versi khusus.** Perubahan Tahap 1 (nama bisnis, zona waktu)
@@ -97,7 +97,7 @@ di kode aplikasi.
 
 ---
 
-## Daftar tenant (`armada/tenant/<slug>.json`)
+## Daftar tenant (`ops/tenants/<slug>.json`)
 
 Satu berkas per cucian, di-commit. Ini **sumber kebenaran armada** — dan
 menjawab masalah yang sekarang ditebak lewat md5 isi zip: *commit mana yang
@@ -138,17 +138,17 @@ sedang jalan di produksi.*
   bukan diingat.
 
 Yang **tidak** boleh ada di berkas ini: password, API key, nomor HP owner.
-Password ada di `armada/rahasia/<slug>.env` (di-gitignore); token WHM di variabel
+Password ada di `ops/secrets/<slug>.env` (di-gitignore); token WHM di variabel
 lingkungan `RAPIIN_WHM_TOKEN`.
 
 ---
 
 ## Alur kerja
 
-### 1. Cucian baru — `armada/bin/tenant-baru.ps1`
+### 1. Cucian baru — `ops/scripts/New-Tenant.ps1`
 
 ```
-tenant-baru.ps1 -Slug budi -NamaBisnis "BUDI CARWASH" -Owner "Pak Budi"
+New-Tenant.ps1 -Slug budi -NamaBisnis "BUDI CARWASH" -Owner "Pak Budi"
 ```
 
 Tanpa `-Terapkan` skrip hanya menyiapkan berkas lokal dan mencetak apa yang
@@ -156,8 +156,8 @@ akan dilakukan. Dengan `-Terapkan`:
 
 1. Validasi slug & pastikan belum dipakai.
 2. Buat password DB, password awal owner, dan `APP_KEY` acak.
-3. Tulis `armada/rahasia/budi.env` dari `armada/templat/env.tenant`.
-4. Tulis `tenant/budi.json` berstatus `disiapkan`.
+3. Tulis `ops/secrets/budi.env` dari `ops/templates/tenant.env`.
+4. Tulis `ops/tenants/budi.json` berstatus `disiapkan`.
 5. WHM `createacct` → akun cPanel `budi` di `budi.rapiin.id`.
 6. WHM `uapi_cpanel` → `Mysql::create_database`, `create_user`,
    `set_privileges_on_database`.
@@ -166,26 +166,26 @@ akan dilakukan. Dengan `-Terapkan`:
 **Langkah yang masih manual** sampai WHM API ArenHost terverifikasi:
 unggah & ekstrak paket rilis, impor database cetakan, AutoSSL, satu baris cron.
 
-### 2. Rilis — `armada/bin/rilis.ps1` *(berikutnya)*
+### 2. Rilis — `ops/scripts/New-Release.ps1` *(berikutnya)*
 
 Membangun **satu paket untuk semua cucian** dari aplikasi di repo ini pada satu commit:
 
-- `rilis/<commit>/app.zip` — seluruh aplikasi termasuk `vendor/`, tanpa `.env`,
-  `docs/`, `deploy/`, `tests/`, `android-app/`, `armada/`. Aturan pengecualian disalin dari
+- `releases/<commit>/app.zip` — seluruh aplikasi termasuk `vendor/`, tanpa `.env`,
+  `docs/`, `deploy/`, `tests/`, `android-app/`, `ops/`. Aturan pengecualian disalin dari
   `buat-update.ps1` (termasuk alasan kenapa zip ditulis entri per entri).
-- `rilis/<commit>/public.zip` — isi `public/` dengan `index.php` versi cPanel
+- `releases/<commit>/public.zip` — isi `public/` dengan `index.php` versi cPanel
   (`deploy/cpanel/index-public_html.php`), baris `$app_base` diganti ke
-  `folder_app` dari `armada.json` — OTIN memakai `otin-carwash`, cucian baru `rapiin-app`.
-- `rilis/<commit>/cetakan.sql` — **database cetakan**: `migrate:fresh --seed`
+  `folder_app` dari `config.json` — OTIN memakai `otin-carwash`, cucian baru `rapiin-app`.
+- `releases/<commit>/cetakan.sql` — **database cetakan**: `migrate:fresh --seed`
   dijalankan di MySQL lokal lalu di-dump. Ini jawaban untuk hosting tanpa
   Terminal: cucian baru cukup impor satu berkas, bukan menjalankan artisan.
-- `rilis/<commit>/migrasi/*.sql` — satu berkas SQL idempotent per migrasi
+- `releases/<commit>/migrasi/*.sql` — satu berkas SQL idempotent per migrasi
   (`IF NOT EXISTS`, cara yang sudah dipakai di `update-migrasi.sql`).
 
 Paket penuh, bukan inkremental. Selisih ukurannya kecil dibanding hilangnya
 satu kelas bug: "berkas tertinggal karena baseline salah tebak".
 
-### 3. Update — `armada/bin/update-semua.ps1` *(berikutnya)*
+### 3. Update — `ops/scripts/Update-Tenants.ps1` *(berikutnya)*
 
 Untuk setiap tenant `percobaan`/`aktif`:
 1. Bandingkan `versi.migrasi_terakhir` dengan isi rilis → daftar SQL yang harus
@@ -196,10 +196,10 @@ Untuk setiap tenant `percobaan`/`aktif`:
 
 Satu cucian gagal tidak menghentikan yang lain; hasilnya dirangkum di akhir.
 
-### 4. Backup di luar hosting — `armada/bin/tarik-backup.ps1` *(berikutnya)*
+### 4. Backup di luar hosting — `ops/scripts/Backup-Tenants.ps1` *(berikutnya)*
 
 Backup mingguan ArenHost tinggal di penyedia yang sama. Skrip ini mengunduh
-dump tiap cucian ke `backup/<slug>/<tanggal>.sql.gz` di laptop (lalu disinkron
+dump tiap cucian ke `backups/<slug>/<tanggal>.sql.gz` di laptop (lalu disinkron
 ke Google Drive), rotasi dihitung **per folder cucian**. Wajib ada sebelum
 cucian kedua menyimpan data nyata.
 
@@ -213,11 +213,11 @@ Dari MODEL-BISNIS "Yang masih perlu diverifikasi", ditambah yang muncul dari ran
 |---|---|---|
 | 1 | WHM reseller ArenHost membuka API token (`createacct`, `uapi_cpanel`)? | provisioning lewat WHM web, skrip hanya menyiapkan `.env` & checklist |
 | 2 | Akun cPanel boleh ber-domain utama subdomain `x.rapiin.id`? | pakai domain sendiri per cucian, atau satu akun + addon domain |
-| 3 | Prefix database di akun reseller 8 karakter (seperti `otincarw_` di OTIN)? | ubah `prefix_db_panjang` di `armada.json` |
+| 3 | Prefix database di akun reseller 8 karakter (seperti `otincarw_` di OTIN)? | ubah `prefix_db_panjang` di `config.json` |
 | 4 | Cron cPanel bisa menjalankan `php artisan migrate --force` sekali jalan? | tetap SQL manual lewat phpMyAdmin — tapi sudah dihitung per cucian |
 | 5 | `Fileman` UAPI bisa unggah & ekstrak zip? | unggah lewat File Manager, skrip mencatat versinya |
 
-Nomor 1 menentukan hampir semua otomasi. Cek itu dulu sebelum menulis `rilis.ps1`.
+Nomor 1 menentukan hampir semua otomasi. Cek itu dulu sebelum menulis `New-Release.ps1`.
 
 ---
 
@@ -225,12 +225,12 @@ Nomor 1 menentukan hampir semua otomasi. Cek itu dulu sebelum menulis `rilis.ps1
 
 1. **Sekarang, di aplikasi:** `business_name` di settings + `APP_TIMEZONE`.
    OTIN ikut menikmati; tidak ada kerja terbuang.
-2. **Sudah:** daftar tenant + `tenant-baru.ps1` di `armada/`.
+2. **Sudah:** daftar tenant + `New-Tenant.ps1` di `ops/`.
    OTIN tercatat sebagai tenant pertama — versinya berhenti ditebak.
-3. **Setelah beli reseller & cek verifikasi #1–#3:** jalankan `tenant-baru.ps1
-   -Terapkan` untuk satu akun uji, lalu tulis `rilis.ps1`.
-4. **Sebelum cucian kedua punya data nyata:** `tarik-backup.ps1`.
-5. **Saat cucian ke-3 atau ke-4:** `update-semua.ps1`. Dengan dua cucian,
+3. **Setelah beli reseller & cek verifikasi #1–#3:** jalankan `New-Tenant.ps1
+   -Terapkan` untuk satu akun uji, lalu tulis `New-Release.ps1`.
+4. **Sebelum cucian kedua punya data nyata:** `Backup-Tenants.ps1`.
+5. **Saat cucian ke-3 atau ke-4:** `Update-Tenants.ps1`. Dengan dua cucian,
    deploy manual dua kali masih lebih murah dari menulis skripnya.
 
 Pendaftaran mandiri **tidak** ada di daftar ini — lima klien pertama didatangi

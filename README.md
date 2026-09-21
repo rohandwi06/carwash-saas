@@ -5,8 +5,8 @@ OTIN Carwash adalah cucian pertama. Kode ini disalin dari repo `otin-carwash`
 (commit `222de3a`, tanpa riwayat) — pekerjaan baru dilakukan di sini.
 
 - Aplikasi Laravel: root repo ini (penjelasan lapisan di bawah).
-- Mengurus banyak cucian: [armada/](armada/README.md).
-- Rancangan multi-tenant: [docs/ARSITEKTUR.md](docs/ARSITEKTUR.md).
+- Mengurus banyak cucian: [ops/](ops/README.md).
+- Rancangan multi-tenant: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Deploy ke cPanel: [deploy/cpanel/README.md](deploy/cpanel/README.md).
 
 ---

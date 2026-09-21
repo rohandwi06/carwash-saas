@@ -1,9 +1,9 @@
 # .env terisi per cucian: password DB, password awal owner, APP_KEY
-rahasia/
-# paket hasil rilis.ps1 (berisi vendor/, besar, bisa dibangun ulang dari commit)
-rilis/
+secrets/
+# paket hasil New-Release.ps1 (berisi vendor/, besar, bisa dibangun ulang dari commit)
+releases/
 # unduhan backup database cucian - data klien, bukan kode
-backup/
+backups/
 *.zip
 *.sql
 *.sql.gz

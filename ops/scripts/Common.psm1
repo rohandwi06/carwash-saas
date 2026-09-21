@@ -1,6 +1,6 @@
 <#
     Fungsi bersama skrip armada rapiin.id. Dipakai lewat:
-        Import-Module (Join-Path $PSScriptRoot 'Armada.psm1') -Force
+        Import-Module (Join-Path $PSScriptRoot 'Common.psm1') -Force
 
     Ditulis untuk Windows PowerShell 5.1 (bawaan Windows, yang dipakai skrip
     deploy di otin-carwash) - jadi tanpa ??, ternary, atau -AsHashtable.
@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:Akar = Split-Path -Parent $PSScriptRoot
 
-function Get-AkarArmada { $script:Akar }
+function Get-OpsRoot { $script:Akar }
 
 # JSON ditulis UTF-8 TANPA BOM. Set-Content -Encoding UTF8 di PowerShell 5.1
 # menambahkan BOM, dan berkas tenant dibaca juga oleh alat lain (git diff, editor).
@@ -26,35 +26,35 @@ function Read-Json {
     [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8) | ConvertFrom-Json
 }
 
-function Get-Armada { Read-Json (Join-Path $script:Akar 'armada.json') }
+function Get-OpsConfig { Read-Json (Join-Path $script:Akar 'config.json') }
 
-# repo_aplikasi di armada.json relatif terhadap folder armada\ - bawaannya ".."
+# repo_aplikasi di config.json relatif terhadap folder ops\ - bawaannya ".."
 # karena aplikasi Laravel tinggal di root repo yang sama.
-function Get-RepoAplikasi {
-    $p = (Get-Armada).repo_aplikasi
+function Get-AppRoot {
+    $p = (Get-OpsConfig).repo_aplikasi
     if (-not [IO.Path]::IsPathRooted($p)) { $p = Join-Path $script:Akar $p }
     [IO.Path]::GetFullPath($p)
 }
 
-function Get-PathTenant {
+function Get-TenantPath {
     param([string]$Slug)
-    Join-Path $script:Akar "tenant\$Slug.json"
+    Join-Path $script:Akar "tenants\$Slug.json"
 }
 
 function Get-Tenant {
     param([string]$Slug)
     if ($Slug) {
-        $p = Get-PathTenant $Slug
-        if (-not (Test-Path $p)) { throw "Tenant '$Slug' tidak ada di tenant\." }
+        $p = Get-TenantPath $Slug
+        if (-not (Test-Path $p)) { throw "Tenant '$Slug' tidak ada di tenants\." }
         return Read-Json $p
     }
-    Get-ChildItem (Join-Path $script:Akar 'tenant') -Filter '*.json' |
+    Get-ChildItem (Join-Path $script:Akar 'tenants') -Filter '*.json' |
         Sort-Object Name |
         ForEach-Object { Read-Json $_.FullName }
 }
 
 # ConvertTo-Json di PowerShell 5.1 menulis indentasi acak (": " ganda, kurung
-# menjorok sejajar kunci). Dirapikan jadi 2 spasi supaya diff git tenant\*.json
+# menjorok sejajar kunci). Dirapikan jadi 2 spasi supaya diff git tenants\*.json
 # hanya memperlihatkan nilai yang benar-benar berubah.
 function Format-Json {
     param([string]$Json)
@@ -78,13 +78,13 @@ function Format-Json {
 
 function Save-Tenant {
     param($Tenant)
-    Write-Utf8 (Get-PathTenant $Tenant.slug) (Format-Json ($Tenant | ConvertTo-Json -Depth 6))
+    Write-Utf8 (Get-TenantPath $Tenant.slug) (Format-Json ($Tenant | ConvertTo-Json -Depth 6))
 }
 
 # Slug = nama akun cPanel = subdomain, jadi aturannya aturan username cPanel:
 # huruf kecil & angka, diawali huruf, maks 16, tanpa tanda hubung,
 # dan cPanel menolak username berawalan "test".
-function Test-Slug {
+function Test-TenantSlug {
     param([string]$Slug)
     if ($Slug -cnotmatch '^[a-z][a-z0-9]{1,15}$') {
         throw "Slug '$Slug' tidak sah: huruf kecil/angka, diawali huruf, 2-16 karakter, tanpa tanda hubung."
@@ -93,14 +93,14 @@ function Test-Slug {
 }
 
 # Prefix database cPanel = potongan awal username. Di ArenHost panjangnya 8
-# (database OTIN bernama otincarw_...), diatur di armada.json.
-function Get-PrefixDb {
+# (database OTIN bernama otincarw_...), diatur di config.json.
+function Get-DbPrefix {
     param([string]$Slug, [int]$Panjang)
     if ($Slug.Length -le $Panjang) { return $Slug }
     $Slug.Substring(0, $Panjang)
 }
 
-function New-Rahasia {
+function New-Secret {
     param([int]$Panjang = 20)
     # Tanpa karakter yang merepotkan di .env ( " ' $ # spasi ) dan tanpa
     # yang mudah tertukar saat didiktekan ke owner (0/O, 1/l/I).
@@ -116,9 +116,9 @@ function New-AppKey {
     'base64:' + [Convert]::ToBase64String($b)
 }
 
-function Expand-Templat {
+function Expand-Template {
     param([string]$Nama, [hashtable]$Nilai)
-    $isi = [IO.File]::ReadAllText((Join-Path $script:Akar "templat\$Nama"), [Text.Encoding]::UTF8)
+    $isi = [IO.File]::ReadAllText((Join-Path $script:Akar "templates\$Nama"), [Text.Encoding]::UTF8)
     foreach ($k in $Nilai.Keys) { $isi = $isi.Replace("{{$k}}", [string]$Nilai[$k]) }
     $sisa = [regex]::Matches($isi, '\{\{[A-Z_]+\}\}') | ForEach-Object { $_.Value } | Sort-Object -Unique
     if ($sisa) { throw "Templat $Nama masih punya isian kosong: $($sisa -join ', ')" }
@@ -133,12 +133,12 @@ function Expand-Templat {
     -Fungsi uapi_cpanel dengan cpanel.user / cpanel.module / cpanel.function.
 
     BELUM DIUJI ke ArenHost: apakah reseller mereka membuka API token adalah
-    verifikasi #1 di docs/ARSITEKTUR.md.
+    verifikasi #1 di docs/ARCHITECTURE.md.
 #>
 function Invoke-Whm {
     param([string]$Fungsi, [hashtable]$Parameter = @{})
-    $a = Get-Armada
-    if (-not $a.whm.host -or -not $a.whm.reseller_user) { throw "whm.host / whm.reseller_user belum diisi di armada.json." }
+    $a = Get-OpsConfig
+    if (-not $a.whm.host -or -not $a.whm.reseller_user) { throw "whm.host / whm.reseller_user belum diisi di config.json." }
     $token = $env:RAPIIN_WHM_TOKEN
     if (-not $token) { throw "Variabel lingkungan RAPIIN_WHM_TOKEN belum diisi." }
 
