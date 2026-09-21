@@ -1098,7 +1098,7 @@ function barisPekerja(p){
     +   '<span class="dp-atas"><span>'+esc(p.name)
     +     (p.is_trainee? ' <span class="tag-training">TRAINING</span>' : '')+'</span></span>'
     +   '<span class="dp-meta">'
-    +     (info.length ? info.join(" &middot; ") : "Biodata belum diisi — ketuk &#9998; untuk melengkapi")
+    +     (info.length ? info.join(" &middot; ") : "Biodata belum diisi")
     +   '</span>'
     + '</span>'
     + '<button class="btn-edit-pk" onclick="editPekerja('+p.id+')" title="Ubah data">&#9998;</button>'
@@ -2866,7 +2866,8 @@ async function renderBuku(){
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
 
     if(!tglPilih){
-      $("detailHari").innerHTML = '<div class="cat-kosong" style="text-align:center">Tap tanggal bertitik hijau untuk lihat riwayat transaksi &amp; pendapatan hari itu.</div>';
+      // Petunjuknya sudah ada tepat di bawah kalender (kal-info).
+      $("detailHari").innerHTML = "";
       return;
     }
     const tgl = tglPilih; // kunci tanggal: selagi await, user bisa tap tanggal lain
@@ -4060,17 +4061,28 @@ async function muatUlangKatalog(){
 /* ---------- PROFIL USAHA (khusus owner) ----------
    Nama tampil di header, menu, layar login, judul tab, resi, dan laporan CSV.
    Alamat & telepon hanya di resi, dan hanya kalau diisi. */
+/* Nomor urut pengisian form. Setiap pengisian (buka tab atau selesai
+   simpan) menaikkannya; jawaban GET yang tiba dengan nomor lama dibuang.
+   Tanpa ini, GET yang dikirim saat layar dibuka tapi baru tiba SESUDAH owner
+   menyimpan akan mengembalikan nilai lama ke form, walau yang tersimpan baru. */
+let profilUrut = 0;
+
+function isiFormProfil(p){
+  $("inUsahaNama").value    = p.name    || "";
+  $("inUsahaTagline").value = p.tagline || "";
+  $("inUsahaAlamat").value  = p.address || "";
+  $("inUsahaTelp").value    = p.phone   || "";
+}
+
 async function renderProfilUsaha(){
   const blok = $("blokProfilUsaha");
   if(!blok) return;
   if(ROLE!=="owner"){ blok.classList.add("hidden"); return; }
   blok.classList.remove("hidden");
+  const urut = ++profilUrut;
   try{
     const p = await api("/business-profile");
-    $("inUsahaNama").value    = p.name    || "";
-    $("inUsahaTagline").value = p.tagline || "";
-    $("inUsahaAlamat").value  = p.address || "";
-    $("inUsahaTelp").value    = p.phone   || "";
+    if(urut === profilUrut) isiFormProfil(p);
   }catch(e){ gagal(e); }
 }
 
@@ -4082,8 +4094,11 @@ async function simpanProfilUsaha(){
     phone:   $("inUsahaTelp").value.trim(),
   };
   if(!body.name){ alert("Nama usaha tidak boleh kosong"); $("inUsahaNama").focus(); return; }
+  const urut = ++profilUrut;
   try{
-    terapkanProfilUsaha(await api("/business-profile",{method:"PUT",body}));
+    const p = await api("/business-profile",{method:"PUT",body});
+    terapkanProfilUsaha(p);
+    if(urut === profilUrut) isiFormProfil(p);
     Swal.fire({toast:true, position:"top-end", icon:"success", title:"Profil usaha tersimpan",
       showConfirmButton:false, timer:1800});
   }catch(e){ gagal(e); }

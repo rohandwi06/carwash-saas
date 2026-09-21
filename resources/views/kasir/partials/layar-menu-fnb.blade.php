@@ -94,7 +94,7 @@
           <div class="cat-blok">
             <h3>&#128203; Tambah menu</h3>
             <div class="form-keluar" style="margin-bottom:6px">
-              <input id="inFnbNama" placeholder="Nama (Kopi, Mie...)">
+              <input id="inFnbNama" placeholder="Nama menu">
               <input id="inFnbHarga" type="number" inputmode="numeric" placeholder="Harga (Rp)">
               <input id="inFnbStok" type="number" inputmode="numeric" placeholder="Stok awal">
             </div>
@@ -176,21 +176,21 @@
                terbuka saja tidak cukup untuk mengambil alih akun ini. --}}
           <div class="cat-blok hidden" id="blokProfilUsaha">
             <h3>&#127978; Profil usaha</h3>
-            <div class="cat-kosong" style="margin-bottom:10px">Tampil di layar login, menu, resi, dan laporan CSV. Alamat &amp; telepon hanya dicetak di resi bila diisi.</div>
+            <div class="cat-kosong" style="margin-bottom:10px">Tampil di layar login, menu, resi, dan laporan CSV. Selain nama, semua boleh dikosongkan; alamat &amp; telepon hanya dicetak di resi.</div>
             <div class="range-input-group" style="margin-bottom:6px">
               <label for="inUsahaNama">Nama usaha</label>
               <input id="inUsahaNama" class="inp-range" maxlength="60" style="text-transform:none" placeholder="Nama carwash">
             </div>
             <div class="range-input-group" style="margin-bottom:6px">
-              <label for="inUsahaTagline">Keterangan di bawah nama (boleh kosong)</label>
+              <label for="inUsahaTagline">Keterangan</label>
               <input id="inUsahaTagline" class="inp-range" maxlength="80" style="text-transform:none" placeholder="Cuci Mobil &amp; Motor">
             </div>
             <div class="range-input-group" style="margin-bottom:6px">
-              <label for="inUsahaAlamat">Alamat (boleh kosong)</label>
+              <label for="inUsahaAlamat">Alamat</label>
               <input id="inUsahaAlamat" class="inp-range" maxlength="160" style="text-transform:none" placeholder="Jl. ...">
             </div>
             <div class="range-input-group" style="margin-bottom:10px">
-              <label for="inUsahaTelp">Telepon / WhatsApp (boleh kosong)</label>
+              <label for="inUsahaTelp">Telepon / WhatsApp</label>
               <input id="inUsahaTelp" class="inp-range" maxlength="30" inputmode="tel" placeholder="08...">
             </div>
             <button class="btn-catat" style="background:var(--go);width:100%"

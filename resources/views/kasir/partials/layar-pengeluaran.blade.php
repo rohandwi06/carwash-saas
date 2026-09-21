@@ -8,7 +8,7 @@
         <div class="cat-blok hidden" id="blokSaldoAwal">
           <h3>&#128176; Saldo Kas <span id="saldoBukuLabel"></span></h3>
           <div class="form-keluar" style="margin-bottom:8px">
-            <input id="inSaldoAwal" type="number" inputmode="numeric" placeholder="Saldo awal pagi ini (Rp)">
+            <input id="inSaldoAwal" type="number" inputmode="numeric" placeholder="Saldo awal (Rp)">
             <button class="btn-catat" style="background:var(--go)" onclick="simpanSaldoAwal()">Simpan</button>
           </div>
           <div id="saldoAwalInfo"></div>
@@ -20,7 +20,7 @@
                tanggal lain di kalender, catatannya masuk ke tanggal ITU. --}}
           <div class="keluar-tgl-aktif">Dicatat untuk: <b id="keluarTglAktif"></b></div>
           <div class="form-keluar" style="margin-bottom:8px">
-            <input id="inKeluarKet" placeholder="Keterangan (beli sabun...)" maxlength="160">
+            <input id="inKeluarKet" placeholder="Keterangan" maxlength="160">
             <input id="inKeluarJumlah" type="number" inputmode="numeric" placeholder="Jumlah (Rp)">
           </div>
           <button class="btn-catat" style="background:var(--go);width:100%" onclick="tambahPengeluaran()">Catat Pengeluaran</button>

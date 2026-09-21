@@ -16,6 +16,10 @@
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;
     transition:transform .06s}
   button:focus-visible{outline:3px solid var(--water);outline-offset:2px}
+  /* Kolom isian & pilihan TIDAK mewarisi huruf halaman secara bawaan browser
+     (jatuh ke Arial), jadi setiap form tampil beda sendiri dari tombol dan
+     teks di sekitarnya. Ukuran & tebal tetap diatur per komponen di bawah. */
+  input, select, textarea{font-family:inherit}
   /* Umpan balik tekan untuk SEMUA tombol. Tombol bergaya "timbul" (punya
      box-shadow) menimpa ini dengan animasi turun — lihat .btn-besar dkk. */
   button:active{transform:scale(.96)}
@@ -362,6 +366,10 @@
   .kal-titik{width:6px;height:6px;border-radius:50%;background:var(--go)}
   .kal-hari.pilih .kal-titik{background:var(--tag)}
   .kal-kosong{aspect-ratio:1}
+  /* Di tablet, kotak persegi mengikuti lebar kolom sampai ~93px, dan satu
+     bulan memenuhi seluruh layar sebelum rincian harinya terlihat. Tinggi
+     tetap 52px masih lega untuk jari dan menyisakan ruang untuk rincian. */
+  @media (min-width:481px){ .kal-hari, .kal-kosong{aspect-ratio:auto;height:52px} }
 
   /* --- Tahan-untuk-rentang ---
      Menahan tanggal di HP memunculkan pilih-teks/menu salin yang menutupi
