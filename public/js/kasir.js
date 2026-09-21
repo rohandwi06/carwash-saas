@@ -494,7 +494,7 @@ function keHome(){ tampilkan("layarHome"); }
 /* ---------- HOME: grid + search ---------- */
 function renderGrid(){
   $("gridUkuran").innerHTML = Object.entries(CFG.categories).map(([key,kt]) =>
-    '<button class="btn-ukuran'+(key==="motor"?" motor":"")+'" onclick="pilihManual(\''+key+'\')">'
+    '<button class="btn-ukuran'+(adalahMotor(key)?" motor":"")+'" onclick="pilihManual(\''+key+'\')">'
     + siluetSVG(bentukKat(key),110)
     + '<div class="bu-label">'+esc(kt.label)+'</div>'
     + '<div class="bu-contoh">'+esc(contohKat(key))+'</div>'
@@ -847,7 +847,7 @@ const GARIS_RESI = '<div class="r-garis"></div>';
 function dataResiCucian(trx){
   const kt = CFG.categories[trx.category];
   const sv = CFG.services[trx.service];
-  const layanan = trx.category==="motor" ? "Cuci Motor" : (sv? sv.label : trx.service);
+  const layanan = adalahMotor(trx.category) ? "Cuci Motor" : (sv? sv.label : trx.service);
   const addons = trx.addons || [];
   const hargaAddon = a => a.pivot? a.pivot.price : a.price;
   const cuci = (trx.total||0) - addons.reduce((t,a)=>t+hargaAddon(a), 0);
@@ -2572,7 +2572,7 @@ function trxHTML(r, opsi){
     // transfer masuk ke catatannya, terutama saat dua transfer bernilai sama.
     ["No. Nota", nomorNota("C", r.id)],
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
-    ["Layanan", r.category==="motor" ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
+    ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
     ["Pembayaran", r.payment_method==="tf" ? "Transfer" : "Cash"],
     ["Tip", r.tip? rp(r.tip) : "&mdash;"],
     ["Pekerja", pk || "&mdash;"],
@@ -3712,6 +3712,11 @@ function setJenisFnb(j){
 }
 /* ---------- PENGATURAN: KATALOG CUCI (owner) ---------- */
 const NAMA_BENTUK = {moto:"Motor", hatch:"Mobil kecil", mpv:"Mobil sedang", van:"Mobil besar / van"};
+
+/* Jenis kendaraan beroda dua ditandai lewat BENTUKNYA, bukan slug "motor":
+   tiap cucian menamai jenis kendaraannya sendiri. Sama dengan aturan kolom
+   Cash Motor di BookkeepingService. */
+function adalahMotor(kat){ return bentukKat(kat) === "moto"; }
 let katalogKategori = [], katalogLayanan = [];
 
 async function renderKatalog(){
@@ -3773,6 +3778,11 @@ async function editKategori(slug){
     html:
       '<div class="sw-field-label">Nama jenis kendaraan</div>'
       +'<input id="swKatLabel" class="swal2-input" placeholder="Mobil Kecil..." maxlength="40" value="'+esc(k?k.label:"")+'">'
+      +'<div class="sw-field-label">Bentuk (gambar di layar kasir; Motor = masuk Cash Motor di pembukuan)</div>'
+      +'<select id="swKatBentuk" class="sw-select">'
+      +  Object.entries(NAMA_BENTUK).map(([v,n]) =>
+           '<option value="'+v+'"'+((k? k.shape : "hatch")===v?" selected":"")+'>'+esc(n)+'</option>').join("")
+      +'</select>'
       +'<div class="sw-judul">Harga &amp; upah pekerja per layanan (hilangkan centang bila tidak tersedia)</div>'
       + barisLayanan,
     focusConfirm: false,
@@ -3794,6 +3804,7 @@ async function editKategori(slug){
       if(Object.keys(prices).length===0) return Swal.showValidationMessage("Pilih minimal satu layanan");
       return {
         label,
+        shape: document.getElementById("swKatBentuk").value,
         prices,
         wages,
       };

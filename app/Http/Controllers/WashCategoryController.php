@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Kelola JENIS KENDARAAN (owner-only).
@@ -58,11 +59,11 @@ class WashCategoryController extends Controller
         $slug = $this->slugUnik($data['label']);
 
         DB::transaction(function () use ($data, $slug) {
-            // 'shape' & 'examples' tidak diisi lewat form (owner tidak mengatur
-            // gambar/contoh) — biarkan pakai default kolom ('hatch', kosong).
+            // 'examples' tidak diisi lewat form — biarkan kosong.
             WashCategory::create([
                 'slug'       => $slug,
                 'label'      => $data['label'],
+                'shape'      => $data['shape'] ?? 'hatch',
                 'sort_order' => (int) WashCategory::max('sort_order') + 1,
             ]);
 
@@ -79,9 +80,12 @@ class WashCategoryController extends Controller
         $data = $this->validasi($request);
 
         DB::transaction(function () use ($data, $washCategory) {
-            // Idem: 'shape' & 'examples' bukan bagian form ini lagi — nilai
-            // yang sudah ada di database (kalau ada, dari data lama) dibiarkan.
-            $washCategory->update(['label' => $data['label']]);
+            // 'examples' bukan bagian form ini — nilai lama dibiarkan. Bentuk
+            // hanya diubah bila dikirim, supaya pemanggil lama tetap aman.
+            $washCategory->update(array_filter([
+                'label' => $data['label'],
+                'shape' => $data['shape'] ?? null,
+            ]));
 
             $this->simpanHarga($washCategory->slug, $data['prices']);
             $this->simpanUpah($washCategory->slug, $data['prices'], $data['wages']);
@@ -135,6 +139,9 @@ class WashCategoryController extends Controller
     {
         return $request->validate([
             'label'    => ['required', 'string', 'max:40'],
+            // Bentuk menentukan gambar di layar kasir DAN apakah uang tunainya
+            // masuk kolom Cash Motor di pembukuan (BookkeepingService).
+            'shape'    => ['sometimes', Rule::in(WashCategory::BENTUK)],
             // prices: {service_slug: harga}. Layanan yang tidak disebut = tidak tersedia.
             'prices'   => ['required', 'array', 'min:1'],
             'prices.*' => ['required', 'integer', 'min:0', 'max:5000000'],

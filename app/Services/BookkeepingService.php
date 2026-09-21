@@ -14,6 +14,10 @@ use Illuminate\Support\Collection;
  * Rekap pembukuan (meniru format buku kas fisik):
  * Total / Tip / TF / Cash Motor / Cash Mobil / Cash Total,
  * dikurangi upah & pengeluaran -> laba bersih.
+ *
+ * "Motor" = semua jenis kendaraan berbentuk motor (shape 'moto'), bukan slug
+ * 'motor' saja: tiap cucian menamai & menambah jenis kendaraannya sendiri,
+ * dan "Motor Besar" buatan owner tetap harus masuk kolom Cash Motor.
  */
 class BookkeepingService
 {
@@ -34,8 +38,10 @@ class BookkeepingService
 
         $total     = (int) $trx->sum('total');
         $tf        = (int) $trx->where('payment_method', 'tf')->sum('total');
-        $cashMotor = (int) $trx->where('payment_method', 'cash')->where('category', 'motor')->sum('total');
-        $cashMobil = (int) $trx->where('payment_method', 'cash')->where('category', '!=', 'motor')->sum('total');
+        $motor     = WashCategory::where('shape', WashCategory::BENTUK_MOTOR)->pluck('slug')->all();
+        $cash      = $trx->where('payment_method', 'cash');
+        $cashMotor = (int) $cash->whereIn('category', $motor)->sum('total');
+        $cashMobil = (int) $cash->whereNotIn('category', $motor)->sum('total');
         $wages     = $this->wages->dailyTotal($date, $bookId);
 
         $fnb      = $saring(FnbSale::valid()->whereDate('date', $date))->get();
