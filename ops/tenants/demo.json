@@ -7,10 +7,10 @@
   "zona_waktu": "Asia/Jakarta",
   "hosting": {
     "jenis": "mandiri",
-    "cpanel_user": null,
+    "cpanel_user": "byrapiin",
     "folder_app": "rapiin-app",
     "docroot": "demo.byrapiin.my.id",
-    "prefix_db": null
+    "prefix_db": "byrapiin"
   },
   "owner": {
     "nama": "Rohan"
@@ -24,6 +24,6 @@
   "catatan": [
     "Hosting cPanel biasa ArenHost (bukan reseller), domain utama byrapiin.my.id; demo di subdomain.",
     "Document root subdomain ~/demo.byrapiin.my.id (sejajar ~/rapiin-app, BUKAN di dalam public_html) supaya $app_base ../rapiin-app di index.php tepat.",
-    "Isi cpanel_user & prefix_db setelah akun terlihat di cPanel."
+    "Database & user MySQL: byrapiin_app."
   ]
 }
