@@ -93,9 +93,14 @@ if ($semua.Count -eq 0) { Write-Host "Tidak ada perubahan. Berhenti." -Foregroun
 # AUDIT-MULTITENANT), sedangkan hosting ini akun milik KLIEN. Di luar
 # public_html memang tidak bisa diunduh lewat web, tapi owner yang membuka
 # File Manager tetap bisa membacanya.
+#
+# .claude/ juga tidak: pengaturan alat di laptop (launch.json berisi path
+# folder lokal), dan diff di atas membandingkan FOLDER KERJA -- jadi versi
+# yang belum di-commit pun ikut tersapu kalau tidak dikecualikan di sini.
 $semua = $semua | Where-Object {
     $_ -notmatch '^\.env' -and $_ -notmatch '^storage/(logs|backups)/' -and $_ -notmatch '^deploy/' -and
     $_ -notmatch '^android-app/' -and $_ -notmatch '^ops/' -and $_ -notmatch '^tests/' -and $_ -notmatch '^docs/' -and
+    $_ -notmatch '^\.claude/' -and
     $_ -notin @('.gitignore', '.gitattributes', '.editorconfig', '.phpunit.result.cache', 'phpunit.xml')
 }
 

@@ -68,15 +68,23 @@ class ReportController extends Controller
         return response()->json(['data' => $this->books->dateRange($data['from'], $data['to'])]);
     }
 
-    /** GET /api/reports/wages?from=2026-07-01&to=2026-07-31 — rekap upah per pekerja untuk range tanggal */
+    /**
+     * GET /api/reports/wages?from=2026-07-01&to=2026-07-31 — rekap upah per pekerja untuk range tanggal
+     * GET /api/reports/wages?dates[]=2026-09-08&dates[]=2026-09-22 — hanya tanggal-tanggal itu
+     *     (pilihan kalender Upah & potongan; boleh loncat-loncat)
+     */
     public function wages(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'from' => ['required', 'date_format:Y-m-d'],
-            'to'   => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'from'    => ['required_without:dates', 'date_format:Y-m-d'],
+            'to'      => ['required_without:dates', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'dates'   => ['sometimes', 'array', 'min:1', 'max:62'],
+            'dates.*' => ['date_format:Y-m-d'],
         ]);
 
-        return response()->json(['data' => $this->wages->byDateRange($data['from'], $data['to'])]);
+        return response()->json(['data' => isset($data['dates'])
+            ? $this->wages->byDates($data['dates'])
+            : $this->wages->byDateRange($data['from'], $data['to'])]);
     }
 
     /** GET /api/reports/daily/csv?date=... — unduh laporan harian */

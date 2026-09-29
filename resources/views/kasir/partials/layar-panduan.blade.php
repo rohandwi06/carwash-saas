@@ -178,10 +178,12 @@
             <summary>Upah seorang pekerja kelihatan aneh. Bisa dicek dari mana angkanya?
               <span class="pd-badge">OWNER</span></summary>
             <div class="pd-isi">
-              <p>Buka <b>Pekerja &amp; Upah</b> &rarr; ketuk nama pekerjanya. Yang muncul bukan
-                 totalnya saja, tapi <b>daftar mobil yang jadi dasar upah itu</b>, satu per satu.</p>
+              <p>Buka <b>Pekerja &amp; Upah</b> &rarr; blok <b>Upah &amp; potongan</b> &rarr; ketuk nama
+                 pekerjanya. Yang muncul bukan totalnya saja, tapi <b>daftar mobil yang jadi dasar
+                 upah itu</b>, satu per satu, ditambah setiap potongan beserta alasannya, siapa yang
+                 mencatat, dan jam berapa.</p>
               <p>Jadi kalau ada angka yang tidak wajar, bisa ditelusuri sampai ke transaksi
-                 mana yang menyebabkannya.</p>
+                 atau potongan mana yang menyebabkannya.</p>
             </div>
           </details>
 
@@ -193,6 +195,21 @@
                  <b>Timpa</b> (mengganti angkanya dengan nominal yang Anda tentukan sendiri).</p>
               <p>Keduanya hanya berlaku untuk tanggal tempat Anda mencatatnya, dan bisa dihapus
                  kalau salah. Potongan tidak akan membuat upah jadi minus.</p>
+              <p>Upah dan potongan ada di satu blok, <b>Upah &amp; potongan</b>, dengan satu kalender.
+                 <b>Ketuk</b> beberapa tanggal (boleh loncat-loncat), atau <b>tahan</b> satu tanggal lalu
+                 ketuk tanggal lain untuk satu rentang. Tidak memilih tanggal = hari ini.
+                 Titik hijau = ada upah, titik merah = ada potongan.</p>
+              <p>Untuk memotong: isi pekerja dan jumlahnya sekali, tekan <b>Catat</b> &mdash; potongan
+                 tercatat di setiap tanggal yang dipilih, dengan jumlah yang sama per tanggal.</p>
+              <p>Kalau di salah satu tanggal lampau upah pekerja itu Rp 0 (libur, tidak kebagian
+                 cucian) atau lebih kecil dari potongannya, Anda diberi tahu sebelum mencatat:
+                 potongan di hari seperti itu tidak memotong apa-apa.</p>
+              <p>Di bawahnya ada upah tiap pekerja untuk tanggal yang dipilih. Pilih satu bulan
+                 penuh (tahan tanggal 1, ketuk tanggal terakhir) untuk rekap gajian.</p>
+              <p>Salah catat? Ketuk nama pekerjanya lalu &#10005; di potongan itu. Salah catat banyak?
+                 Tekan <b>Hapus &hellip; potongan/koreksi</b> di bawah daftar &mdash; semua di tanggal
+                 yang dipilih terhapus sekaligus. Kalau nama pekerja dipilih di kolom pekerja, yang
+                 terhapus hanya milik dia.</p>
               <p>Pekerja training punya tarif upahnya sendiri, diatur terpisah.</p>
             </div>
           </details>

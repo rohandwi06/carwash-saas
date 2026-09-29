@@ -129,6 +129,7 @@ $kecualiFolder = @(
     (Join-Path $proyek 'docs'),
     (Join-Path $proyek 'deploy'),
     (Join-Path $proyek 'android-app'),
+    (Join-Path $proyek '.claude'),        # pengaturan alat di laptop (path folder lokal)
     (Join-Path $proyek 'public')          # dibungkus terpisah ke public_html
 )
 $kecualiBerkas = @('.env', '*.sqlite')

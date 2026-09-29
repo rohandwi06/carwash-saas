@@ -164,6 +164,22 @@ class WageService
     }
 
     /**
+     * Potongan yang BENAR-BENAR memotong: yang tercatat bisa lebih besar dari
+     * upahnya (upah tidak pernah minus), dan selisih itu tidak menahan uang
+     * apa pun. Layar yang menulis "dipotong Rp X" harus memakai angka ini,
+     * bukan jumlah yang tercatat — kalau tidak, owner membaca "dipotong
+     * Rp 100.000" untuk pekerja yang upahnya memang Rp 0.
+     */
+    public function potonganTerpakai(int $upahHitungan, ?array $adj): int
+    {
+        if ($adj === null) {
+            return 0;
+        }
+
+        return ($adj['timpa'] ?? $upahHitungan) - $this->terapkanPenyesuaian($upahHitungan, $adj);
+    }
+
+    /**
      * Penyesuaian untuk rentang tanggal, siap pakai:
      *   ['2026-08-20' => [3 => ['timpa' => 20000, 'potongan' => 5000]]]
      *
@@ -238,6 +254,7 @@ class WageService
                     'vehicles'   => $w->transactions->count(),
                     'gross_wage' => $kotor,
                     'penalty'    => (int) ($adj['potongan'] ?? 0),
+                    'penalty_applied' => $this->potonganTerpakai($kotor, $adj),
                     'override'   => $adj['timpa'] ?? null,
                     'wage'       => $this->terapkanPenyesuaian($kotor, $adj),
                     'breakdown'  => $w->transactions->map($this->barisTransaksi(...))->values()->toArray(),
@@ -360,6 +377,7 @@ class WageService
                             'vehicles'   => $dayTrx->count(),
                             'gross_wage' => $kotor,
                             'penalty'    => (int) ($adj['potongan'] ?? 0),
+                            'penalty_applied' => $this->potonganTerpakai($kotor, $adj),
                             'override'   => $adj['timpa'] ?? null,
                             'wage'       => $this->terapkanPenyesuaian($kotor, $adj),
                         ];
@@ -375,6 +393,7 @@ class WageService
                             'vehicles'   => 0,
                             'gross_wage' => 0,
                             'penalty'    => (int) $adj['potongan'],
+                            'penalty_applied' => $this->potonganTerpakai(0, $adj),
                             'override'   => $adj['timpa'],
                             'wage'       => $this->terapkanPenyesuaian(0, $adj),
                         ]);
@@ -389,12 +408,44 @@ class WageService
                     'total_wage'      => (int) $harian->sum('wage'),
                     'total_gross'     => (int) $harian->sum('gross_wage'),
                     'total_penalty'   => (int) $harian->sum('penalty'),
+                    'total_penalty_applied' => (int) $harian->sum('penalty_applied'),
                     'total_vehicles'  => $w->transactions->count(),
                     'daily_breakdown' => $harian->toArray(),
                 ];
             })
             ->filter(fn ($row) => $row['total_vehicles'] > 0 || count($row['daily_breakdown']) > 0)
             ->sortBy('name')
+            ->values();
+    }
+
+    /**
+     * Seperti byDateRange(), tapi hanya untuk tanggal-tanggal tertentu yang
+     * boleh loncat-loncat (pilihan di kalender Upah & potongan). Rentangnya
+     * dihitung sekali dari yang paling awal sampai paling akhir, lalu hari di
+     * antaranya yang tidak dipilih dibuang dan totalnya dihitung ulang —
+     * jadi aturan hitung per tanggal tetap satu, milik byDateRange().
+     */
+    public function byDates(array $dates): Collection
+    {
+        $tanggal = collect($dates)->unique()->sort()->values();
+        $dipilih = $tanggal->flip();
+
+        return $this->byDateRange($tanggal->first(), $tanggal->last())
+            ->map(function (array $row) use ($dipilih) {
+                $harian = collect($row['daily_breakdown'])
+                    ->filter(fn ($d) => $dipilih->has($d['date']))
+                    ->values();
+
+                return array_merge($row, [
+                    'total_wage'      => (int) $harian->sum('wage'),
+                    'total_gross'     => (int) $harian->sum('gross_wage'),
+                    'total_penalty'   => (int) $harian->sum('penalty'),
+                    'total_penalty_applied' => (int) $harian->sum('penalty_applied'),
+                    'total_vehicles'  => (int) $harian->sum('vehicles'),
+                    'daily_breakdown' => $harian->toArray(),
+                ]);
+            })
+            ->filter(fn ($row) => count($row['daily_breakdown']) > 0)
             ->values();
     }
 }

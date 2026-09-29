@@ -262,10 +262,14 @@ function batasBulan(tahun, bulan){
    data-tgl: tidak ada yang bisa dibuka di situ, tapi rentang tetap boleh
    dimulai atau diakhiri di hari kosong. */
 function selKalender(tgl, angka, opsi){
-  const cls = "kal-hari"+(opsi.ada?" ada":"")+(tgl===hariIni()?" ini":"")
+  const cls = "kal-hari"+((opsi.ada||opsi.potong)?" ada":"")+(tgl===hariIni()?" ini":"")
     + (opsi.pilih?" pilih":"") + (opsi.mati?" mati":"");
+  // opsi.potong = titik merah kedua (kalender Upah & potongan: hari yang ada
+  // potongan/koreksi upah). Kalender lain hanya memakai titik hijau.
+  const titik = (opsi.ada? '<span class="kal-titik"></span>' : '')
+    + (opsi.potong? '<span class="kal-titik potong"></span>' : '');
   return '<button class="'+cls+'" data-tgl="'+tgl+'">'+angka
-    + (opsi.ada? '<span class="kal-titik"></span>' : '')+'</button>';
+    + (titik? '<span class="kal-titik-baris">'+titik+'</span>' : '')+'</button>';
 }
 
 /* ---------- KALENDER: KETUK SATU HARI, TAHAN UNTUK RENTANG ----------
@@ -472,7 +476,9 @@ function pergi(id){
   if(LAYAR_OWNER.includes(id) && ROLE!=="owner") id = layarAwal();
   if(id==="layarFnb") renderFnb();
   if(id==="layarMenuFnb") renderMenuFnb(true);
-  if(id==="layarPekerja"){ initTanggalPenyesuaian(); renderPekerja(); renderUpahKalender(); }
+  // Kalender Upah & potongan digambar renderPekerja() -> renderPenyesuaian(),
+  // karena dropdown pekerjanya menumpang daftar pekerja yang dimuat di sana.
+  if(id==="layarPekerja") renderPekerja();
   // Masuk layar Rekap selalu mulai dari "Semua". Penyaring yang tertinggal
   // dari kunjungan sebelumnya membuat owner membaca laba sebagian hari dan
   // mengiranya laba sehari penuh — risiko salah baca angka uang.
@@ -1071,7 +1077,7 @@ async function renderPekerja(){
     $("daftarPekerja").innerHTML = pekerja.length===0
       ? '<div class="cat-kosong">Belum ada pekerja. Tambahkan nama di atas.</div>'
       : pekerja.map(barisPekerja).join("");
-    // Dropdown pekerja di Potongan & koreksi upah menumpang daftar yang baru
+    // Dropdown pekerja di blok Upah & potongan menumpang daftar yang baru
     // dimuat di atas — karena itu dipanggil di sini, bukan di pergi().
     renderPenyesuaian();
   }catch(e){ gagal(e); }
@@ -1114,59 +1120,6 @@ function labelSvc(slug){
   return (CFG && CFG.services[slug] && CFG.services[slug].label) || slug;
 }
 
-/**
- * Satu pekerja + daftar cucian yang ia kerjakan (bisa dibuka/tutup).
- * Barisnya sengaja SAMA dengan riwayat di Rekap Hari Ini — jam, kendaraan,
- * plat, dan totalnya — supaya angka upah bisa ditelusuri ke transaksinya.
- */
-function kartuUpah(w, ruang){
-  const detailId = "upah-"+ruang+"-"+w.id;
-  const baris = (w.breakdown||[]).map(t =>
-    '<div class="upah-trx">'
-    + '<span class="upah-trx-kiri">'
-    +   '<span class="waktu">'+esc(t.time||"")+'</span> '+esc(t.vehicle_name)
-    +   '<span class="upah-trx-sub">'+esc(t.plate || "plat kosong")
-    +     ' &middot; '+esc(labelKat(t.category))+' &middot; '+esc(labelSvc(t.service))
-    +     ' &middot; '+rp(t.total)+'</span>'
-    + '</span>'
-    + '<b class="hijau">'+rp(t.wage)+'</b>'
-    + '</div>'
-  ).join("");
-
-  // Baris penyesuaian ditampilkan HANYA kalau ada — supaya kartu upah yang
-  // normal tetap seringkas dulu, dan yang dipotong langsung terlihat kenapa
-  // angkanya beda dari jumlah rincian di atasnya.
-  const adaPeny = (w.penalty||0) > 0 || (w.override!==null && w.override!==undefined);
-  const penyHTML = !adaPeny ? "" :
-      '<div class="upah-peny">'
-    + (w.override!==null && w.override!==undefined
-        ? '<div class="upah-peny-baris"><span>&#9998; Upah ditimpa'
-          + '<span class="upah-trx-sub">hasil hitungan '+rp(w.gross_wage)+'</span></span>'
-          + '<b>'+rp(w.override)+'</b></div>'
-        : '')
-    + ((w.penalty||0) > 0
-        ? '<div class="upah-peny-baris"><span>&#10134; Potongan</span>'
-          + '<b class="merah">-'+rp(w.penalty)+'</b></div>'
-        : '')
-    + '<div class="upah-peny-baris tebal"><span>Diterima</span>'
-    +   '<b class="hijau">'+rp(w.wage)+'</b></div>'
-    + '</div>';
-
-  return '<div class="upah-kartu">'
-    + '<button class="upah-kepala" onclick="document.getElementById(\''+detailId+'\').classList.toggle(\'hidden\')">'
-    +   '<span class="upah-nama">'+esc(w.name)
-    +     '<span class="upah-sub">'+w.vehicles+' kendaraan'
-    +       (adaPeny? ' &middot; <span class="upah-tanda-peny">disesuaikan</span>' : '')
-    +     '</span></span>'
-    +   '<b class="hijau">'+rp(w.wage)+'</b>'
-    +   '<span class="trx-panah">&#9662;</span>'
-    + '</button>'
-    + '<div id="'+detailId+'" class="hidden upah-detail">'
-    +   (baris || '<div class="cat-kosong">Tidak ada rincian.</div>')
-    +   penyHTML
-    + '</div>'
-    + '</div>';
-}
 async function tambahPekerja(){
   const nama = $("inNamaPk").value.trim();
   if(!nama){ $("inNamaPk").focus(); return; }
@@ -1242,11 +1195,6 @@ async function editPekerja(id){
   }catch(e){ gagal(e); }
 }
 
-/* Tanggal form Potongan & koreksi upah diisi hari ini saat layar dibuka. */
-function initTanggalPenyesuaian(){
-  if($("inPenyTgl") && !$("inPenyTgl").value) $("inPenyTgl").value = hariIni();
-}
-
 /* ---------- PENYESUAIAN UPAH: potongan (hukuman) & timpa angka ----------
    Owner-only. Aturan hitungnya ada di server
    (WageService::terapkanPenyesuaian): 'timpa' menetapkan angka dasar, lalu
@@ -1256,16 +1204,26 @@ function initTanggalPenyesuaian(){
    memakai upah SETELAH penyesuaian, dan laba dihitung "... - upah -
    pengeluaran". Jadi tidak ada pos khusus yang perlu dicatat terpisah. */
 let jenisPenyesuaian = "potongan";
+let penyKalTahun = new Date().getFullYear();
+let penyKalBulan = new Date().getMonth();
+let penyPilihan = [];                // tanggal terpilih di kalender, terurut; [] = hari ini
+let penyUrutan = 0;                  // hanya pemuatan terakhir yang boleh menulis ke layar
+let penyTampil = null;               // {tanggal, upah, entri} yang terakhir digambar di kartu upah
+let penyKartuBuka = new Set();       // id pekerja yang kartunya terbuka — bertahan saat digambar ulang
+let penyTitik = {kunci:null, upah:{}, potong:{}};  // titik kalender sebulan; kunci null = muat ulang
+const PENY_MAKS_TGL = 62;            // sama dengan batas POST /wage-adjustments/bulk
+
+const ymd = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 
 function setJenisPenyesuaian(j){
   jenisPenyesuaian = j;
   $("jenisPotongan").classList.toggle("aktif", j==="potongan");
   $("jenisTimpa").classList.toggle("aktif", j==="timpa");
   $("inPenyJumlah").placeholder = j==="potongan"
-    ? "Jumlah dipotong (Rp)" : "Upah baru hari itu (Rp)";
+    ? "Potong per tanggal (Rp)" : "Upah baru per tanggal (Rp)";
   $("penyKet").innerHTML = j==="potongan"
-    ? "Mengurangi upah pekerja pada tanggal itu. Boleh dicatat lebih dari sekali."
-    : "Mengganti upah hasil hitungan dengan angka lain. Boleh Rp 0 (upah hari itu dinolkan). Satu per pekerja per hari &mdash; yang terbaru menang.";
+    ? "Mengurangi upah di tanggal yang dipilih di kalender &mdash; tidak memilih = hari ini. Boleh dicatat lebih dari sekali."
+    : "Mengganti upah hasil hitungan di tanggal yang dipilih dengan angka lain. Boleh Rp 0 (upah dinolkan). Satu per pekerja per hari &mdash; yang terbaru menang.";
 }
 
 async function renderPenyesuaian(){
@@ -1276,32 +1234,380 @@ async function renderPenyesuaian(){
 
   setJenisPenyesuaian(jenisPenyesuaian);
 
+  // Pilihan pekerja yang sedang dipegang jangan hilang hanya karena daftar
+  // digambar ulang setelah pindah tanggal di kalender.
+  const pilihan = $("inPenyPekerja").value;
   $("inPenyPekerja").innerHTML = pekerja.length===0
     ? '<option value="">— belum ada pekerja —</option>'
     : '<option value="">— pilih pekerja —</option>'
       + pekerja.map(p => '<option value="'+p.id+'">'+esc(p.name)+'</option>').join("");
+  $("inPenyPekerja").value = pilihan;
 
-  // Daftar mengikuti tanggal yang sedang dipilih di kolom tanggal, supaya
-  // owner langsung melihat apa saja yang sudah tercatat untuk hari itu.
-  const tgl = $("inPenyTgl").value || hariIni();
+  // Ketukan beruntun memicu beberapa pemuatan sekaligus; di sinyal lemah
+  // jawabannya bisa tiba tidak berurutan. Tanpa penjaga 'ke', kartu bisa
+  // menampilkan upah tanggal lain di bawah tanggal yang sedang disorot.
+  const ke = ++penyUrutan;
+  const tanggal = penyPilihan.length ? [...penyPilihan] : [hariIni()];
+  const q = tanggal.map(t => "dates[]="+t).join("&");
+  let titik, upah, entri;
   try{
-    const rows = await api("/wage-adjustments?date="+tgl);
-    $("daftarPenyesuaian").innerHTML = rows.length===0
-      ? '<div class="cat-kosong">Belum ada potongan/koreksi pada '+fmtTgl(tgl)+'.</div>'
-      : rows.map(a =>
-          '<div class="cat-baris"><span>'
-          + '<b>'+esc(a.worker_name)+'</b> '
-          + (a.type==="timpa"
-              ? '<span class="chip-timpa">TIMPA</span>'
-              : '<span class="chip-potong">POTONG</span>')
-          + (a.reason? '<span class="draft-note"> &#128221; '+esc(a.reason)+'</span>' : '')
-          + (a.created_by? '<span class="waktu"> &#128100; '+esc(a.created_by)+'</span>' : '')
-          + '</span><span>'
-          + '<b class="'+(a.type==="timpa"?"":"merah")+'">'
-          +   (a.type==="timpa" ? rp(a.amount) : "-"+rp(a.amount))+'</b>'
-          + ' <button class="btn-void" title="Hapus" onclick="hapusPenyesuaian('+a.id+')">&#10005;</button>'
-          + '</span></div>'
-        ).join("");
+    [titik, upah, entri] = await Promise.all([
+      muatTitikBulan(),
+      // Satu tanggal: rekap harian, satu baris per mobil. Banyak tanggal:
+      // rekap per pekerja dengan satu baris per tanggal.
+      tanggal.length===1 ? api("/reports/daily?date="+tanggal[0]) : api("/reports/wages?"+q),
+      api("/wage-adjustments?"+q),
+    ]);
+  }catch(e){ gagal(e); return; }
+  if(ke !== penyUrutan) return;
+
+  gambarKalenderPenyesuaian(titik);
+  perbaruiTombolCatat();
+  penyTampil = {tanggal, upah, entri};
+  tampilkanUpah();
+}
+
+/* Titik kalender bulan yang sedang dibuka: hijau = ada upah, merah = ada
+   potongan/koreksi. Selalu dari data SEBULAN penuh, terpisah dari kartu di
+   bawah — kalau diambil dari tanggal pilihan, hari lain tampak kosong.
+   Disimpan per bulan supaya mengetuk tanggal tidak memuat ulang; dibuang
+   (kunci = null) setiap kali potongan dicatat atau dihapus. */
+async function muatTitikBulan(){
+  const kunci = penyKalTahun+"-"+penyKalBulan;
+  if(penyTitik.kunci === kunci) return penyTitik;
+  const [awal, akhir] = batasBulan(penyKalTahun, penyKalBulan);
+  const [rekap, adj] = await Promise.all([
+    api("/reports/date-range?from="+awal+"&to="+akhir),
+    api("/wage-adjustments?from="+awal+"&to="+akhir),
+  ]);
+  const upah = {}, potong = {};
+  rekap.days.forEach(d => { if(d.wages) upah[tglSaja(d.date)] = true; });
+  adj.forEach(a => { potong[tglSaja(a.date)] = true; });
+  return penyTitik = {kunci, upah, potong};
+}
+
+function gambarKalenderPenyesuaian(titik){
+  $("penyKalJudul").textContent = NAMA_BULAN[penyKalBulan]+" "+penyKalTahun;
+
+  const jmlHari = new Date(penyKalTahun, penyKalBulan+1, 0).getDate();
+  let html = kepalaKalender() + awalanKalender(penyKalTahun, penyKalBulan);
+  for(let t=1;t<=jmlHari;t++){
+    const tgl = penyKalTahun+"-"+String(penyKalBulan+1).padStart(2,"0")+"-"+String(t).padStart(2,"0");
+    html += selKalender(tgl, t, {ada: !!titik.upah[tgl], potong: !!titik.potong[tgl],
+                                 pilih: penyPilihan.includes(tgl)});
+  }
+  $("penyKalGrid").innerHTML = html;
+  // Berbeda dari kalender lain: di sini ketukan tidak MENGGANTI tanggal yang
+  // dilihat, tapi menambah/membuang satu tanggal dari pilihan — pilihan itu
+  // yang dipakai Catat & Hapus sekaligus. Rentang dari tahan-lalu-ketuk
+  // langsung dilebur ke pilihan, jadi sorotan rentang bawaan tidak dipakai.
+  pasangKalender("penyKalGrid", {
+    info: "penyKalInfo",
+    onSingle: ubahPilihanPeny,
+    onRange: tambahRentangPeny,
+    onClear: () => renderPenyesuaian(),
+  });
+  tandaiRentang("penyKalGrid");
+  if(!(KAL.penyKalGrid||{}).jangkar) infoPilihanPeny();
+}
+
+/* Baris keterangan di bawah kalender. Saat jangkar rentang sedang menunggu,
+   tandaiRentang() yang mengisinya ("Mulai 9 Sep — ketuk tanggal akhirnya"). */
+function infoPilihanPeny(){
+  const info = $("penyKalInfo");
+  const n = penyPilihan.length;
+  if(n===0){
+    info.className = "kal-info";
+    info.innerHTML = "Ketuk tanggal untuk memilih (boleh beberapa) &middot; <b>tahan</b> lalu ketuk tanggal lain untuk rentang";
+    return;
+  }
+  const MAKS = 4;
+  info.className = "kal-info aktif";
+  info.innerHTML = n+" tanggal dipilih: "
+    + penyPilihan.slice(0, MAKS).map(fmtTglPendek).join(", ")
+    + (n > MAKS ? " +"+(n-MAKS) : "")
+    + ' <button class="kal-info-x" onclick="kosongkanPilihanPeny()">&#10005; kosongkan</button>';
+}
+
+function perbaruiTombolCatat(){
+  const n = penyPilihan.length;
+  $("btnPenyCatat").innerHTML = "&#10133; Catat "
+    + (n===0 ? "untuk hari ini" : n===1 ? "di "+fmtTglPendek(penyPilihan[0]) : "di "+n+" tanggal");
+
+  const MAKS = 6;
+  $("penyTanggal").innerHTML = '<span class="peny-tgl-isi">&#128197; Tanggal: <b>'
+    + (n===0 ? "hari ini ("+fmtTglPendek(hariIni())+")"
+       : penyPilihan.slice(0, MAKS).map(fmtTglPendek).join(", ")+(n > MAKS ? " +"+(n-MAKS) : ""))
+    + '</b></span>'
+    + '<button class="peny-tgl-btn" onclick="keKalenderPeny()">'
+    +   (n===0 ? "Pilih tanggal lain" : "Ubah tanggal")+'</button>'
+    + '<span class="peny-tgl-cara">Ketuk beberapa tanggal di kalender, atau <b>tahan</b> satu tanggal lalu ketuk tanggal lain untuk rentang.</span>';
+}
+
+/* Gulir ke kalender dan sorot sebentar — tanda bahwa tanggal Catat dipilih di sana. */
+function keKalenderPeny(){
+  // Seluruh baris bulan, bukan teks judulnya: tombol ‹ › lebih tinggi dari
+  // teksnya dan ikut terpotong kalau yang dijajarkan ke atas cuma judulnya.
+  $("penyKalJudul").closest(".kal-nav").scrollIntoView({behavior:"smooth", block:"start"});
+  const grid = $("penyKalGrid");
+  grid.classList.remove("kal-sorot");
+  void grid.offsetWidth;               // mulai ulang animasinya kalau ditekan lagi
+  grid.classList.add("kal-sorot");
+}
+
+function penyPenuh(){
+  Swal.fire({toast:true, position:"top-end", icon:"warning", showConfirmButton:false, timer:2600,
+    title: "Maksimal "+PENY_MAKS_TGL+" tanggal sekaligus"});
+}
+
+/** Ketuk satu tanggal: masuk ke pilihan, atau keluar kalau sudah dipilih. */
+function ubahPilihanPeny(tgl){
+  const i = penyPilihan.indexOf(tgl);
+  if(i >= 0) penyPilihan.splice(i, 1);
+  else if(penyPilihan.length >= PENY_MAKS_TGL){ penyPenuh(); return; }
+  else { penyPilihan.push(tgl); penyPilihan.sort(); }
+  renderPenyesuaian();
+}
+
+/** Tahan lalu ketuk: semua hari dari..sampai ditambahkan ke pilihan. */
+function tambahRentangPeny(dari, sampai){
+  const st = KAL.penyKalGrid;
+  if(st){ st.dari = st.sampai = null; }
+  const baru = new Set(penyPilihan);
+  for(const d = new Date(dari+"T00:00:00"); ymd(d) <= sampai; d.setDate(d.getDate()+1)) baru.add(ymd(d));
+  if(baru.size > PENY_MAKS_TGL) penyPenuh();
+  else penyPilihan = [...baru].sort();
+  renderPenyesuaian();
+}
+
+function kosongkanPilihanPeny(){
+  penyPilihan = [];
+  renderPenyesuaian();
+}
+
+function gantiBulanPenyesuaian(d){
+  penyKalBulan += d;
+  if(penyKalBulan<0){ penyKalBulan=11; penyKalTahun--; }
+  if(penyKalBulan>11){ penyKalBulan=0; penyKalTahun++; }
+  // Pilihan & jangkar sengaja dibiarkan: tanggal boleh dipilih lintas bulan
+  // (ketuk 30 Sep, pindah bulan, ketuk 2 Okt; atau tahan 25, pindah, ketuk 5).
+  renderPenyesuaian();
+}
+
+/**
+ * Kartu upah per pekerja untuk tanggal pilihan (atau hari ini), dari data
+ * yang dimuat renderPenyesuaian(). Potongan/timpa ditempel ke kartu
+ * pekerjanya masing-masing — satu tempat untuk menjawab "berapa yang dia
+ * terima, dan kenapa segitu".
+ */
+function tampilkanUpah(){
+  const {tanggal, upah, entri} = penyTampil;
+  const satuHari = tanggal.length === 1;
+  const daftarPk = satuHari ? (upah.worker_wages || []) : upah;
+  const perPk = {};
+  entri.forEach(a => { (perPk[a.worker_id] = perPk[a.worker_id] || []).push(a); });
+
+  let html = '<div class="upah-judul">'
+    + (!penyPilihan.length ? "Upah hari ini &middot; "+fmtTgl(tanggal[0])
+       : satuHari ? "Upah "+fmtTgl(tanggal[0]) : "Upah "+tanggal.length+" tanggal")
+    + '</div>';
+
+  if(daftarPk.length===0 && entri.length===0){
+    $("daftarPenyesuaian").innerHTML = html
+      + '<div class="cat-kosong">Belum ada cucian maupun potongan pada '
+      + (satuHari ? 'tanggal ini' : 'tanggal-tanggal ini')+'.</div>';
+    return;
+  }
+
+  const idAda = new Set(daftarPk.map(w => w.id));
+  html += daftarPk.map(w => kartuUpah(w, perPk[w.id] || [], !satuHari)).join("");
+
+  // Potongan milik pekerja yang sudah dihapus dari daftar pekerja: upahnya
+  // tidak lagi muncul di rekap mana pun, tapi catatannya tetap ada dan harus
+  // tetap bisa dilihat & dihapus.
+  const yatim = entri.filter(a => !idAda.has(a.worker_id));
+  if(yatim.length){
+    html += '<div class="upah-peny"><div class="upah-peny-judul">Potongan pekerja yang sudah dihapus</div>'
+      + yatim.map(a => barisEntri(a, {tanggal: !satuHari, nama: true})).join("")+'</div>';
+  }
+
+  const total = satuHari ? upah.wages : daftarPk.reduce((t, w) => t + w.total_wage, 0);
+  html += '<div class="cat-baris tebal"><span>TOTAL UPAH</span><b>'+rp(total)+'</b></div>';
+  html += tombolHapusBanyak();
+  $("daftarPenyesuaian").innerHTML = html;
+}
+
+/**
+ * Satu pekerja. Kepala: nama, kendaraan, upah yang DITERIMA. Diklik ->
+ * dropdown berisi dasar angkanya: satu baris per mobil (satu tanggal) atau
+ * per tanggal (banyak tanggal — seminggu satu-baris-per-mobil terlalu
+ * panjang di HP), lalu setiap potongan/timpa beserta keterangannya.
+ */
+function kartuUpah(w, entri, rekap){
+  const buka = penyKartuBuka.has(w.id);
+  const diterima = rekap ? w.total_wage : w.wage;
+
+  const baris = rekap
+    ? w.daily_breakdown.map(d =>
+        '<div class="upah-trx">'
+        + '<span class="upah-trx-kiri">'+fmtTgl(d.date)
+        +   '<span class="upah-trx-sub">'+d.vehicles+' kendaraan'
+        +     (d.penalty > 0 || d.override !== null ? ' &middot; hasil hitungan '+rp(d.gross_wage) : '')
+        +   '</span></span>'
+        + '<b class="hijau">'+rp(d.wage)+'</b>'
+        + '</div>').join("")
+    // Barisnya sengaja SAMA dengan riwayat di Rekap Hari Ini — jam,
+    // kendaraan, plat, dan totalnya — supaya upah bisa ditelusuri ke transaksinya.
+    : (w.breakdown||[]).map(t =>
+        '<div class="upah-trx">'
+        + '<span class="upah-trx-kiri">'
+        +   '<span class="waktu">'+esc(t.time||"")+'</span> '+esc(t.vehicle_name)
+        +   '<span class="upah-trx-sub">'+esc(t.plate || "plat kosong")
+        +     ' &middot; '+esc(labelKat(t.category))+' &middot; '+esc(labelSvc(t.service))
+        +     ' &middot; '+rp(t.total)+'</span>'
+        + '</span>'
+        + '<b class="hijau">'+rp(t.wage)+'</b>'
+        + '</div>').join("");
+
+  // Bagian potongan & ringkasan hanya kalau ada — kartu yang normal tetap
+  // seringkas dulu, dan yang dipotong langsung terlihat kenapa angkanya beda.
+  // Dua angka potongan: yang TERCATAT, dan yang benar-benar memotong
+  // (dihitung server). Upah tidak pernah minus, jadi potongan di hari yang
+  // upahnya kecil/nol tidak menahan apa-apa — yang ditulis "dipotong" harus
+  // angka yang terpakai, bukan yang tercatat.
+  const kotor    = rekap ? w.total_gross : w.gross_wage;
+  const tercatat = rekap ? w.total_penalty : w.penalty;
+  const terpakai = rekap ? w.total_penalty_applied : w.penalty_applied;
+  const timpa    = !rekap && w.override !== null && w.override !== undefined;
+  const peny = !entri.length ? "" :
+      '<div class="upah-peny">'
+    +   '<div class="upah-peny-judul">Potongan &amp; koreksi</div>'
+    +   entri.map(a => barisEntri(a, {tanggal: rekap})).join("")
+    +   '<div class="upah-peny-baris"><span>Hasil hitungan</span><b>'+rp(kotor)+'</b></div>'
+    +   (timpa ? '<div class="upah-peny-baris"><span>Ditimpa jadi</span><b>'+rp(w.override)+'</b></div>' : '')
+    +   (tercatat > 0
+          ? '<div class="upah-peny-baris"><span>Potongan'
+            + (tercatat > terpakai
+                ? '<span class="upah-trx-sub">tercatat '+rp(tercatat)+' &mdash; upah tidak pernah minus</span>' : '')
+            + '</span><b class="merah">-'+rp(terpakai)+'</b></div>'
+          : '')
+    +   '<div class="upah-peny-baris tebal"><span>Diterima</span><b class="hijau">'+rp(diterima)+'</b></div>'
+    + '</div>';
+
+  const tanda = [];
+  if(terpakai > 0)      tanda.push("dipotong "+rp(terpakai));
+  else if(tercatat > 0) tanda.push("potongan tidak terpakai");
+  if(entri.some(a => a.type==="timpa")) tanda.push("ditimpa");
+
+  return '<div class="upah-kartu">'
+    + '<button class="upah-kepala" onclick="bukaTutupKartuUpah('+w.id+')">'
+    +   '<span class="upah-nama">'+esc(w.name)
+    +     '<span class="upah-sub">'+(rekap ? w.total_vehicles : w.vehicles)+' kendaraan'
+    +       (rekap ? ' &middot; '+w.daily_breakdown.length+' hari' : '')
+    +       (tanda.length ? ' &middot; <span class="upah-tanda-peny">'+tanda.join(", ")+'</span>' : '')
+    +     '</span></span>'
+    +   '<b class="hijau">'+rp(diterima)+'</b>'
+    +   '<span class="trx-panah">'+(buka ? '&#9652;' : '&#9662;')+'</span>'
+    + '</button>'
+    + '<div class="upah-detail'+(buka ? '' : ' hidden')+'">'
+    +   (baris || '<div class="cat-kosong">Tidak ada cucian.</div>')
+    +   peny
+    + '</div>'
+    + '</div>';
+}
+
+/* Satu potongan/timpa dengan keterangannya: alasan, siapa yang mencatat, dan
+   kapan. ✕ menghapus catatan ini saja. */
+function barisEntri(a, opsi){
+  const timpa = a.type === "timpa";
+  const dicatat = a.created_at ? new Date(a.created_at) : null;
+  return '<div class="upah-entri">'
+    + '<div class="upah-entri-atas">'
+    +   '<span>'+(timpa ? '<span class="chip-timpa">TIMPA</span>' : '<span class="chip-potong">POTONG</span>')
+    +     (opsi.nama ? ' '+esc(a.worker_name) : '')
+    +     (opsi.tanggal ? ' '+fmtTglPendek(tglSaja(a.date)) : '')+'</span>'
+    +   '<span style="white-space:nowrap"><b class="'+(timpa ? '' : 'merah')+'">'
+    +     (timpa ? rp(a.amount) : '-'+rp(a.amount))+'</b>'
+    +   ' <button class="btn-void" title="Hapus catatan ini" onclick="hapusPenyesuaian('+a.id+')">&#10005;</button></span>'
+    + '</div>'
+    + '<div class="upah-entri-ket">'+(a.reason ? esc(a.reason) : '<i>tanpa keterangan</i>')+'</div>'
+    + '<div class="upah-trx-sub">dicatat '+esc(a.created_by || "—")
+    +   (dicatat ? ' &middot; '+fmtTglPendek(ymd(dicatat))+' '+jam(a.created_at) : '')+'</div>'
+    + '</div>';
+}
+
+function bukaTutupKartuUpah(id){
+  if(penyKartuBuka.has(id)) penyKartuBuka.delete(id); else penyKartuBuka.add(id);
+  tampilkanUpah();
+}
+
+/* Dropdown pekerja berganti -> tombol hapus sekaligus ikut berganti sasaran,
+   tanpa perlu memuat ulang dari server. */
+function tampilkanUlangPenyesuaian(){
+  if(penyTampil) tampilkanUpah();
+}
+
+/* ---------- HAPUS SEKALIGUS DARI KALENDER ----------
+   Sasarannya potongan/timpa di tanggal yang sedang ditampilkan (pilihan di
+   kalender, atau hari ini). Tampilan bawaannya satu hari, jadi sebulan
+   catatan hanya bisa tersapu kalau sebulan itu memang sengaja dipilih.
+   Kalau dropdown pekerja terisi, sasarannya hanya catatan milik pekerja itu. */
+function sasaranHapusBanyak(){
+  if(!penyTampil) return null;
+  const idPk  = parseInt($("inPenyPekerja").value, 10) || null;
+  const t = penyTampil.tanggal, n = t.length;
+  return {
+    baris: penyTampil.entri.filter(a => !idPk || Number(a.worker_id) === idPk),
+    siapa: idPk ? ((pekerja.find(p => p.id===idPk)||{}).name || "pekerja ini") : null,
+    kapan: !penyPilihan.length ? "hari ini" : n===1 ? fmtTglPendek(t[0]) : n+" tanggal",
+  };
+}
+
+function tombolHapusBanyak(){
+  const s = sasaranHapusBanyak();
+  // Satu catatan sudah punya tombol ✕ sendiri; tombol ini untuk yang banyak.
+  if(!s || s.baris.length < 2) return "";
+  return '<button class="btn-hapus-banyak" onclick="hapusPenyesuaianBanyak()">&#128465; Hapus '
+    + s.baris.length+' potongan/koreksi '+(s.siapa ? esc(s.siapa) : '(semua pekerja)')+' di '+s.kapan+'</button>'
+    + (s.siapa ? '' : '<div class="peny-ket" style="margin:6px 0 0">Pilih nama di kolom pekerja'
+                    + ' untuk menghapus milik satu orang saja.</div>');
+}
+
+async function hapusPenyesuaianBanyak(){
+  const s = sasaranHapusBanyak();
+  if(!s || s.baris.length===0) return;
+  const n = s.baris.length;
+  const dilepas = s.baris.filter(a => a.type==="potongan").reduce((t, a) => t + a.amount, 0);
+  const MAKS = 8;
+
+  const konfirmasi = await Swal.fire({
+    icon: "warning",
+    title: "Hapus "+n+" catatan?",
+    html: '<div style="text-align:left;font-size:14px;line-height:1.7">'
+      + s.baris.slice(0, MAKS).map(a =>
+          '<b>'+esc(a.worker_name)+'</b> &middot; '+fmtTglPendek(tglSaja(a.date))+' &middot; '
+          + (a.type==="timpa" ? 'timpa '+rp(a.amount) : '<span class="merah">-'+rp(a.amount)+'</span>')
+        ).join("<br>")
+      + (n > MAKS ? '<br>&hellip; dan '+(n-MAKS)+' lainnya' : '')
+      + '</div><br>Upah di tanggal-tanggal itu kembali seperti hasil hitungan'
+      // "Paling banyak": potongan di hari yang upahnya lebih kecil dari
+      // potongan itu tidak pernah memotong penuh, jadi tidak ada yang kembali.
+      + (dilepas ? ', jadi <b>laba bersih turun</b> &mdash; paling banyak '+rp(dilepas) : '')+'.',
+    showCancelButton: true,
+    confirmButtonText: "Ya, hapus "+n,
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#C0392B",
+    cancelButtonColor: "#57503E",
+  });
+  if(!konfirmasi.isConfirmed) return;
+
+  try{
+    const r = await api("/wage-adjustments/bulk-delete",
+                        {method:"POST", body:{ids: s.baris.map(a => a.id)}});
+    penyTitik.kunci = null;          // titik merah di kalender bisa berkurang
+    await renderPenyesuaian();
+    Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2200,
+      title: r.deleted+" catatan dihapus"});
   }catch(e){ gagal(e); }
 }
 
@@ -1316,17 +1622,37 @@ async function tambahPenyesuaian(){
   }
 
   const nama = (pekerja.find(p=>p.id===worker_id)||{}).name || "pekerja ini";
-  const tgl  = $("inPenyTgl").value || hariIni();
+  // Tidak memilih tanggal di kalender = hari ini, seperti kolom tanggal dulu.
+  const tanggal = penyPilihan.length ? [...penyPilihan] : [hariIni()];
+  const n = tanggal.length;
+  const potong = jenisPenyesuaian==="potongan";
+
+  let peringatan = [];
+  if(potong){
+    try{ peringatan = await cekUpahSebelumPotong(worker_id, tanggal, amount); }
+    catch(e){ gagal(e); return; }
+  }
+
+  const MAKS = 10;
+  const daftarTgl = n===1 ? fmtTgl(tanggal[0])
+    : n+' tanggal: '+tanggal.slice(0, MAKS).map(fmtTglPendek).join(", ")+(n > MAKS ? ", &hellip;" : "");
   const konfirmasi = await Swal.fire({
     icon: "warning",
-    title: jenisPenyesuaian==="potongan" ? "Potong upah?" : "Timpa angka upah?",
-    html: jenisPenyesuaian==="potongan"
-      ? 'Upah <b>'+esc(nama)+'</b> pada '+fmtTgl(tgl)+' dipotong <b>'+rp(amount)+'</b>.'
-        + '<br><br>Uangnya tidak jadi dibayarkan, jadi <b>laba bersih hari itu naik</b> sebesar potongan ini.'
-      : 'Upah <b>'+esc(nama)+'</b> pada '+fmtTgl(tgl)+' diganti jadi <b>'+rp(amount)+'</b>, '
-        + 'menimpa hasil hitungan.<br><br>Selisihnya ikut mengubah <b>laba bersih hari itu</b>.',
+    title: potong ? "Potong upah?" : "Timpa angka upah?",
+    html: (potong
+        ? 'Upah <b>'+esc(nama)+'</b> dipotong <b>'+rp(amount)+'</b>'+(n>1 ? ' per tanggal' : '')
+          + ' di <b>'+daftarTgl+'</b>.'
+          + (n>1 ? '<br>Total <b>'+rp(amount*n)+'</b>.' : '')
+          + '<br><br>Uangnya tidak jadi dibayarkan, jadi <b>laba bersih naik</b> sebesar '
+          + (peringatan.length ? 'yang benar-benar terpotong (lihat catatan di bawah).' : 'potongan ini.')
+        : 'Upah <b>'+esc(nama)+'</b> di <b>'+daftarTgl+'</b> diganti jadi <b>'+rp(amount)+'</b>'
+          + (n>1 ? ' per tanggal' : '')+', menimpa hasil hitungan.'
+          + '<br><br>Selisihnya ikut mengubah <b>laba bersih</b>.')
+      + (peringatan.length
+          ? '<div class="peny-peringatan">'+peringatan.map(p => '&#9888;&#65039; '+p).join("<br>")+'</div>'
+          : ''),
     showCancelButton: true,
-    confirmButtonText: "Ya, catat",
+    confirmButtonText: peringatan.length ? "Tetap catat" : (n>1 ? "Ya, catat "+n+" tanggal" : "Ya, catat"),
     cancelButtonText: "Batal",
     confirmButtonColor: "#C0392B",
     cancelButtonColor: "#57503E",
@@ -1334,144 +1660,55 @@ async function tambahPenyesuaian(){
   if(!konfirmasi.isConfirmed) return;
 
   const body = {worker_id, type:jenisPenyesuaian, amount,
-                reason: $("inPenyAlasan").value.trim() || null, date: tgl};
+                reason: $("inPenyAlasan").value.trim() || null, dates: tanggal};
   try{
-    await api("/wage-adjustments",{method:"POST",body});
+    await api("/wage-adjustments/bulk",{method:"POST",body});
     $("inPenyJumlah").value=""; $("inPenyAlasan").value="";
+    // Buka kartu pekerja itu, supaya potongan yang baru dicatat langsung
+    // terlihat beserta upah yang sekarang ia terima.
+    penyKartuBuka.add(worker_id);
+    penyTitik.kunci = null;
     await renderPenyesuaian();
-    await segarkanUpahTerlihat(tgl);
     Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2200,
-      title: jenisPenyesuaian==="potongan" ? "Upah dipotong" : "Angka upah ditimpa",
-      text: esc(nama)+" · "+rp(amount)});
+      title: potong ? "Upah dipotong" : "Angka upah ditimpa",
+      text: nama+" · "+(n>1 ? n+" × " : "")+rp(amount)});
   }catch(e){ gagal(e); }
+}
+
+/**
+ * Tanggal lampau tempat potongan tidak (seluruhnya) bekerja: upah pekerja
+ * hari itu 0 — misalnya libur atau tidak kebagian cucian — atau lebih kecil
+ * dari potongannya. Upah tidak pernah minus, jadi potongan di hari seperti
+ * itu tidak memotong apa-apa (atau hanya sebagian), padahal totalnya tetap
+ * terbaca di daftar. Hari ini & yang akan datang tidak diperiksa: cuciannya
+ * mungkin belum masuk. Angka upahnya sudah termasuk potongan yang ada.
+ */
+async function cekUpahSebelumPotong(worker_id, tanggal, amount){
+  const lampau = tanggal.filter(t => t < hariIni());
+  if(!lampau.length) return [];
+
+  const data = await api("/reports/wages?from="+lampau[0]+"&to="+lampau[lampau.length-1]);
+  const pk = data.find(w => Number(w.id) === worker_id);
+  const upah = {};
+  ((pk && pk.daily_breakdown) || []).forEach(d => { upah[tglSaja(d.date)] = d.wage; });
+
+  return lampau.flatMap(t => {
+    const u = upah[t] || 0;
+    if(u <= 0)     return [fmtTglPendek(t)+': upahnya Rp 0 &mdash; potongan di tanggal ini tidak memotong apa-apa.'];
+    if(u < amount) return [fmtTglPendek(t)+': upahnya cuma '+rp(u)+' &mdash; yang benar-benar terpotong hanya '+rp(u)+'.'];
+    return [];
+  });
 }
 
 async function hapusPenyesuaian(id){
   if(!await konfirmasiHapus()) return;
   try{
     await api("/wage-adjustments/"+id,{method:"DELETE"});
+    penyTitik.kunci = null;
     await renderPenyesuaian();
-    await segarkanUpahTerlihat($("inPenyTgl").value || hariIni());
   }catch(e){ gagal(e); }
 }
 
-/* Setelah penyesuaian berubah, angka upah yang sedang terpampang harus ikut
-   berubah — kalau tidak, owner melihat upah lama dan mengira catatannya gagal. */
-async function segarkanUpahTerlihat(tgl){
-  await renderUpahKalender();
-  if(upahTglPilih === tgl) await pilihTglUpah(tgl);
-}
-
-/* ---------- UPAH PEKERJA: KALENDER + RANGE TANGGAL ---------- */
-let upahKalTahun = new Date().getFullYear();
-let upahKalBulan = new Date().getMonth();
-let upahTglPilih = null;
-
-function gantiBulanUpah(d){
-  upahKalBulan += d;
-  if(upahKalBulan<0){ upahKalBulan=11; upahKalTahun--; }
-  if(upahKalBulan>11){ upahKalBulan=0; upahKalTahun++; }
-  renderUpahKalender();
-}
-
-async function renderUpahKalender(){
-  const [awal, akhir] = batasBulan(upahKalTahun, upahKalBulan);
-  $("upahKalJudul").textContent = NAMA_BULAN[upahKalBulan]+" "+upahKalTahun;
-
-  // Titik hijau = hari yang ada upahnya, sama seperti kalender Pembukuan &
-  // Pengeluaran. Diambil dari rekap rentang yang memang sudah menyediakan
-  // total upah per tanggal.
-  const perTgl = {};
-  try{
-    const r = await api("/reports/date-range?from="+awal+"&to="+akhir);
-    r.days.forEach(d => { if(d.wages) perTgl[tglSaja(d.date)] = d.wages; });
-  }catch(e){
-    if(e.message===ERR_LOGIN || e.message===ERR_SHIFT) return;
-    // Titik hanya penanda — kalendernya tetap ditampilkan walau gagal.
-  }
-
-  const jmlHari = new Date(upahKalTahun, upahKalBulan+1, 0).getDate();
-  let html = kepalaKalender() + awalanKalender(upahKalTahun, upahKalBulan);
-  for(let t=1;t<=jmlHari;t++){
-    const tgl = upahKalTahun+"-"+String(upahKalBulan+1).padStart(2,"0")+"-"+String(t).padStart(2,"0");
-    html += selKalender(tgl, t, {ada: !!perTgl[tgl], pilih: tgl===upahTglPilih});
-  }
-  $("upahKalGrid").innerHTML = html;
-  pasangKalender("upahKalGrid", {
-    info: "upahKalInfo",
-    onSingle: pilihTglUpah,
-    onRange: renderUpahRange,
-    onClear: () => { $("upahRangeHasil").innerHTML = ""; },
-  });
-  tandaiRentang("upahKalGrid");
-}
-
-async function pilihTglUpah(tgl){
-  upahTglPilih = tgl;
-  await renderUpahKalender(); // tandai tanggal terpilih dulu, baru muat detailnya
-
-  try{
-    const h = await api("/reports/daily?date="+tgl);
-    $("upahRangeHasil").innerHTML = ''; // hasil range lama jangan bercampur
-
-    let html = '<div class="cat-blok"><h3>&#128119; Upah '+fmtTgl(tgl)+'</h3>';
-    html += (!h.worker_wages || h.worker_wages.length===0)
-      ? '<div class="cat-kosong">Belum ada kendaraan yang dikerjakan pada tanggal ini.</div>'
-      : h.worker_wages.map(w => kartuUpah(w, "kal")).join("")
-        + '<div class="cat-baris tebal"><span>TOTAL UPAH</span><b>'+rp(h.wages)+'</b></div>';
-    html += '</div>';
-
-    $("upahDetailHari").innerHTML = html;
-  }catch(e){ gagal(e); }
-}
-
-/** Rekap upah untuk rentang tanggal (dipilih dengan tahan di kalender). */
-async function renderUpahRange(dari, sampai){
-  try{
-    const data = await api("/reports/wages?from="+dari+"&to="+sampai);
-    $("upahDetailHari").innerHTML = '';   // detail satu hari & rentang jangan bertumpuk
-
-    if(data.length===0){
-      $("upahRangeHasil").innerHTML = '<div class="cat-kosong">Belum ada data upah pada periode ini.</div>';
-      return;
-    }
-
-    let html = '<div style="margin-bottom:12px;font-size:12px;color:var(--ink2)">Periode: '
-      + fmtTgl(dari)+' sampai '+fmtTgl(sampai)+'</div>';
-    data.forEach(worker => {
-      html += '<div class="cat-blok" style="background:var(--air);padding:12px;margin-bottom:8px;border-radius:8px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-        + '<span style="font-weight:700">'+esc(worker.name)+'</span>'
-        + '<span class="hijau" style="font-weight:800;font-size:16px">'+rp(worker.total_wage)+'</span>'
-        + '</div>'
-        + '<div style="font-size:12px;color:var(--ink2);margin-bottom:8px">'+worker.total_vehicles+' kendaraan</div>';
-
-      if(worker.daily_breakdown.length > 0){
-        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;font-size:12px">';
-        worker.daily_breakdown.forEach(day => {
-          if(!day.date || !day.wage) return;
-          const parts = day.date.split('T')[0].split('-');
-          const tahun = parseInt(parts[0], 10);
-          const bulan = parseInt(parts[1], 10);
-          const hari = parseInt(parts[2], 10);
-          if(!tahun || !bulan || !hari) return;
-          const namaBln = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][bulan-1];
-          html += '<div style="background:white;padding:8px;border-radius:6px;border-left:3px solid var(--go)">'
-            + '<div style="color:var(--ink2)">'+hari+' '+namaBln+'</div>'
-            + '<div style="font-weight:800;color:var(--go)">'+rp(day.wage)+'</div>'
-            + '<div style="color:var(--ink2);font-size:11px">'+day.vehicles+'x kendaraan</div>'
-            + '</div>';
-        });
-        html += '</div>';
-      }
-
-      html += '</div>';
-    });
-
-    $("upahRangeHasil").innerHTML = html;
-    $("upahDetailHari").innerHTML = '';
-  }catch(e){ gagal(e); }
-}
 /* Tarif upah kini diatur bersama jenis kendaraan di Pengaturan (editKategori). */
 
 /**

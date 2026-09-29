@@ -249,6 +249,166 @@ class WageAdjustmentTest extends TestCase
             'type' => 'potongan', 'amount' => 1000, 'date' => now()->toDateString(),
         ]);
         $this->deleteJson('/api/wage-adjustments/'.$adj->id, [], $h)->assertStatus(403);
+        $this->postJson('/api/wage-adjustments/bulk-delete', ['ids' => [$adj->id]], $h)->assertStatus(403);
+        $this->assertDatabaseHas('wage_adjustments', ['id' => $adj->id]);
+    }
+
+    /**
+     * Hapus sekaligus dari kalender: hanya id yang dikirim yang hilang, dan
+     * upah hari itu kembali utuh — sama seperti menghapus satu per satu.
+     */
+    public function test_hapus_sekaligus_hanya_id_yang_dikirim(): void
+    {
+        $this->siapkan();
+        $budi = Worker::create(['name' => 'Budi']);
+        $andi = Worker::create(['name' => 'Andi']);
+        $this->cuci($budi);
+        $h = $this->header('owner');
+
+        $potong = fn (Worker $w, int $jumlah, ?string $tgl = null) => $this->postJson('/api/wage-adjustments', [
+            'worker_id' => $w->id, 'type' => 'potongan', 'amount' => $jumlah,
+            'date' => $tgl ?? now()->toDateString(),
+        ], $h)->json('data.id');
+
+        $b1 = $potong($budi, 5000);
+        $b2 = $potong($budi, 2000, now()->subDay()->toDateString());
+        $a1 = $potong($andi, 1000);
+        $this->assertSame(15000, $this->rekap()['wages']);
+
+        $this->postJson('/api/wage-adjustments/bulk-delete', ['ids' => [$b1, $b2]], $h)
+            ->assertOk()
+            ->assertJsonPath('data.deleted', 2);
+
+        $this->assertDatabaseMissing('wage_adjustments', ['id' => $b1]);
+        $this->assertDatabaseMissing('wage_adjustments', ['id' => $b2]);
+        $this->assertDatabaseHas('wage_adjustments', ['id' => $a1]);
+        $this->assertSame(20000, $this->rekap()['wages'], 'Upah Budi harus kembali utuh.');
+    }
+
+    /**
+     * Catat sekaligus dari kalender: angka yang sama untuk SETIAP tanggal,
+     * dan filter dates[] mengembalikan tanggal pilihan saja — hari di
+     * antaranya yang tidak dipilih tidak ikut terhitung.
+     */
+    public function test_catat_sekaligus_per_tanggal(): void
+    {
+        $this->siapkan();
+        $budi = Worker::create(['name' => 'Budi']);
+        $this->cuci($budi);
+        $h = $this->header('owner');
+        $hariIni = now()->toDateString();
+
+        $res = $this->postJson('/api/wage-adjustments/bulk', [
+            'worker_id' => $budi->id, 'type' => 'potongan', 'amount' => 5000,
+            'reason' => 'kasbon', 'dates' => [$hariIni, '2026-09-09', '2026-09-14'],
+        ], $h)->assertCreated();
+
+        $this->assertCount(3, $res->json('data'));
+        $this->assertSame(15000, $this->rekap()['wages'], 'Potongan hari ini harus ikut memotong upah.');
+
+        // Hari di antara yang TIDAK dipilih tidak boleh ikut terhitung.
+        WageAdjustment::create([
+            'worker_id' => $budi->id, 'worker_name' => 'Budi',
+            'type' => 'potongan', 'amount' => 99000, 'date' => '2026-09-10',
+        ]);
+
+        $daftar = $this->getJson('/api/wage-adjustments?dates[]=2026-09-09&dates[]=2026-09-14', $h)
+            ->assertOk();
+        $this->assertCount(2, $daftar->json('data'));
+        $this->assertSame(10000, $daftar->json('summary.total_potongan'));
+        $this->assertSame('kasbon', $daftar->json('data.0.reason'));
+    }
+
+    public function test_catat_sekaligus_ditolak_bila_tidak_sah(): void
+    {
+        $w = Worker::create(['name' => 'Budi']);
+        $owner = $this->header('owner');
+        $dasar = ['worker_id' => $w->id, 'type' => 'potongan', 'amount' => 5000];
+
+        $this->postJson('/api/wage-adjustments/bulk', $dasar + ['dates' => []], $owner)->assertStatus(422);
+        $this->postJson('/api/wage-adjustments/bulk', $dasar + ['dates' => ['2026-09-09', '2026-09-09']], $owner)
+            ->assertStatus(422);
+        $this->postJson('/api/wage-adjustments/bulk', ['amount' => 0] + $dasar + ['dates' => ['2026-09-09']], $owner)
+            ->assertStatus(422);
+        $this->postJson('/api/wage-adjustments/bulk', $dasar + ['dates' => ['2026-09-09']], $this->header('kasir'))
+            ->assertStatus(403);
+
+        $this->assertSame(0, WageAdjustment::count());
+    }
+
+    /**
+     * Rekap upah untuk tanggal pilihan (loncat-loncat): hari di antaranya
+     * yang tidak dipilih tidak ikut dijumlahkan, dan potongan tetap
+     * diterapkan per tanggal.
+     */
+    public function test_rekap_upah_untuk_tanggal_pilihan(): void
+    {
+        $this->siapkan();
+        $budi = Worker::create(['name' => 'Budi']);
+        foreach (['2026-09-08', '2026-09-09', '2026-09-10'] as $t) {
+            $this->travelTo($t.' 10:00:00');
+            $this->cuci($budi);
+        }
+        $this->travelBack();
+        WageAdjustment::create([
+            'worker_id' => $budi->id, 'worker_name' => 'Budi',
+            'type' => 'potongan', 'amount' => 5000, 'date' => '2026-09-10',
+        ]);
+
+        $baris = $this->getJson('/api/reports/wages?dates[]=2026-09-08&dates[]=2026-09-10',
+            $this->header('owner'))->assertOk()->json('data.0');
+
+        $this->assertSame('Budi', $baris['name']);
+        $this->assertSame(['2026-09-08', '2026-09-10'], array_column($baris['daily_breakdown'], 'date'));
+        $this->assertSame(2, $baris['total_vehicles']);
+        $this->assertSame(40000, $baris['total_gross']);
+        $this->assertSame(5000, $baris['total_penalty']);
+        $this->assertSame(5000, $baris['total_penalty_applied']);
+        $this->assertSame(35000, $baris['total_wage']);
+
+        // Cara lama (from/to) tetap jalan — dipakai aplikasi Android.
+        $this->getJson('/api/reports/wages?from=2026-09-08&to=2026-09-10', $this->header('owner'))
+            ->assertOk()->assertJsonPath('data.0.total_vehicles', 3);
+    }
+
+    /**
+     * "Dipotong berapa" harus angka yang benar-benar memotong: potongan yang
+     * melebihi upah tidak menahan uang lebih dari upah itu sendiri.
+     */
+    public function test_potongan_terpakai_tidak_melebihi_upah(): void
+    {
+        $this->siapkan();
+        $budi = Worker::create(['name' => 'Budi']);
+        $andi = Worker::create(['name' => 'Andi']);
+        $this->cuci($budi);                       // upah hitungan Budi 20.000
+        $h = $this->header('owner');
+        $catat = fn (Worker $w, string $jenis, int $jumlah) => $this->postJson('/api/wage-adjustments',
+            ['worker_id' => $w->id, 'type' => $jenis, 'amount' => $jumlah], $h)->assertCreated();
+
+        $catat($budi, 'potongan', 30000);         // tercatat 30.000, terpakai 20.000
+        $catat($andi, 'timpa', 10000);            // Andi tidak mencuci, upah ditimpa 10.000
+        $catat($andi, 'potongan', 15000);         // terpakai 10.000 dari dasar timpa
+
+        $rekap = collect($this->getJson('/api/reports/daily?date='.now()->toDateString(), $h)
+            ->assertOk()->json('data.worker_wages'))->keyBy('name');
+
+        $this->assertSame(30000, $rekap['Budi']['penalty']);
+        $this->assertSame(20000, $rekap['Budi']['penalty_applied']);
+        $this->assertSame(0, $rekap['Budi']['wage']);
+        $this->assertSame(10000, $rekap['Andi']['penalty_applied']);
+
+        $rentang = collect($this->getJson('/api/reports/wages?dates[]='.now()->toDateString(), $h)
+            ->assertOk()->json('data'))->keyBy('name');
+        $this->assertSame(20000, $rentang['Budi']['total_penalty_applied']);
+        $this->assertSame(10000, $rentang['Andi']['total_penalty_applied']);
+    }
+
+    public function test_hapus_sekaligus_menolak_daftar_kosong(): void
+    {
+        $h = $this->header('owner');
+
+        $this->postJson('/api/wage-adjustments/bulk-delete', ['ids' => []], $h)->assertStatus(422);
+        $this->postJson('/api/wage-adjustments/bulk-delete', [], $h)->assertStatus(422);
     }
 
     public function test_potongan_hanya_berlaku_di_tanggalnya(): void
@@ -264,5 +424,33 @@ class WageAdjustmentTest extends TestCase
         ], $this->header('owner'))->assertCreated();
 
         $this->assertSame(20000, $this->rekap()['wages']);
+    }
+
+    /**
+     * Rentang sebulan (dipakai titik merah kalender Upah & potongan): hanya
+     * catatan di dalam rentang. Angka 'timpa' hanya dihitung, tidak ikut
+     * dijumlahkan — itu upah pengganti, bukan uang yang ditahan.
+     */
+    public function test_ringkasan_untuk_rentang(): void
+    {
+        $budi = Worker::create(['name' => 'Budi']);
+        $andi = Worker::create(['name' => 'Andi']);
+        $catat = fn (Worker $w, string $jenis, int $jumlah, string $tgl) => WageAdjustment::create([
+            'worker_id' => $w->id, 'worker_name' => $w->name,
+            'type' => $jenis, 'amount' => $jumlah, 'date' => $tgl,
+        ]);
+
+        $catat($budi, 'potongan', 5000, '2026-09-02');
+        $catat($budi, 'potongan', 3000, '2026-09-15');
+        $catat($budi, 'timpa', 50000, '2026-09-20');
+        $catat($andi, 'potongan', 10000, '2026-09-10');
+        $catat($andi, 'potongan', 99000, '2026-10-01');   // di luar rentang
+
+        $res = $this->getJson('/api/wage-adjustments?from=2026-09-01&to=2026-09-30',
+            $this->header('owner'))->assertOk();
+
+        $this->assertCount(4, $res->json('data'));
+        $this->assertSame(18000, $res->json('summary.total_potongan'));
+        $this->assertSame(1, $res->json('summary.jumlah_timpa'));
     }
 }

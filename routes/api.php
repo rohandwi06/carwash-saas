@@ -245,6 +245,8 @@ Route::middleware('pin.auth')->group(function () {
         // laba bersih yang dilaporkan.
         Route::get('/wage-adjustments', [WageAdjustmentController::class, 'index']);
         Route::post('/wage-adjustments', [WageAdjustmentController::class, 'store']);
+        Route::post('/wage-adjustments/bulk', [WageAdjustmentController::class, 'storeMany']);
+        Route::post('/wage-adjustments/bulk-delete', [WageAdjustmentController::class, 'destroyMany']);
         Route::delete('/wage-adjustments/{wageAdjustment}', [WageAdjustmentController::class, 'destroy']);
 
     });
