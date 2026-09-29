@@ -16,8 +16,9 @@ use Illuminate\Validation\Rule;
  * dengan upah senior, supaya jenis kendaraan baru otomatis punya tempat untuk
  * keduanya.
  *
- * Angka ini jatah BERSAMA semua anak training pada satu cucian, bukan per
- * orang — pembagiannya di WageService::bagiUpah.
+ * Angka ini upah SETIAP anak training per cucian (3 anak training x Rp 3.000
+ * = Rp 9.000), sisanya dibagi rata ke senior — pembagiannya di
+ * WageService::bagiUpah.
  */
 class TraineeWageController extends Controller
 {

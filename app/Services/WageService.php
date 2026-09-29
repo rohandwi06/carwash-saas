@@ -75,27 +75,30 @@ class WageService
      * bisa dihitung tanpa menyentuh database — inilah satu-satunya tempat
      * angka upah per orang ditentukan.
      *
-     * - Angka training adalah JATAH BERSAMA seluruh karyawan training pada
-     *   cucian itu, BUKAN per orang. Dua anak training berbagi jatah yang
-     *   sama; mereka tidak menggandakannya.
-     * - Sisanya dibagi rata ke pekerja senior.
+     * - Angka training berlaku untuk SETIAP anak training pada cucian itu
+     *   (keputusan owner 2026-09-29: "3k per orang, bukan 3k dibagi tiga").
+     *   Upah cucian Rp 50.000, 5 tetap + 3 training, training Rp 3.000 ->
+     *   tiap training Rp 3.000, tiap karyawan tetap (50.000 - 9.000) / 5 =
+     *   Rp 8.200.
+     * - Sisanya dibagi rata ke pekerja senior (karyawan tetap).
      * - Kalau yang mengerjakan hanya training, mereka tetap menerima jatah
      *   kecilnya saja; selisihnya tidak dibagikan ke siapa pun (jadi milik
      *   owner). Ini pilihan sadar: status training berarti porsi kecil,
      *   entah ia bekerja sendiri atau bersama senior.
      *
-     * Kenapa bersama, bukan per orang: dengan nominal per orang, menambah anak
-     * training menggerus bagian senior — pada 1 senior + 2 training, seniornya
-     * justru dapat paling sedikit. Padahal maksud fitur ini sebaliknya.
+     * Dulu angkanya jatah BERSAMA (3k dibagi tiga) supaya menambah anak
+     * training tidak menggerus bagian senior. Dengan per orang, makin banyak
+     * anak training makin kecil bagian senior — batas di bawah yang menjaga
+     * agar senior tidak pernah kalah dari anak training.
      *
-     * BATAS PENTING: jatah training dipotong agar tidak pernah melebihi porsi
-     * yang akan mereka terima seandainya dibagi rata (jatah x jumlah training
-     * / jumlah semua). Dengan batas itu, tiap anak training tidak mungkin
-     * melebihi senior, dan senior tidak mungkin dapat Rp 0 pada cucian
-     * bertarif kecil (mis. motor Rp 5.000 dengan jatah training Rp 5.000).
+     * BATAS PENTING: upah tiap anak training dipotong agar tidak pernah
+     * melebihi bagiannya seandainya semua dibagi rata (jatah / jumlah semua).
+     * Dengan batas itu, anak training tidak mungkin melebihi senior, dan
+     * senior tidak mungkin dapat Rp 0 pada cucian bertarif kecil (mis. motor
+     * Rp 5.000 dengan jatah training Rp 5.000).
      *
      * @param  int         $jatah          upah cucian yang dibagikan
-     * @param  int         $jatahTraining  jatah BERSAMA training utk kendaraan+layanan ini
+     * @param  int         $jatahTraining  upah SETIAP anak training utk kendaraan+layanan ini
      * @param  array<int>  $semua          id semua pekerja pada transaksi
      * @param  array<int>  $training       id yang berstatus training
      * @return array<int,int>              id pekerja => upahnya
@@ -112,14 +115,8 @@ class WageService
             return array_fill_keys($semua, $rata);
         }
 
-        $batas = intdiv($jatah * count($training), count($semua));
-        $kolam = min($jatahTraining, $batas);
+        $upahTraining = min($jatahTraining, intdiv($jatah, count($semua)));
 
-        $upahTraining = intdiv($kolam, count($training));
-
-        // Memakai yang BENAR-BENAR dibagikan, bukan $kolam: sisa pembulatan
-        // pembagian ke anak training tidak boleh ikut hilang dari hitungan
-        // senior.
         $sisa = $jatah - ($upahTraining * count($training));
         $upahSenior = count($senior) > 0 ? intdiv(max(0, $sisa), count($senior)) : 0;
 

@@ -606,8 +606,8 @@ class _KartuTraining extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Jatah BERSAMA semua anak training pada satu cucian, bukan per '
-              'orang. Angka upah senior ditampilkan sebagai pembanding.',
+              'Upah SETIAP anak training per cucian; sisanya dibagi rata ke '
+              'karyawan tetap. Angka upah senior ditampilkan sebagai pembanding.',
               style: Teks.kecil,
             ),
             const SizedBox(height: 10),

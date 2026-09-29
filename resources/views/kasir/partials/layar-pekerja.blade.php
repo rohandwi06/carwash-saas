@@ -48,8 +48,12 @@
                     onchange="tampilkanUlangPenyesuaian()"></select>
           </div>
           <div class="form-keluar" style="margin-bottom:6px">
-            <input id="inPenyJumlah" type="number" inputmode="numeric" placeholder="Jumlah (Rp)">
+            <input id="inPenyJumlah" type="number" inputmode="numeric" placeholder="Jumlah (Rp)"
+                   oninput="perbaruiBagiPeny()">
           </div>
+          {{-- Potongan = TOTAL yang dibagi rata ke tanggal terpilih; baris ini
+               menunjukkan bagian per tanggalnya sebelum dicatat. --}}
+          <div class="peny-bagi" id="penyBagi"></div>
           <div class="form-keluar" style="margin-bottom:6px">
             <input id="inPenyAlasan" placeholder="Alasan" maxlength="160">
           </div>

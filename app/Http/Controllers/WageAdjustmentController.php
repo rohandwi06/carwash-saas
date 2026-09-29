@@ -92,18 +92,25 @@ class WageAdjustmentController extends Controller
 
     /**
      * POST /api/wage-adjustments/bulk  {"worker_id":3, "type":"potongan",
-     *                                   "amount":5000, "dates":["2026-09-09", ...]}
+     *                                   "amount":100000, "split":true,
+     *                                   "dates":["2026-09-09", ...]}
      *
-     * Catat sekaligus dari kalender potongan: angka yang sama untuk SETIAP
-     * tanggal (per tanggal, bukan total yang dibagi). Satu transaksi — kalau
+     * Catat sekaligus dari kalender Upah & potongan. Satu transaksi — kalau
      * satu tanggal gagal, tidak ada yang tercatat, supaya owner tidak perlu
      * menebak tanggal mana yang sudah masuk.
+     *
+     * split=true (potongan saja): 'amount' adalah TOTAL yang dibagi rata ke
+     * semua tanggal — potong Rp 100.000 untuk 7 hari = Rp 14.285 per hari,
+     * sisa pembagiannya (Rp 5) ditaruh di tanggal terakhir supaya jumlahnya
+     * tepat Rp 100.000. Tanpa split, 'amount' berlaku untuk SETIAP tanggal;
+     * 'timpa' selalu begitu, karena angkanya upah pengganti per hari.
      */
     public function storeMany(Request $request): JsonResponse
     {
         $data = $request->validate($this->aturanCatat() + [
             'dates'   => ['required', 'array', 'min:1', 'max:62'],
             'dates.*' => ['date_format:Y-m-d', 'distinct'],
+            'split'   => ['sometimes', 'boolean'],
         ]);
 
         if ($tolak = $this->tolakPotonganNol($data)) {
@@ -112,12 +119,38 @@ class WageAdjustmentController extends Controller
 
         $worker  = Worker::findOrFail($data['worker_id']);
         $tanggal = collect($data['dates'])->sort()->values();
+        $bagi    = ($data['split'] ?? false) && $data['type'] === WageAdjustment::POTONGAN;
+
+        if ($bagi && $data['amount'] < $tanggal->count()) {
+            return response()->json([
+                'message' => 'Total potongan terlalu kecil untuk dibagi ke '.$tanggal->count().' tanggal.',
+            ], 422);
+        }
+
+        $bagian = $bagi ? self::bagiRata($data['amount'], $tanggal->count()) : null;
 
         $rows = DB::transaction(fn () => $tanggal->map(
-            fn (string $t) => $this->catat($request, $worker, $data, $t)
+            fn (string $t, int $i) => $this->catat($request, $worker,
+                $bagian ? ['amount' => $bagian[$i]] + $data : $data, $t)
         ));
 
         return response()->json(['data' => $rows], 201);
+    }
+
+    /**
+     * Bagi rata sebuah total ke n bagian bulat; sisa pembagian ke bagian
+     * TERAKHIR. 100.000 / 7 = [14.285 ×6, 14.290] — jumlahnya selalu tepat
+     * sama dengan total. kasir.js memakai rumus yang sama untuk pratinjau.
+     *
+     * @return int[]
+     */
+    public static function bagiRata(int $total, int $n): array
+    {
+        $dasar  = intdiv($total, $n);
+        $bagian = array_fill(0, $n, $dasar);
+        $bagian[$n - 1] += $total - $dasar * $n;
+
+        return $bagian;
     }
 
     /** Aturan bersama store() & storeMany(); tanggalnya ditambahkan masing-masing. */

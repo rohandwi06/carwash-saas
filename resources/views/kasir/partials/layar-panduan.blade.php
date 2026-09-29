@@ -199,8 +199,10 @@
                  <b>Ketuk</b> beberapa tanggal (boleh loncat-loncat), atau <b>tahan</b> satu tanggal lalu
                  ketuk tanggal lain untuk satu rentang. Tidak memilih tanggal = hari ini.
                  Titik hijau = ada upah, titik merah = ada potongan.</p>
-              <p>Untuk memotong: isi pekerja dan jumlahnya sekali, tekan <b>Catat</b> &mdash; potongan
-                 tercatat di setiap tanggal yang dipilih, dengan jumlah yang sama per tanggal.</p>
+              <p>Untuk memotong: isi pekerja dan <b>total</b> potongannya, tekan <b>Catat</b> &mdash;
+                 totalnya dibagi rata ke tanggal yang dipilih. Potong Rp 100.000 untuk 7 hari = Rp 14.285
+                 per hari, sisanya (Rp 5) di tanggal terakhir. <b>Timpa angka</b> tidak dibagi: angkanya
+                 jadi upah di setiap tanggal yang dipilih.</p>
               <p>Kalau di salah satu tanggal lampau upah pekerja itu Rp 0 (libur, tidak kebagian
                  cucian) atau lebih kecil dari potongannya, Anda diberi tahu sebelum mencatat:
                  potongan di hari seperti itu tidak memotong apa-apa.</p>

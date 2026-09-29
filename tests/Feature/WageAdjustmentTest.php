@@ -319,6 +319,54 @@ class WageAdjustmentTest extends TestCase
         $this->assertSame('kasbon', $daftar->json('data.0.reason'));
     }
 
+    /**
+     * Potong Rp 100.000 untuk 7 hari = total dibagi rata, BUKAN 100.000 per
+     * hari. Sisa pembagian ke tanggal terakhir, jadi jumlahnya tepat 100.000.
+     */
+    public function test_potongan_total_dibagi_rata(): void
+    {
+        $w = Worker::create(['name' => 'Budi']);
+        $tanggal = ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10',
+                    '2026-09-11', '2026-09-12', '2026-09-13'];
+
+        $res = $this->postJson('/api/wage-adjustments/bulk', [
+            'worker_id' => $w->id, 'type' => 'potongan', 'amount' => 100000,
+            'split' => true, 'dates' => array_reverse($tanggal),   // urutan kiriman tidak penting
+        ], $this->header('owner'))->assertCreated();
+
+        $this->assertSame(
+            [14285, 14285, 14285, 14285, 14285, 14285, 14290],
+            array_column($res->json('data'), 'amount'),
+        );
+        $this->assertSame('2026-09-13', $res->json('data.6.date'), 'Sisa ke tanggal terakhir.');
+        $this->assertSame(100000, (int) WageAdjustment::sum('amount'));
+    }
+
+    public function test_potongan_dibagi_rata_ditolak_bila_total_terlalu_kecil(): void
+    {
+        $w = Worker::create(['name' => 'Budi']);
+
+        $this->postJson('/api/wage-adjustments/bulk', [
+            'worker_id' => $w->id, 'type' => 'potongan', 'amount' => 2,
+            'split' => true, 'dates' => ['2026-09-07', '2026-09-08', '2026-09-09'],
+        ], $this->header('owner'))->assertStatus(422);
+
+        $this->assertSame(0, WageAdjustment::count());
+    }
+
+    /** Timpa tidak pernah dibagi: angkanya upah pengganti untuk SETIAP hari. */
+    public function test_timpa_tidak_dibagi_walau_split(): void
+    {
+        $w = Worker::create(['name' => 'Budi']);
+
+        $res = $this->postJson('/api/wage-adjustments/bulk', [
+            'worker_id' => $w->id, 'type' => 'timpa', 'amount' => 30000,
+            'split' => true, 'dates' => ['2026-09-07', '2026-09-08'],
+        ], $this->header('owner'))->assertCreated();
+
+        $this->assertSame([30000, 30000], array_column($res->json('data'), 'amount'));
+    }
+
     public function test_catat_sekaligus_ditolak_bila_tidak_sah(): void
     {
         $w = Worker::create(['name' => 'Budi']);

@@ -131,6 +131,10 @@
         <div class="set-grup" data-grup="karyawan">
           <div class="cat-blok">
             <h3>&#127891; Karyawan training</h3>
+            {{-- Satu kalimat aturan hitungnya: tanpa ini, owner tidak tahu apakah
+                 angka yang ia isi per orang atau dibagi di antara anak training. --}}
+            <div class="peny-ket">Angka ini untuk <b>setiap</b> anak training per cucian.
+              Sisa upah cuciannya dibagi rata ke karyawan tetap.</div>
             <div id="daftarUpahTraining"></div>
           </div>
 

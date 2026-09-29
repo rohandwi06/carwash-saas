@@ -1220,10 +1220,35 @@ function setJenisPenyesuaian(j){
   $("jenisPotongan").classList.toggle("aktif", j==="potongan");
   $("jenisTimpa").classList.toggle("aktif", j==="timpa");
   $("inPenyJumlah").placeholder = j==="potongan"
-    ? "Potong per tanggal (Rp)" : "Upah baru per tanggal (Rp)";
+    ? "Total potongan (Rp)" : "Upah baru per tanggal (Rp)";
   $("penyKet").innerHTML = j==="potongan"
-    ? "Mengurangi upah di tanggal yang dipilih di kalender &mdash; tidak memilih = hari ini. Boleh dicatat lebih dari sekali."
+    ? "Total potongan dibagi rata ke tanggal yang dipilih di kalender &mdash; tidak memilih = hari ini. Boleh dicatat lebih dari sekali."
     : "Mengganti upah hasil hitungan di tanggal yang dipilih dengan angka lain. Boleh Rp 0 (upah dinolkan). Satu per pekerja per hari &mdash; yang terbaru menang.";
+  perbaruiBagiPeny();
+}
+
+/* Rumus yang SAMA dengan WageAdjustmentController::bagiRata (yang dipakai
+   server saat mencatat): bagian bulat, sisa pembagian ke bagian terakhir.
+   Di layar hanya untuk pratinjau & peringatan. */
+function bagiRata(total, n){
+  const dasar = Math.floor(total / n);
+  const bagian = Array(n).fill(dasar);
+  bagian[n-1] += total - dasar * n;
+  return bagian;
+}
+
+/* Pratinjau di bawah kolom jumlah: potongan Rp 100.000 untuk 7 tanggal =
+   Rp 14.285 per tanggal. Hanya untuk potongan & lebih dari satu tanggal. */
+function perbaruiBagiPeny(){
+  const el = $("penyBagi");
+  if(!el) return;
+  const total = parseInt($("inPenyJumlah").value, 10);
+  const n = penyPilihan.length || 1;
+  if(jenisPenyesuaian !== "potongan" || n < 2 || !(total > 0)){ el.innerHTML = ""; return; }
+  if(total < n){ el.innerHTML = "Total terlalu kecil untuk dibagi ke "+n+" tanggal."; return; }
+  const b = bagiRata(total, n);
+  el.innerHTML = "= <b>"+rp(b[0])+"</b> per tanggal &times; "+n+" tanggal"
+    + (b[n-1] !== b[0] ? " (tanggal terakhir "+rp(b[n-1])+")" : "");
 }
 
 async function renderPenyesuaian(){
@@ -1342,6 +1367,7 @@ function perbaruiTombolCatat(){
     + '<button class="peny-tgl-btn" onclick="keKalenderPeny()">'
     +   (n===0 ? "Pilih tanggal lain" : "Ubah tanggal")+'</button>'
     + '<span class="peny-tgl-cara">Ketuk beberapa tanggal di kalender, atau <b>tahan</b> satu tanggal lalu ketuk tanggal lain untuk rentang.</span>';
+  perbaruiBagiPeny();   // jumlah tanggal berubah -> bagian per tanggal ikut berubah
 }
 
 /* Gulir ke kalender dan sorot sebentar — tanda bahwa tanggal Catat dipilih di sana. */
@@ -1626,10 +1652,19 @@ async function tambahPenyesuaian(){
   const tanggal = penyPilihan.length ? [...penyPilihan] : [hariIni()];
   const n = tanggal.length;
   const potong = jenisPenyesuaian==="potongan";
+  // Potongan: angka di kolom adalah TOTAL, dibagi rata ke semua tanggal.
+  // Timpa: angkanya upah pengganti untuk SETIAP tanggal.
+  if(potong && amount < n){
+    $("inPenyJumlah").focus();
+    Swal.fire({toast:true, position:"top-end", icon:"warning", showConfirmButton:false, timer:2600,
+      title: "Total terlalu kecil untuk dibagi ke "+n+" tanggal"});
+    return;
+  }
+  const bagian = potong ? bagiRata(amount, n) : tanggal.map(() => amount);
 
   let peringatan = [];
   if(potong){
-    try{ peringatan = await cekUpahSebelumPotong(worker_id, tanggal, amount); }
+    try{ peringatan = await cekUpahSebelumPotong(worker_id, tanggal, bagian); }
     catch(e){ gagal(e); return; }
   }
 
@@ -1640,9 +1675,11 @@ async function tambahPenyesuaian(){
     icon: "warning",
     title: potong ? "Potong upah?" : "Timpa angka upah?",
     html: (potong
-        ? 'Upah <b>'+esc(nama)+'</b> dipotong <b>'+rp(amount)+'</b>'+(n>1 ? ' per tanggal' : '')
-          + ' di <b>'+daftarTgl+'</b>.'
-          + (n>1 ? '<br>Total <b>'+rp(amount*n)+'</b>.' : '')
+        ? (n===1
+            ? 'Upah <b>'+esc(nama)+'</b> dipotong <b>'+rp(amount)+'</b> di <b>'+daftarTgl+'</b>.'
+            : 'Upah <b>'+esc(nama)+'</b> dipotong total <b>'+rp(amount)+'</b>, dibagi rata ke <b>'+daftarTgl+'</b>.'
+              + '<br>Per tanggal <b>'+rp(bagian[0])+'</b>'
+              + (bagian[n-1] !== bagian[0] ? ' (tanggal terakhir '+rp(bagian[n-1])+')' : '')+'.')
           + '<br><br>Uangnya tidak jadi dibayarkan, jadi <b>laba bersih naik</b> sebesar '
           + (peringatan.length ? 'yang benar-benar terpotong (lihat catatan di bawah).' : 'potongan ini.')
         : 'Upah <b>'+esc(nama)+'</b> di <b>'+daftarTgl+'</b> diganti jadi <b>'+rp(amount)+'</b>'
@@ -1659,11 +1696,13 @@ async function tambahPenyesuaian(){
   });
   if(!konfirmasi.isConfirmed) return;
 
-  const body = {worker_id, type:jenisPenyesuaian, amount,
+  // split: server yang membagi (bagiRata di atas hanya pratinjaunya).
+  const body = {worker_id, type:jenisPenyesuaian, amount, split: potong,
                 reason: $("inPenyAlasan").value.trim() || null, dates: tanggal};
   try{
     await api("/wage-adjustments/bulk",{method:"POST",body});
     $("inPenyJumlah").value=""; $("inPenyAlasan").value="";
+    perbaruiBagiPeny();
     // Buka kartu pekerja itu, supaya potongan yang baru dicatat langsung
     // terlihat beserta upah yang sekarang ia terima.
     penyKartuBuka.add(worker_id);
@@ -1671,7 +1710,8 @@ async function tambahPenyesuaian(){
     await renderPenyesuaian();
     Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2200,
       title: potong ? "Upah dipotong" : "Angka upah ditimpa",
-      text: nama+" · "+(n>1 ? n+" × " : "")+rp(amount)});
+      text: nama+" · "+(potong ? "total "+rp(amount)+(n>1 ? " / "+n+" tanggal" : "")
+                               : (n>1 ? n+" × " : "")+rp(amount))});
   }catch(e){ gagal(e); }
 }
 
@@ -1683,7 +1723,8 @@ async function tambahPenyesuaian(){
  * terbaca di daftar. Hari ini & yang akan datang tidak diperiksa: cuciannya
  * mungkin belum masuk. Angka upahnya sudah termasuk potongan yang ada.
  */
-async function cekUpahSebelumPotong(worker_id, tanggal, amount){
+async function cekUpahSebelumPotong(worker_id, tanggal, bagian){
+  // bagian[i] = potongan untuk tanggal[i] (hasil bagi rata).
   const lampau = tanggal.filter(t => t < hariIni());
   if(!lampau.length) return [];
 
@@ -1692,10 +1733,11 @@ async function cekUpahSebelumPotong(worker_id, tanggal, amount){
   const upah = {};
   ((pk && pk.daily_breakdown) || []).forEach(d => { upah[tglSaja(d.date)] = d.wage; });
 
-  return lampau.flatMap(t => {
+  return tanggal.flatMap((t, i) => {
+    if(t >= hariIni()) return [];
     const u = upah[t] || 0;
-    if(u <= 0)     return [fmtTglPendek(t)+': upahnya Rp 0 &mdash; potongan di tanggal ini tidak memotong apa-apa.'];
-    if(u < amount) return [fmtTglPendek(t)+': upahnya cuma '+rp(u)+' &mdash; yang benar-benar terpotong hanya '+rp(u)+'.'];
+    if(u <= 0)         return [fmtTglPendek(t)+': upahnya Rp 0 &mdash; potongan '+rp(bagian[i])+' di tanggal ini tidak memotong apa-apa.'];
+    if(u < bagian[i])  return [fmtTglPendek(t)+': upahnya cuma '+rp(u)+' &mdash; dari '+rp(bagian[i])+' yang benar-benar terpotong hanya '+rp(u)+'.'];
     return [];
   });
 }
@@ -4387,8 +4429,8 @@ function setTabPengaturan(tab, gulirKeAtas = true){
 }
 
 /* ---------- PENGATURAN: KARYAWAN TRAINING (khusus owner) ----------
-   Training TIDAK ikut bagi rata: ia menerima nominal tetap per cucian, sisanya
-   baru dibagi ke pekerja senior. Angkanya diatur di sini; perhitungannya
+   Training TIDAK ikut bagi rata: SETIAP anak training menerima nominal tetap
+   per cucian, sisanya baru dibagi ke pekerja senior. Angkanya diatur di sini; perhitungannya
    sendiri hidup di server (WageService::bagiUpah) supaya layar tidak pernah
    ikut memutuskan besaran upah. */
 async function renderKaryawanTraining(){
