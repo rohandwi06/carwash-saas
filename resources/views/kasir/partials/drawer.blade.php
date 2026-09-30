@@ -31,5 +31,13 @@
            ditutup manual — kalau tidak, pertanyaannya lari ke owner. --}}
       <button class="dr-item" data-layar="layarPanduan" onclick="pergi('layarPanduan')"><span class="ikon">&#10067;</span> Panduan</button>
     </div>
-    <div class="dr-foot">Terhubung ke server.<br>Login: <b id="roleBadge">-</b> &middot; <a href="#" onclick="keluarApp();return false" style="color:#C0392B;font-weight:900">Keluar</a></div>
+    @if (app()->environment('demo'))
+      {{-- Situs demo tidak punya halaman login (pengunjung langsung masuk),
+           jadi "Keluar" diganti tombol pindah tampilan owner <-> kasir. --}}
+      <div class="dr-foot">Versi demo &middot; login: <b id="roleBadge">-</b><br>
+        <a href="#" id="gantiPeranDemo" onclick="gantiPeranDemo();return false"
+           style="color:#C0392B;font-weight:900"></a></div>
+    @else
+      <div class="dr-foot">Terhubung ke server.<br>Login: <b id="roleBadge">-</b> &middot; <a href="#" onclick="keluarApp();return false" style="color:#C0392B;font-weight:900">Keluar</a></div>
+    @endif
   </nav>

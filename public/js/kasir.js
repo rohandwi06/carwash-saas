@@ -27,6 +27,11 @@ let TOKEN = localStorage.getItem("kasir_token") || "";
 let ROLE  = localStorage.getItem("kasir_role")  || "";
 let NAMA  = localStorage.getItem("kasir_name")  || "";
 
+/* Situs demo (APP_ENV=demo, dibawa halaman sebagai window.DEMO): tidak ada
+   halaman login — pengunjung bingung harus memakai akun apa. Aplikasi langsung
+   masuk sebagai owner, dan menu ☰ punya tombol pindah ke tampilan kasir. */
+const DEMO = !!window.DEMO;
+
 /* opts.penuh = true -> kembalikan SELURUH badan JSON, bukan cuma .data.
    Dipakai endpoint yang ikut mengirim ringkasan hitungan dari server
    (mis. /consignors dengan total utang), supaya angka uang tetap
@@ -97,6 +102,8 @@ function simpanSesi(token, role, nama){
   NAMA  ? localStorage.setItem("kasir_name", NAMA)   : localStorage.removeItem("kasir_name");
   const badge = document.getElementById("roleBadge");
   if (badge) badge.textContent = role ? role.toUpperCase()+(NAMA?" · "+NAMA:"") : "-";
+  const ganti = document.getElementById("gantiPeranDemo");   // hanya ada di situs demo
+  if (ganti) ganti.textContent = role === "kasir" ? "👑 Lihat sebagai Owner" : "👀 Lihat sebagai Kasir";
   terapkanBatasRole();
 }
 
@@ -125,6 +132,59 @@ function terapkanBatasRole(){
   });
 }
 function tampilkanLogin(pesan){
+  if (DEMO && !demoGagal) { masukDemo(peranDemo()); return; }
+  tampilkanLoginBiasa(pesan);
+}
+
+/* ---------- SITUS DEMO: MASUK TANPA LOGIN ----------
+   Dipanggil setiap kali aplikasi seharusnya menampilkan halaman login
+   (pertama kali dibuka, atau token habis). Satu proses masuk sekaligus:
+   beberapa permintaan yang bersamaan berbalas 401 cukup memicu satu kali. */
+let demoMasuk = null;
+let demoGagal = false;   // masuk otomatis gagal -> pakai halaman login biasa
+
+function peranDemo(){
+  try{ return localStorage.getItem("demoPeran") === "kasir" ? "kasir" : "owner"; }
+  catch(e){ return "owner"; }
+}
+
+function masukDemo(role){
+  if (demoMasuk) return demoMasuk;
+  demoMasuk = (async () => {
+    try{
+      const r = await api("/demo-login", {method:"POST", body:{role}});
+      simpanSesi(r.token, r.role, r.name);
+      document.getElementById("layarLogin").classList.add("hidden-login");
+      Swal.fire({
+        toast: true, position: "top-end", icon: "info",
+        title: "Versi demo · masuk sebagai "+(r.role === "owner" ? "Owner" : "Kasir ("+r.name+")"),
+        text: "Pindah ke tampilan "+(r.role === "owner" ? "kasir" : "owner")+" lewat menu ☰ di kiri atas.",
+        showConfirmButton: false, timer: 5000, timerProgressBar: true,
+      });
+      mulaiAplikasi();
+    }catch(e){
+      // Mis. server ternyata bukan mode demo (404): jangan sampai layar kosong.
+      demoGagal = true;
+      tampilkanLoginBiasa(e.message === ERR_LOGIN ? "" : e.message);
+    }finally{
+      demoMasuk = null;
+    }
+  })();
+  return demoMasuk;
+}
+
+async function gantiPeranDemo(){
+  const baru = ROLE === "kasir" ? "owner" : "kasir";
+  try{
+    localStorage.setItem("demoPeran", baru);
+    localStorage.removeItem("kasirLastPage");   // mendarat di layar awal peran baru
+  }catch(e){}
+  try{ await api("/logout", {method:"POST"}); }catch(e){}
+  simpanSesi("", "");
+  location.reload();
+}
+
+function tampilkanLoginBiasa(pesan){
   document.getElementById("layarLogin").classList.remove("hidden-login");
   document.getElementById("loginErr").textContent = pesan || "";
   document.getElementById("inputPassword").value = "";
@@ -1762,27 +1822,46 @@ async function hapusPenyesuaian(id){
  */
 /**
  * Satu cara bayar (Cash / TF) sebagai baris yang bisa dibuka.
- * Isinya: tiap jenis kendaraan, berapa kali, dan berapa rupiah.
+ *
+ * Isinya transaksi-transaksi yang dibayar dengan cara itu — dulu cuma
+ * ringkasan per jenis kendaraan, dan transaksinya ada di blok "Riwayat
+ * transaksi hari ini" terpisah di bawah. Permintaan owner (29/09): satukan,
+ * supaya membuka Cash langsung memperlihatkan transaksinya; tiap baris
+ * diketuk untuk keterangannya (trxHTML, lengkap dengan tombol batal & resi).
+ * Ringkasan per jenis kendaraan tetap ada sebagai satu baris di atasnya —
+ * itu yang dipakai mencocokkan uang di laci.
  *
  * Dibiarkan TERTUTUP saat pertama tampil supaya bentuk rekap sehari-hari tidak
- * berubah — rinciannya baru dibuka kalau memang sedang dicocokkan dengan uang
- * di laci.
+ * berubah; yang sedang dibuka tetap terbuka saat Rekap dimuat ulang (mis.
+ * sesudah membatalkan satu transaksi di dalamnya).
  */
-function barisBayar(p){
+function barisBayar(p, trx){
   const id    = "rincianBayar-"+p.method;
   const label = {cash:"Cash", tf:"TF"}[p.method] || p.method.toUpperCase();
   const kelas = p.method === "tf" ? "biru-t" : "";
+  const buka  = rekapBayarBuka.has(p.method);
+  const ringkas = (p.rows||[]).map(r =>
+    esc(labelKat(r.category))+' '+r.count+'x '+rp(r.total)).join(' &middot; ');
 
-  return '<button class="cat-baris baris-buka" onclick="document.getElementById(\''+id+'\').classList.toggle(\'hidden\')">'
+  return '<button class="cat-baris baris-buka'+(buka ? ' buka' : '')+'" onclick="bukaTutupBayar(\''+p.method+'\')">'
     +   '<span>'+esc(label)+' <span class="waktu">'+p.count+'x</span></span>'
     +   '<b class="'+kelas+'">'+rp(p.total)+' <span class="trx-panah">&#9662;</span></b>'
     + '</button>'
-    + '<div id="'+id+'" class="hidden rincian-bayar">'
-    +   p.rows.map(r =>
-        '<div class="cat-baris"><span>'+esc(labelKat(r.category))
-        + ' <span class="waktu">'+r.count+'x</span></span>'
-        + '<b>'+rp(r.total)+'</b></div>').join("")
+    + '<div id="'+id+'" class="rincian-bayar'+(buka ? '' : ' hidden')+'">'
+    +   (ringkas ? '<div class="bayar-ringkas">'+ringkas+'</div>' : '')
+    +   (trx.length ? trx.map(r => trxHTML(r, {batal:true})).join("")
+                    : '<div class="cat-kosong">Tidak ada transaksi.</div>')
     + '</div>';
+}
+
+let rekapBayarBuka = new Set();   // cara bayar yang dropdown-nya sedang terbuka
+
+function bukaTutupBayar(method){
+  if(rekapBayarBuka.has(method)) rekapBayarBuka.delete(method); else rekapBayarBuka.add(method);
+  const buka = rekapBayarBuka.has(method);
+  const isi = $("rincianBayar-"+method);
+  isi.classList.toggle("hidden", !buka);
+  isi.previousElementSibling.classList.toggle("buka", buka);
 }
 
 /* ---------- REKAP: PENYARING BUKU KAS SELURUH LAYAR ----------
@@ -1970,17 +2049,44 @@ async function renderRekap(){
     // ini, labelKat() jatuh ke slug mentah ("kecil" alih-alih "Mobil Kecil")
     // di rincian Cash/TF.
     if(!CFG) CFG = await api("/config");
-    const h = await api("/reports/daily?date="+hariIni()+paramBukuRekap());
+    const [h, semuaTrx] = await Promise.all([
+      api("/reports/daily?date="+hariIni()+paramBukuRekap()),
+      api("/transactions?date="+hariIni()),
+    ]);
     const cuciTotal = h.total;
     const cuciLaba = cuciTotal + h.tip - h.wages;
 
+    // Transaksi hari ini, untuk isi dropdown Cash/TF di bawah (dulu blok
+    // "Riwayat transaksi hari ini" tersendiri). Penyaring buku kas di sini,
+    // bukan di server: daftarnya sudah terambil utuh dan book_id tiap
+    // transaksi ikut terbawa.
+    let trx = semuaTrx;
+    if(rekapBukuPilih!==null) trx = trx.filter(r => r.book_id === rekapBukuPilih);
+    // Transaksi yang sudah dibatalkan hanya untuk mata owner — permintaan
+    // owner sendiri (21/09): di layar kasir, baris batal tidak boleh muncul
+    // walau cuma sebagai coretan. Uangnya memang sudah tidak dihitung di mana
+    // pun (Transaction::valid()), jadi yang disembunyikan murni tampilannya.
+    // Yang MENUNGGU approval tetap tampil: transaksinya masih sah, dan kasir
+    // perlu melihat bahwa pengajuannya sedang ditunggu.
+    if(ROLE!=="owner") trx = trx.filter(r => !r.voided_at);
+    const perBayar = {};
+    trx.forEach(r => { (perBayar[r.payment_method] ??= []).push(r); });
+    // by_payment dari server hanya menghitung transaksi sah. Cara bayar yang
+    // isinya tinggal transaksi batal (terlihat owner) tetap diberi baris
+    // "0x", supaya catatan batalnya tidak hilang dari layar.
+    const bayar = [...(h.by_payment||[])];
+    Object.keys(perBayar).forEach(m => {
+      if(!bayar.some(p => p.method === m)) bayar.push({method:m, count:0, total:0, rows:[]});
+    });
+
     // Baris TF & Cash menggantikan "Cash Motor"/"Cash Mobil" yang lama: sekarang
-    // bisa dibuka dan memerinci SEMUA jenis kendaraan berikut berapa kalinya,
-    // bukan cuma memisah motor dari mobil.
+    // bisa dibuka dan memuat transaksinya satu per satu.
     $("rekapCuci").innerHTML =
       '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>'
       +'<div class="cat-baris"><span>Tip</span><b>'+(h.tip? rp(h.tip):"kosong")+'</b></div>'
-      + (h.by_payment||[]).map(barisBayar).join("")
+      + (bayar.length
+          ? bayar.map(p => barisBayar(p, perBayar[p.method] || [])).join("")
+          : '<div class="cat-kosong">Belum ada transaksi'+(rekapBukuPilih!==null? ' di buku ini':'')+'.</div>')
       +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
       +'<div class="cat-baris tebal"><span>Laba Cuci</span><b class="hijau">'+rp(cuciLaba)+'</b></div>';
 
@@ -2010,7 +2116,6 @@ async function renderRekap(){
     $("statMasuk").textContent = rp(omzetHari(h));
     $("statTrx").textContent = h.vehicles + " kendaraan";
     $("statLaba").textContent = rp(h.profit);
-    renderRiwayat();
     renderApproval();
     renderApprovalSetoran();
   }catch(e){ gagal(e); }
@@ -3258,30 +3363,6 @@ function gambarPeringkat(elId, rows, satuan){
 }
 
 /* ---------- RIWAYAT / PENCARIAN GAGAL ---------- */
-async function renderRiwayat(){
-  try{
-    let trx = await api("/transactions?date="+hariIni());
-    // Disaring di sini, bukan di server: daftarnya sudah terambil utuh untuk
-    // layar ini dan book_id tiap transaksi ikut terbawa, jadi menyaringnya di
-    // sisi klien tidak menambah permintaan baru.
-    if(rekapBukuPilih!==null){
-      trx = trx.filter(r => r.book_id === rekapBukuPilih);
-    }
-    // Transaksi yang sudah dibatalkan hanya untuk mata owner — permintaan
-    // owner sendiri (21/09): di layar kasir, baris batal tidak boleh muncul
-    // walau cuma sebagai coretan. Uangnya memang sudah tidak dihitung di mana
-    // pun (Transaction::valid()), jadi yang disembunyikan murni tampilannya.
-    //
-    // Yang MENUNGGU approval tetap tampil: transaksinya masih sah, dan kasir
-    // perlu melihat bahwa pengajuannya sedang ditunggu. Begitu owner
-    // menyetujui, barisnya hilang dari layar kasir.
-    if(ROLE!=="owner") trx = trx.filter(r => !r.voided_at);
-    $("daftarRiwayat").innerHTML = trx.length===0
-      ? '<div class="cat-kosong">Belum ada transaksi'+(rekapBukuPilih!==null? ' di buku ini':'')+'.</div>'
-      : trx.map(r=>trxHTML(r,{batal:true})).join("");
-  }catch(e){ gagal(e); }
-}
-
 /* ---------- GEMINI: sambungan otomatis dari kolom pencarian ----------
    Dulu AI punya tombol melayang & modal sendiri dengan kolom ketik kedua.
    Sekarang ia menyatu: kasir cukup mengetik di satu kolom, dan kalau daftar
@@ -5034,6 +5115,6 @@ async function mulaiAplikasi(){
 }
 (function boot(){
   simpanSesi(TOKEN, ROLE, NAMA); // sinkronkan badge role
-  if (!TOKEN) { tampilkanLogin(""); return; }
+  if (!TOKEN) { tampilkanLogin(""); return; }   // situs demo: langsung masuk sendiri
   mulaiAplikasi();
 })();

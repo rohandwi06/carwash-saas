@@ -684,6 +684,18 @@
   .rincian-bayar{padding-left:14px;border-left:3px solid var(--line);margin:2px 0 6px}
   .rincian-bayar .cat-baris{padding:5px 0;font-size:13.5px;border-bottom:none}
   .rincian-bayar .cat-baris b{font-weight:800}
+  .baris-buka.buka .trx-panah{display:inline-block;transform:rotate(180deg)}
+  /* Ringkasan per jenis kendaraan di atas daftar transaksi Cash/TF — untuk
+     mencocokkan uang di laci tanpa menjumlah baris satu per satu. */
+  .bayar-ringkas{font-size:12px;font-weight:700;color:var(--ink2);line-height:1.5;
+    padding:2px 0 6px;border-bottom:1px dashed var(--line)}
+  /* Transaksi di dalam dropdown: tiap baris dipisah garis tipis, seperti
+     riwayat yang dulu berdiri sendiri. */
+  .rincian-bayar .trx-item .trx-head{padding:8px 0}
+  /* Di dalam dropdown Cash semua baris cash (dan TF semuanya TF) — chip cara
+     bayarnya cuma memakan tempat dan mematahkan baris jadi dua. */
+  .rincian-bayar .chip-cash,.rincian-bayar .chip-tf{display:none}
+  .rincian-bayar .trx-head > span:last-child{white-space:nowrap}   /* harga, ✕, ▾ satu baris */
 
   .baris-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
   .pilih-kat{width:100%;font-size:16px;font-weight:800;padding:12px 14px;
@@ -706,10 +718,16 @@
   .rank-bawah{font-size:12px;font-weight:700;color:var(--ink2)}
 
   /* ---- Login (username & password) ---- */
+  /* Rata tengah lewat margin:auto, bukan justify-content:center: kalau
+     kotaknya lebih tinggi dari layar (keterangan demo di HP kecil), center
+     mendorong bagian atasnya keluar layar tanpa bisa digulir. margin:auto
+     tetap menengahkan saat muat, dan menyusut ke 0 saat tidak muat. */
   .login-layar{position:fixed;inset:0;background:#FFFBEF;z-index:99;display:flex;
-    align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:24px}
+    align-items:center;justify-content:flex-start;flex-direction:column;gap:14px;padding:24px;
+    overflow-y:auto}
   .login-kotak{width:100%;max-width:340px;background:#fff;border:3px solid #141414;
-    border-radius:18px;padding:26px 22px;box-shadow:6px 6px 0 #141414;text-align:center}
+    border-radius:18px;padding:26px 22px;box-shadow:6px 6px 0 #141414;text-align:center;
+    margin:auto 0;flex-shrink:0}
   .login-kotak h2{font-size:22px;font-weight:900;margin-bottom:4px}
   .login-kotak p{font-size:13px;color:#8C8574;font-weight:600;margin-bottom:16px}
   /* Dulu kotak PIN 4 digit (rata tengah, huruf renggang, mirip kotak-kotak
@@ -724,6 +742,16 @@
     background:#FFD34D;border:3px solid #141414;border-radius:12px;cursor:pointer;
     box-shadow:4px 4px 0 #141414;transition:transform .06s,box-shadow .06s}
   .login-kotak button:active{transform:translate(2px,2px);box-shadow:2px 2px 0 #141414}
+  /* Kartu akun di keterangan demo: tombol juga, tapi bukan tombol MASUK —
+     gaya kuning tebal di atas harus dibatalkan supaya tidak tertukar. */
+  .akun-demo-judul{margin:10px 0 2px;font-size:12.5px;font-weight:800}
+  .login-kotak .login-demo .akun-demo{display:block;width:100%;margin-top:8px;padding:9px 12px;
+    text-align:left;font-size:13px;font-weight:600;color:var(--ink);background:var(--card);
+    border:2px solid var(--line);border-radius:10px;box-shadow:none}
+  .login-kotak .login-demo .akun-demo:active{transform:scale(.98);box-shadow:none;border-color:var(--tag)}
+  .akun-demo-peran{display:block;font-size:14px;font-weight:900}
+  .akun-demo-ket{display:block;margin:2px 0 4px;font-size:12.5px;line-height:1.4;color:var(--ink2)}
+  .akun-demo-kunci{display:block}
   .login-err{color:#C0392B;font-weight:800;font-size:13px;min-height:18px;margin-bottom:6px}
   .hidden-login{display:none!important}
   /* ---- Transaksi batal ---- */

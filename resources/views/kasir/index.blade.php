@@ -77,6 +77,8 @@
 {{-- Profil usaha dibawa langsung di halaman: layar login sudah butuh nama
      usaha sebelum ada token untuk memanggil API. --}}
 <script>window.USAHA = @json($usaha);</script>
+{{-- Situs demo: kasir.js melewati halaman login dan langsung masuk. --}}
+<script>window.DEMO = @json(app()->environment('demo'));</script>
 <script src="{{ asset('js/kasir.js') }}?v={{ filemtime(public_path('js/kasir.js')) }}"></script>
 </body>
 </html>

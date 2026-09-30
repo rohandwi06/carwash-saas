@@ -60,14 +60,59 @@ class DemoModeTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * Masuk tanpa password HANYA di demo. Kalau jalan ini bocor ke instalasi
+     * sungguhan, siapa pun di internet bisa membuka pembukuan cucian itu.
+     */
+    public function test_masuk_tanpa_password_hanya_di_demo(): void
+    {
+        User::create(['name' => 'Dina', 'username' => 'dina',
+            'password' => Hash::make('kasir123'), 'role' => 'kasir']);
+
+        foreach (['production', 'local', 'testing'] as $env) {
+            $this->app['env'] = $env;
+            $this->postJson('/api/demo-login', ['role' => 'owner'])->assertNotFound();
+            $this->postJson('/api/demo-login', ['role' => 'kasir'])->assertNotFound();
+        }
+
+        $this->app['env'] = 'demo';
+        $owner = $this->postJson('/api/demo-login', ['role' => 'owner'])->assertOk()->json('data');
+        $this->assertSame('owner', $owner['role']);
+        $this->getJson('/api/me', ['Authorization' => 'Bearer '.$owner['token']])
+            ->assertOk()->assertJsonPath('data.role', 'owner');
+
+        $kasir = $this->postJson('/api/demo-login', ['role' => 'kasir'])->assertOk()->json('data');
+        $this->assertSame(['kasir', 'Dina'], [$kasir['role'], $kasir['name']]);
+
+        $this->postJson('/api/demo-login', ['role' => 'admin'])->assertStatus(422);
+    }
+
+    /** Halaman: penanda demo & tombol pindah peran hanya di demo; "Keluar" di tempat lain. */
+    public function test_halaman_demo_tanpa_tombol_keluar(): void
+    {
+        $this->app['env'] = 'production';
+        $this->get('/')->assertOk()->assertSee('window.DEMO = false', false)
+            ->assertDontSee('gantiPeranDemo')->assertSee('keluarApp()');
+
+        $this->app['env'] = 'demo';
+        $this->get('/')->assertOk()->assertSee('window.DEMO = true', false)
+            ->assertSee('gantiPeranDemo')->assertDontSee('keluarApp()');
+    }
+
     public function test_info_login_hanya_tampil_di_demo(): void
     {
         config(['carwash.owner.username' => 'owner', 'carwash.owner.password' => 'rahasia-owner']);
 
         $this->app['env'] = 'production';
-        $this->get('/')->assertOk()->assertDontSee('Versi demo')->assertDontSee('rahasia-owner');
+        $this->get('/')->assertOk()->assertDontSee('Versi demo')->assertDontSee('rahasia-owner')
+            ->assertDontSee('isiAkunDemo');
 
+        // Di demo: tiap akun dijelaskan dan bisa diketuk untuk mengisi kolom
+        // login — password owner ada di data-p tombolnya, bukan cuma di teks.
         $this->app['env'] = 'demo';
-        $this->get('/')->assertOk()->assertSee('Versi demo')->assertSee('rahasia-owner');
+        $this->get('/')->assertOk()->assertSee('Versi demo')->assertSee('rahasia-owner')
+            ->assertSee('data-p="rahasia-owner"', false)
+            ->assertSee('data-u="dina" data-p="kasir123"', false)
+            ->assertSee('pemilik usaha')->assertSee('karyawan jaga');
     }
 }

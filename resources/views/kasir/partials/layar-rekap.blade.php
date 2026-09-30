@@ -29,7 +29,10 @@
              Urutannya disengaja: cuci -> F&B -> pengeluaran. Dua yang pertama
              uang masuk, yang ketiga uang keluar sekaligus penutup hitungannya
              (uang masuk - pengeluaran = omzet), jadi angkanya terbaca
-             berurutan tanpa berpindah kartu. --}}
+             berurutan tanpa berpindah kartu.
+             Transaksi cucian hari ini ada di dalam dropdown Cash/TF laporan
+             cuci — dulu blok "Riwayat transaksi hari ini" tersendiri di bawah
+             (disatukan atas permintaan owner, 29/09). --}}
         <div class="cat-blok">
           <h3>🚗 Laporan Cuci Mobil/Motor</h3>
           <div id="rekapCuci"></div>
@@ -50,10 +53,6 @@
           <div class="stat masuk"><div class="s-label">Omzet</div><div class="s-nilai" id="statMasuk">Rp 0</div></div>
           <div class="stat"><div class="s-label">Transaksi</div><div class="s-nilai" id="statTrx">0</div></div>
           <div class="stat laba"><div class="s-label">Laba Bersih</div><div class="s-nilai" id="statLaba">Rp 0</div></div>
-        </div>
-        <div class="cat-blok">
-          <h3>&#129534; Riwayat transaksi hari ini</h3>
-          <div id="daftarRiwayat"></div>
         </div>
         <button class="btn-export" onclick="unduhCSV()">&#128190; Unduh Laporan Hari Ini (CSV)</button>
       </div>

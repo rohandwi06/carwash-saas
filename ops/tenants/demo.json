@@ -17,11 +17,12 @@
   },
   "mulai": null,
   "versi": {
-    "commit": null,
+    "commit": "16bd547",
     "pasti": true,
-    "migrasi_terakhir": null
+    "migrasi_terakhir": "2026_09_18_000003_add_consignment_to_products_sales_expenses"
   },
   "catatan": [
+    "versi.commit 16bd547: dipastikan 29-09 lewat md5 js/kasir.js di situs demo (cocok persis) + blok keterangan login demo tampil.",
     "Hosting cPanel biasa ArenHost (bukan reseller), domain utama byrapiin.my.id; demo di subdomain.",
     "Document root subdomain ~/demo.byrapiin.my.id (sejajar ~/rapiin-app, BUKAN di dalam public_html) supaya $app_base ../rapiin-app di index.php tepat.",
     "Database & user MySQL: byrapiin_app."

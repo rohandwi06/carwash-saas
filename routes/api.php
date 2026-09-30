@@ -34,6 +34,10 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
+// Situs demo saja: masuk tanpa password sebagai owner/kasir contoh. Di luar
+// APP_ENV=demo controllernya membalas 404 (lihat AuthController::demoLogin).
+Route::post('/demo-login', [AuthController::class, 'demoLogin'])->middleware('throttle:30,1');
+
 // Nama, keterangan, alamat, telepon usaha. Publik karena layar login (web
 // maupun tablet Android) sudah harus menampilkan nama cucian sebelum ada
 // token - dan isinya memang dicetak di setiap resi.

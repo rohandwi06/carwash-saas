@@ -13,6 +13,13 @@
     {{-- Hanya muncul saat owner memakai tombol Pratinjau di Pengaturan. --}}
     <button class="btn-keluar-kunci hidden" id="kunciPratinjau" onclick="tutupPratinjau()">
       &larr; Tutup pratinjau</button>
-    <button class="btn-keluar-kunci" onclick="keluarApp()">Keluar &amp; ganti akun</button>
+    @if (app()->environment('demo'))
+      {{-- Situs demo tidak punya login: "keluar" berarti masuk lagi sebagai
+           kasir yang sama dan terkunci lagi. Jalan keluarnya pindah ke owner,
+           yang tidak terkena jam operasional. --}}
+      <button class="btn-keluar-kunci" onclick="gantiPeranDemo()">&#128081; Lihat sebagai Owner</button>
+    @else
+      <button class="btn-keluar-kunci" onclick="keluarApp()">Keluar &amp; ganti akun</button>
+    @endif
   </div>
 </div>
