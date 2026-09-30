@@ -21,7 +21,10 @@ class FnbSaleController extends Controller
             // Transaksi cucinya ikut dibawa (plat & nama kendaraan saja):
             // kasir perlu diperingatkan sebelum membatalkan pesanan yang
             // menempel pada sebuah cucian — lihat voidFnb() di kasir.js.
-            'data' => FnbSale::with(['items', 'transaction:id,plate,vehicle_name,total,voided_at'])
+            // customerTransaction = mobil pembeli jajanan yang dibayar terpisah;
+            // plat dari salah satu dari keduanya tampil di tiap baris laporan.
+            'data' => FnbSale::with(['items', 'transaction:id,plate,vehicle_name,total,voided_at',
+                'customerTransaction:id,plate,vehicle_name'])
                 ->whereDate('date', $date)
                 ->orderByDesc('id')
                 ->get(),
@@ -56,7 +59,8 @@ class FnbSaleController extends Controller
     public function voidRequests(): JsonResponse
     {
         return response()->json([
-            'data' => FnbSale::with(['items', 'transaction:id,plate,vehicle_name,total,voided_at'])
+            'data' => FnbSale::with(['items', 'transaction:id,plate,vehicle_name,total,voided_at',
+                'customerTransaction:id,plate,vehicle_name'])
                 ->pendingVoid()
                 ->orderBy('void_requested_at')
                 ->get(),
@@ -95,6 +99,10 @@ class FnbSaleController extends Controller
             // Diisi bila penjualan ini berasal dari draft — draftnya ikut
             // terhapus di FnbService::create() begitu penjualan tersimpan.
             'draft_id'           => ['nullable', 'integer', 'exists:fnb_drafts,id'],
+            // Mobil pembelinya (cucian hari ini). Layar kasir web mewajibkan
+            // memilih mobil ATAU "bukan pelanggan cuci"; server tetap
+            // menerima kosong supaya aplikasi Android lama tidak ditolak.
+            'customer_transaction_id' => ['nullable', 'integer', 'exists:transactions,id'],
         ]);
 
         return response()->json([

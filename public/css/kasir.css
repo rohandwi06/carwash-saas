@@ -117,6 +117,10 @@
     border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);
     text-transform:uppercase}
   .field input:focus{outline:none;border-color:var(--water)}
+  /* Pilihan "Untuk mobil" di Jual F&B: tampil seperti kolom isian di atasnya. */
+  .field select{width:100%;font-size:16px;font-weight:800;padding:12px 12px;
+    border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+  .field select:focus{outline:none;border-color:var(--water)}
   .field input::placeholder{color:#A8A190;font-weight:600;text-transform:none}
 
   .total-bar{display:flex;align-items:center;justify-content:space-between;
@@ -683,12 +687,15 @@
      pos pemasukan yang berdiri sendiri. */
   .rincian-bayar{padding-left:14px;border-left:3px solid var(--line);margin:2px 0 6px}
   .rincian-bayar .cat-baris{padding:5px 0;font-size:13.5px;border-bottom:none}
-  .rincian-bayar .cat-baris b{font-weight:800}
+  .rincian-bayar .cat-baris b{font-weight:800;white-space:nowrap}   /* "Rp 5.000" tidak patah di HP */
   .baris-buka.buka .trx-panah{display:inline-block;transform:rotate(180deg)}
-  /* Ringkasan per jenis kendaraan di atas daftar transaksi Cash/TF — untuk
-     mencocokkan uang di laci tanpa menjumlah baris satu per satu. */
-  .bayar-ringkas{font-size:12px;font-weight:700;color:var(--ink2);line-height:1.5;
-    padding:2px 0 6px;border-bottom:1px dashed var(--line)}
+  /* Judul seksi per jenis kendaraan di dalam dropdown Cash/TF — jumlah &
+     rupiahnya dipakai mencocokkan uang di laci tanpa menjumlah baris. */
+  .bayar-seksi{display:flex;justify-content:space-between;gap:10px;
+    font-size:12.5px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:var(--ink2);
+    padding:10px 0 4px;border-bottom:1px dashed var(--line)}
+  .bayar-seksi:first-child{padding-top:2px}
+  .bayar-seksi b{white-space:nowrap;text-transform:none}
   /* Transaksi di dalam dropdown: tiap baris dipisah garis tipis, seperti
      riwayat yang dulu berdiri sendiri. */
   .rincian-bayar .trx-item .trx-head{padding:8px 0}

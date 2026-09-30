@@ -1836,22 +1836,64 @@ async function hapusPenyesuaian(id){
  * sesudah membatalkan satu transaksi di dalamnya).
  */
 function barisBayar(p, trx){
-  const id    = "rincianBayar-"+p.method;
   const label = {cash:"Cash", tf:"TF"}[p.method] || p.method.toUpperCase();
   const kelas = p.method === "tf" ? "biru-t" : "";
-  const buka  = rekapBayarBuka.has(p.method);
-  const ringkas = (p.rows||[]).map(r =>
-    esc(labelKat(r.category))+' '+r.count+'x '+rp(r.total)).join(' &middot; ');
+  // Dibagi per jenis kendaraan (permintaan owner 30/09): judul seksi memuat
+  // jumlah & rupiahnya — pengganti baris ringkasan satu kalimat yang dulu —
+  // lalu transaksinya di bawah. Urutan seksi mengikuti katalog (p.rows sudah
+  // diurut server). Jenis yang isinya tinggal transaksi batal (terlihat
+  // owner) tidak ada di p.rows, jadi ditambahkan di belakang dengan 0x.
+  const seksi = (p.rows||[]).map(r => ({...r}));
+  trx.forEach(r => {
+    if(!seksi.some(x => x.category === r.category)) seksi.push({category:r.category, count:0, total:0});
+  });
+  const isi = seksi.map(x => {
+    const rows = trx.filter(r => r.category === x.category);
+    return '<div class="bayar-seksi"><span>'+esc(labelKat(x.category))+' <span class="waktu">'+x.count+'x</span></span>'
+      + '<b>'+rp(x.total)+'</b></div>'
+      + rows.map(r => trxHTML(r, {batal:true})).join("");
+  }).join("");
 
-  return '<button class="cat-baris baris-buka'+(buka ? ' buka' : '')+'" onclick="bukaTutupBayar(\''+p.method+'\')">'
-    +   '<span>'+esc(label)+' <span class="waktu">'+p.count+'x</span></span>'
-    +   '<b class="'+kelas+'">'+rp(p.total)+' <span class="trx-panah">&#9662;</span></b>'
+  return barisBuka(p.method, esc(label)+' <span class="waktu">'+p.count+'x</span>', rp(p.total), kelas,
+    isi || '<div class="cat-kosong">Tidak ada transaksi.</div>');
+}
+
+/* Baris rekap yang bisa dibuka: kepala (label + nominal) dan isinya.
+   Kunci membedakan dropdown satu sama lain dan mengingat yang sedang terbuka
+   (rekapBayarBuka) saat Rekap dimuat ulang. */
+function barisBuka(kunci, labelHtml, nilaiHtml, kelas, isiHtml){
+  const buka = rekapBayarBuka.has(kunci);
+  return '<button class="cat-baris baris-buka'+(buka ? ' buka' : '')+'" onclick="bukaTutupBayar(\''+kunci+'\')">'
+    +   '<span>'+labelHtml+'</span>'
+    +   '<b class="'+kelas+'">'+nilaiHtml+' <span class="trx-panah">&#9662;</span></b>'
     + '</button>'
-    + '<div id="'+id+'" class="rincian-bayar'+(buka ? '' : ' hidden')+'">'
-    +   (ringkas ? '<div class="bayar-ringkas">'+ringkas+'</div>' : '')
-    +   (trx.length ? trx.map(r => trxHTML(r, {batal:true})).join("")
-                    : '<div class="cat-kosong">Tidak ada transaksi.</div>')
-    + '</div>';
+    + '<div id="rincianBayar-'+kunci+'" class="rincian-bayar'+(buka ? '' : ' hidden')+'">'+isiHtml+'</div>';
+}
+
+/* Mobil sebuah penjualan F&B: cucian satu resi, atau mobil pembeli jajanan
+   yang dibayar terpisah. null = bukan pelanggan cuci / penjualan lama. */
+function mobilFnb(sl){
+  return sl.transaction || sl.customer_transaction || null;
+}
+
+/* "Isuzu Panther · B 1234 XY" — urutannya sama dengan baris transaksi cuci. */
+function labelMobil(t){
+  if(!t) return '<span class="waktu">&#128694; bukan pelanggan cuci</span>';
+  return esc(t.vehicle_name||"")+' &middot; '+esc(t.plate||"plat kosong");
+}
+
+/* Baris F&B Cash / TF di Rekap: dropdown berisi tiap penjualan beserta platnya
+   (permintaan owner 30/09 — supaya jelas jajanan itu milik mobil yang mana). */
+function barisFnbBayar(metode, label, total, kelas, fnb){
+  const rows = fnb.filter(sl => sl.payment_method === metode);
+  if(!total && rows.length===0){
+    return '<div class="cat-baris"><span>'+label+'</span><b class="'+kelas+'">kosong</b></div>';
+  }
+  const isi = rows.map(sl =>
+    '<div class="cat-baris"><span><span class="waktu">'+jam(sl.created_at)+'</span> &middot; '+labelMobil(mobilFnb(sl))
+    + '<br><span class="waktu">'+sl.items.map(i=>esc(i.product_name)+' x'+i.qty).join(", ")+'</span></span>'
+    + '<b>'+rp(sl.total)+'</b></div>').join("");
+  return barisBuka("fnb-"+metode, label+' <span class="waktu">'+rows.length+'x</span>', rp(total), kelas, isi);
 }
 
 let rekapBayarBuka = new Set();   // cara bayar yang dropdown-nya sedang terbuka
@@ -2049,9 +2091,10 @@ async function renderRekap(){
     // ini, labelKat() jatuh ke slug mentah ("kecil" alih-alih "Mobil Kecil")
     // di rincian Cash/TF.
     if(!CFG) CFG = await api("/config");
-    const [h, semuaTrx] = await Promise.all([
+    const [h, semuaTrx, semuaFnb] = await Promise.all([
       api("/reports/daily?date="+hariIni()+paramBukuRekap()),
       api("/transactions?date="+hariIni()),
+      api("/fnb-sales?date="+hariIni()),
     ]);
     const cuciTotal = h.total;
     const cuciLaba = cuciTotal + h.tip - h.wages;
@@ -2081,9 +2124,32 @@ async function renderRekap(){
 
     // Baris TF & Cash menggantikan "Cash Motor"/"Cash Mobil" yang lama: sekarang
     // bisa dibuka dan memuat transaksinya satu per satu.
+    // Penjualan F&B yang ikut dihitung server (FnbSale::valid()): tidak batal
+    // dan cuciannya (bila satu resi) tidak batal. Isi dropdown Tip & F&B
+    // Cash/TF harus berjumlah sama persis dengan angka di sebelahnya.
+    let fnb = semuaFnb.filter(sl => !sl.voided_at && !(sl.transaction && sl.transaction.voided_at));
+    if(rekapBukuPilih!==null) fnb = fnb.filter(sl => sl.book_id === rekapBukuPilih);
+    const trxSah = trx.filter(r => !r.voided_at);
+
+    // Tip dari cucian dan dari jajanan, diurut jam — tiap baris menyebut platnya.
+    const tipRows = trxSah.filter(r => r.tip>0).map(r => ({waktu:r.created_at, mobil:r, asal:"cuci", tip:r.tip}))
+      .concat(fnb.filter(sl => sl.tip>0).map(sl => ({waktu:sl.created_at, mobil:mobilFnb(sl), asal:"F&B", tip:sl.tip})))
+      .sort((a,b) => String(a.waktu).localeCompare(String(b.waktu)));
+    const isiTip = tipRows.map(t =>
+      '<div class="cat-baris"><span><span class="waktu">'+jam(t.waktu)+'</span> &middot; '+labelMobil(t.mobil)
+      + ' <span class="waktu">'+esc(t.asal)+'</span></span><b>'+rp(t.tip)+'</b></div>').join("");
+
     $("rekapCuci").innerHTML =
-      '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>'
-      +'<div class="cat-baris"><span>Tip</span><b>'+(h.tip? rp(h.tip):"kosong")+'</b></div>'
+      // Semua cucian hari ini urut jam (paling pagi di atas) — permintaan
+      // owner 30/09. Isinya sama dengan dropdown Cash/TF, hanya tidak dipilah.
+      (trx.length
+          ? barisBuka("cuci", 'Total Cuci <span class="waktu">'+trxSah.length+'x</span>', rp(cuciTotal), "",
+              [...trx].sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)))
+                .map(r => trxHTML(r, {batal:true})).join(""))
+          : '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>')
+      +(h.tip
+          ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "", isiTip)
+          : '<div class="cat-baris"><span>Tip</span><b>kosong</b></div>')
       + (bayar.length
           ? bayar.map(p => barisBayar(p, perBayar[p.method] || [])).join("")
           : '<div class="cat-kosong">Belum ada transaksi'+(rekapBukuPilih!==null? ' di buku ini':'')+'.</div>')
@@ -2092,8 +2158,8 @@ async function renderRekap(){
 
     $("rekapFnb").innerHTML =
       '<div class="cat-baris"><span>Total F&amp;B</span><b>'+rp(h.fnb_total)+'</b></div>'
-      +'<div class="cat-baris"><span>Cash</span><b>'+(h.fnb_cash? rp(h.fnb_cash):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>TF</span><b class="biru-t">'+(h.fnb_tf? rp(h.fnb_tf):"kosong")+'</b></div>'
+      +barisFnbBayar("cash", "Cash", h.fnb_cash, "", fnb)
+      +barisFnbBayar("tf", "TF", h.fnb_tf, "biru-t", fnb)
       +'<div class="cat-baris tebal"><span>Laba F&amp;B</span><b class="hijau">'+rp(h.fnb_total)+'</b></div>';
 
     renderRekapBuku(h.books || []);
@@ -3142,7 +3208,7 @@ async function renderBuku(){
       +'<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;" oninput="bukuCari=this.value;bukuHal=1;renderBukuTrx()">'
       +'<div id="bukuTrxList"></div><div id="bukuTrxNav" class="hal-nav"></div></div>'
       +'<div class="cat-blok"><h3>&#127860; Penjualan F&amp;B</h3>'
-      +(fnb.length? fnb.map(sl=>'<div class="cat-baris"><span><span class="waktu">'+jam(sl.created_at)+'</span> &middot; '+sl.items.map(i=>esc(i.product_name)+' x'+i.qty).join(", ")+(sl.created_by?' <span class="waktu">&#128100; '+esc(sl.created_by)+'</span>':'')+'</span><b>'+rp(sl.total)+'</b></div>').join("") : '<div class="cat-kosong">Tidak ada penjualan F&amp;B.</div>')+'</div>';
+      +(fnb.length? fnb.map(sl=>'<div class="cat-baris"><span><span class="waktu">'+jam(sl.created_at)+'</span> &middot; '+labelMobil(mobilFnb(sl))+' &middot; '+sl.items.map(i=>esc(i.product_name)+' x'+i.qty).join(", ")+(sl.created_by?' <span class="waktu">&#128100; '+esc(sl.created_by)+'</span>':'')+'</span><b>'+rp(sl.total)+'</b></div>').join("") : '<div class="cat-kosong">Tidak ada penjualan F&amp;B.</div>')+'</div>';
     bukuTrxData = trx; bukuCari=""; bukuHal=1;
     renderBukuTrx();
   }catch(e){ gagal(e); }
@@ -3556,7 +3622,11 @@ async function renderFnb(){
     produk = await api("/products?active=1");
     gambarGridFnb(); gambarKeranjang();
     await renderFnbDrafts();
-    const sales = await api("/fnb-sales?date="+hariIni());
+    const [sales, trxHari] = await Promise.all([
+      api("/fnb-sales?date="+hariIni()),
+      api("/transactions?date="+hariIni()),
+    ]);
+    isiPilihMobilFnb(trxHari);
     penjualanFnb = sales;
     $("riwayatFnb").innerHTML = sales.length===0
       ? '<div class="cat-kosong">Belum ada penjualan hari ini.</div>'
@@ -3655,20 +3725,48 @@ function bukaQris(){
   $("qrisOverlay").classList.add("buka");
 }
 function tutupQris(){ $("qrisOverlay").classList.remove("buka"); }
+/* Pilihan "Untuk mobil" di Jual F&B: cucian hari ini yang masih sah, terbaru
+   di atas, plus "Bukan pelanggan cuci". Pilihan yang sedang terpilih
+   dipertahankan saat daftar dimuat ulang (mis. sesudah simpan draft). */
+function isiPilihMobilFnb(trxHari){
+  const sel = $("inMobilFnb");
+  if(!sel) return;
+  const tadi = sel.value;
+  const sah = trxHari.filter(r => !r.voided_at)
+    .sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)));
+  sel.innerHTML = '<option value="">&mdash; pilih mobil &mdash;</option>'
+    + '<option value="0">&#128694; Bukan pelanggan cuci</option>'
+    + sah.map(r => '<option value="'+r.id+'">'+jam(r.created_at)+' &middot; '
+        + esc(r.plate||"plat kosong")+' &middot; '+esc(r.vehicle_name||"")+'</option>').join("");
+  if([...sel.options].some(o => o.value === tadi)) sel.value = tadi;
+}
+
 async function simpanFnb(){
   const items = Object.entries(keranjang).map(([id,qty])=>({product_id:+id, qty}));
   if(items.length===0){
     Swal.fire({icon:"warning", title:"Pesanan masih kosong", text:"Tap menu di atas untuk menambah item dulu.", confirmButtonColor:"#1B9E62"});
     return;
   }
+  // Wajib memilih: mobil pembelinya, atau tegas "bukan pelanggan cuci" —
+  // supaya setiap baris F&B di laporan bisa ditelusuri ke platnya.
+  const mobil = ($("inMobilFnb")||{}).value;
+  if(!mobil){
+    Swal.fire({icon:"warning", title:"Pilih mobilnya dulu",
+      text:"Jajanan ini untuk mobil yang mana? Kalau pembelinya tidak cuci, pilih \"Bukan pelanggan cuci\".",
+      confirmButtonColor:"#1B9E62"});
+    if($("inMobilFnb")) $("inMobilFnb").focus();
+    return;
+  }
   try{
     const tip = tipFnb();
     const body = {payment_method:bayarFnb, items, tip};
+    if(+mobil > 0) body.customer_transaction_id = +mobil;
     if(draftFnbAktif) body.draft_id = draftFnbAktif; // draft ikut terhapus di server
     const sale = await api("/fnb-sales",{method:"POST",body});
     lepasDraftFnb();   // draftnya sudah tidak ada — jangan dipakai lagi
     keranjang={}; bayarFnb="cash"; setBayarFnb("cash");
     if($("inTipFnb")) $("inTipFnb").value = "";
+    if($("inMobilFnb")) $("inMobilFnb").value = "";
     renderFnb();
     // Resi hanya dibuka kalau kasir menekan tombolnya. Notifikasi tetap
     // menutup sendiri seperti dulu (timer), supaya penjualan cepat yang tidak
@@ -3702,6 +3800,9 @@ function barisRiwayatFnb(sl){
     // tahu sebelum menekan tombol batal, bukan baru diberi tahu setelahnya.
     + (sl.transaction? ' <span class="chip-nempel" title="Menempel pada cucian">&#128663; '
         + esc(sl.transaction.plate || sl.transaction.vehicle_name || "cucian") + '</span>' : '')
+    // Pembeli jajanan terpisah: platnya saja, tanpa ikatan batal dengan cuciannya.
+    + (!sl.transaction && sl.customer_transaction? ' <span class="chip-nempel" title="Dibeli pelanggan cucian ini">&#128663; '
+        + esc(sl.customer_transaction.plate || sl.customer_transaction.vehicle_name || "cucian") + '</span>' : '')
     + (batal?' <span class="chip-batal">BATAL</span>':'')
     + (indukBatal && !batal?' <span class="chip-batal">CUCIAN BATAL</span>':'')
     + (menunggu?' <span class="chip-tunggu">MENUNGGU APPROVAL</span>':'')

@@ -15,6 +15,13 @@
           <h3 id="judulKeranjang">&#128722; Pesanan</h3>
           <div id="keranjangFnb"></div>
         </div>
+        {{-- Wajib dipilih (dijaga simpanFnb): setiap baris F&B di laporan
+             harus bisa ditelusuri ke plat mobil pembelinya. Diisi JS dari
+             cucian hari ini lewat isiPilihMobilFnb(). --}}
+        <div class="field" style="margin-bottom:12px">
+          <label for="inMobilFnb">Untuk mobil</label>
+          <select id="inMobilFnb"><option value="">&mdash; pilih mobil &mdash;</option></select>
+        </div>
         <div>
           <div class="sec-label">Pembayaran</div>
           <div class="bayar-grid">

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FnbDraft;
 use App\Models\FnbSale;
 use App\Models\Product;
+use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
@@ -21,6 +22,16 @@ class FnbService
     public function create(array $data): FnbSale
     {
         return DB::transaction(function () use ($data) {
+            // Mobil pembeli harus cucian HARI INI yang masih sah — plat dari
+            // cucian kemarin atau yang sudah dibatalkan hanya menyesatkan laporan.
+            if (! empty($data['customer_transaction_id'])) {
+                $mobil = Transaction::find($data['customer_transaction_id']);
+                if (! $mobil || $mobil->voided_at !== null
+                    || $mobil->date->toDateString() !== now()->toDateString()) {
+                    throw new InvalidArgumentException('Mobil yang dipilih bukan cucian hari ini yang masih sah.');
+                }
+            }
+
             $products = Product::whereIn('id', collect($data['items'])->pluck('product_id'))
                 ->where('is_active', true)
                 ->lockForUpdate()
@@ -76,6 +87,8 @@ class FnbService
             $sale = FnbSale::create([
                 // Terisi bila pesanan datang dari kasir cuci (satu resi dengan cucian).
                 'transaction_id' => $data['transaction_id'] ?? null,
+                // Terisi bila dijual lewat menu F&B untuk pelanggan cuci (resi terpisah).
+                'customer_transaction_id' => $data['customer_transaction_id'] ?? null,
                 'payment_method' => $data['payment_method'],
                 'total'          => $total,
                 // Tip DI LUAR total: total adalah harga menu, itu yang jadi

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FnbSale extends Model
 {
-    protected $fillable = ['transaction_id', 'payment_method', 'total', 'tip', 'date',
+    protected $fillable = ['transaction_id', 'customer_transaction_id', 'payment_method', 'total', 'tip', 'date',
         'book_id', 'created_by',
         'voided_at', 'void_reason', 'voided_by',
         'void_requested_at', 'void_requested_by', 'void_request_reason',
@@ -35,6 +35,17 @@ class FnbSale extends Model
     public function transaction(): BelongsTo
     {
         return $this->belongsTo(Transaction::class);
+    }
+
+    /**
+     * Mobil pembeli jajanan yang dibayar TERPISAH lewat menu Jual F&B.
+     * Hanya penanda plat untuk laporan — beda dengan transaction(), penjualan
+     * ini tidak ikut gugur saat cucian itu dibatalkan. Lihat migrasi
+     * add_customer_transaction_id_to_fnb_sales_table.
+     */
+    public function customerTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'customer_transaction_id');
     }
 
     /**
