@@ -173,7 +173,7 @@ class BookkeepingService
         $fnbPerBuku = $fnb->groupBy('book_id');
         $keluarPerBuku = $expenses->groupBy('book_id');
 
-        return $books->map(function (CashBook $b) use ($trxPerBuku, $fnbPerBuku, $keluarPerBuku) {
+        return $books->map(function (CashBook $b) use ($date, $trxPerBuku, $fnbPerBuku, $keluarPerBuku) {
             $t = $trxPerBuku->get($b->id, collect());
             $f = $fnbPerBuku->get($b->id, collect());
             $k = $keluarPerBuku->get($b->id, collect());
@@ -195,6 +195,12 @@ class BookkeepingService
                 'wash_total' => (int) $t->sum('total'),
                 'tip'      => (int) $t->sum('tip') + (int) $f->sum('tip'),
                 'fnb_total' => (int) $f->sum('total'),
+                // Upah & pengeluaran buku ini — dipakai Pembukuan, yang kini
+                // merinci setiap buku (cuci, tip, F&B, upah, pengeluaran)
+                // tanpa harus memanggil server sekali per buku. Upahnya
+                // dihitung dengan jalur yang sama dengan tab buku di Rekap.
+                'wages'    => $this->wages->dailyTotal($date, $b->id),
+                'expenses' => $pengeluaranBuku,
                 // Saldo kas kecil buku ini — MURNI informasi tambahan untuk
                 // kasir, tidak menyentuh omzet/laba di bawah. null kalau
                 // belum pernah diisi (bukan 0, biar jelas "belum diisi").

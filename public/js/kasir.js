@@ -3233,83 +3233,154 @@ async function renderBuku(){
       api("/fnb-sales?date="+tgl),
     ]);
     if(tglPilih !== tgl) return; // pilihan sudah berubah — hasil ini basi, jangan render
-    const upahRows = h.worker_wages.map(w =>
-      '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' &middot; '+w.vehicles+' kendaraan</span><b>'+rp(w.wage)+'</b></div>').join("");
+    // Detail satu tanggal (permintaan owner 03/10): ringkasan sehari dibuat
+    // pendek, dan SEMUA rinciannya — angka, transaksi cuci, F&B, pengeluaran
+    // — dipindah ke dalam bukunya masing-masing (renderBukuPerBuku).
+    const masuk = uangMasukHari(h);
+    const isiUpah = h.worker_wages.map(w =>
+      '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' <span class="waktu">'+w.vehicles+' kendaraan</span></span><b>'+rp(w.wage)+'</b></div>').join("");
     $("detailHari").innerHTML =
       '<div class="cat-blok"><h3>&#128197; '+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
-      +'<div class="cat-baris"><span>Total</span><b>'+rp(h.total)+'</b></div>'
-      +'<div class="cat-baris"><span>Tip</span><b>'+(h.tip?rp(h.tip):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>TF</span><b>'+(h.tf?rp(h.tf):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>Cash Motor</span><b>'+(h.cash_motor?rp(h.cash_motor):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>Cash Mobil</span><b>'+(h.cash_mobil?rp(h.cash_mobil):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>F&amp;B</span><b>'+(h.fnb_total?rp(h.fnb_total):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>Cash Total</span><b>'+rp(h.cash_total)+'</b></div>'
-      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
-      +upahRows
-      +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>'
-      // Baris yang sama persis dengan layar Pengeluaran — termasuk tombol
-      // koreksi & hapus untuk owner. Ini satu-satunya jalan membetulkan
-      // pengeluaran bertanggal lampau: Rekap cuma melayani hari ini.
-      +(h.expense_list||[]).map(e => barisKeluar(e)).join("")
-      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="hijau">'+rp(h.profit)+'</b></div>'
+      +'<div class="cat-baris"><span>Uang masuk<br><span class="waktu">cuci + F&amp;B + tip &middot; '+h.vehicles+' kendaraan</span></span><b style="white-space:nowrap">'+rp(masuk)+'</b></div>'
+      // Upah bisa dibuka: per pekerja. Rinciannya per mobil ada di menu Pekerja & Upah.
+      +(isiUpah
+          ? barisBuka("buku-upah", 'Upah pekerja', '-'+rp(h.wages), "merah", isiUpah)
+          : '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>')
+      +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'+(h.expenses? '-'+rp(h.expenses) : rp(0))+'</b></div>'
+      + barisTitipanRekap(h)
+      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(h.profit>=0?"hijau":"merah")+'">'+rp(h.profit)+'</b></div>'
       +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
       +'</div>'
-      // Rincian per buku: tanggal lampau tidak butuh tombol tutup/setujui
-      // seperti Rekap Hari Ini (buku sehari yang sudah lewat sudah pasti
-      // bukan 'open' lagi), jadi cukup daftar ringkas berstatus.
-      +((h.books&&h.books.length)? '<div class="cat-blok"><h3>&#128214; Per buku</h3>'+h.books.map(barisBukuRingkas).join("")+'</div>' : '')
-      +'<div class="cat-blok"><h3>&#129534; Riwayat transaksi ('+h.vehicles+')</h3>'
-      +'<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;" oninput="bukuCari=this.value;bukuHal=1;renderBukuTrx()">'
-      +'<div id="bukuTrxList"></div><div id="bukuTrxNav" class="hal-nav"></div></div>'
-      +'<div class="cat-blok"><h3>&#127860; Penjualan F&amp;B</h3>'
-      +(fnb.length? fnb.map(barisFnbRingkas).join("") : '<div class="cat-kosong">Tidak ada penjualan F&amp;B.</div>')+'</div>';
-    bukuTrxData = trx; bukuCari=""; bukuHal=1;
-    renderBukuTrx();
+      +'<div class="cat-blok"><h3>&#128214; Per buku</h3>'
+      +'<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;" oninput="bukuCari=this.value;renderBukuPerBuku()">'
+      +'<div id="bukuPerBuku"></div></div>';
+    // Tanggal baru dibuka: buku tunggal langsung terbuka (tidak ada yang perlu
+    // dipilih); beberapa buku mulai tertutup supaya daftarnya muat selayar.
+    if(bukuHari.tgl !== tgl){
+      [...rekapBayarBuka].filter(k => String(k).startsWith("buku-")).forEach(k => rekapBayarBuka.delete(k));
+      bukuCari = "";
+    }
+    bukuHari = {tgl, h, trx, fnb};
+    const grup = grupBukuHari();
+    if(grup.length === 1) rekapBayarBuka.add("buku-"+grup[0].kunci);
+    $("bukuCariIn").value = bukuCari;
+    renderBukuPerBuku();
   }catch(e){ gagal(e); }
 }
-/**
- * Satu baris ringkas buku kas untuk detail hari di Pembukuan — bukan
- * interaktif seperti panel di Rekap Hari Ini, karena tanggal lampau tidak
- * pernah punya buku yang masih 'open' untuk ditutup.
- */
+/* ---------- PEMBUKUAN: RINCIAN PER BUKU ----------
+   Setiap buku kas pada tanggal yang dibuka menjadi satu dropdown berisi
+   angkanya sendiri lalu transaksi cuci, penjualan F&B, dan pengeluarannya.
+   Catatan yang tidak menempel ke buku mana pun (data lama dari sebelum ada
+   buku kas, atau pengeluaran yang dicatat untuk tanggal lampau) dikumpulkan
+   di kelompok "Tanpa buku" supaya tidak hilang dari layar. */
 const LABEL_STATUS_BUKU = {
   open: "&#9998; berjalan", pending: "&#8987; menunggu",
   deposited: "&#9989; disetor", rejected: "&#10060; ditolak",
 };
-function barisBukuRingkas(b){
-  return '<div class="cat-baris"><span>'+esc(b.label)
-    + ' <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)
-    +   (b.cashiers&&b.cashiers.length? ' &middot; '+esc(b.cashiers.join(", ")) : '')+'</span></span>'
-    + '<b>'+rp(b.amount||0)+'</b></div>';
+let bukuHari = {tgl:null, h:null, trx:[], fnb:[]};
+let bukuCari = "";
+
+/** F&B yang ikut dihitung server — sama dengan FnbSale::valid(). */
+function fnbSah(sl){
+  return !sl.voided_at && !(sl.transaction && sl.transaction.voided_at);
 }
 
-/* Riwayat transaksi di Pembukuan: cari + halaman (client-side, 10/halaman) */
-let bukuTrxData=[], bukuCari="", bukuHal=1;
-const BUKU_PER_HAL = 10;
-function renderBukuTrx(){
-  const wadah = $("bukuTrxList"); if(!wadah) return;
+/** Kelompok per buku untuk tanggal yang sedang dibuka, plus "Tanpa buku". */
+function grupBukuHari(){
+  const {h, trx, fnb} = bukuHari;
+  if(!h) return [];
+  const books = h.books || [];
+  const idBuku = new Set(books.map(b => b.id));
+  const keluar = h.expense_list || [];
+  const grup = books.map(b => ({
+    kunci: b.id, buku: b,
+    trx: trx.filter(r => r.book_id === b.id),
+    fnb: fnb.filter(sl => sl.book_id === b.id && fnbSah(sl)),
+    keluar: keluar.filter(e => e.book_id === b.id),
+  }));
+  const sisa = {
+    kunci: "tanpa", buku: null,
+    trx: trx.filter(r => !idBuku.has(r.book_id)),
+    fnb: fnb.filter(sl => !idBuku.has(sl.book_id) && fnbSah(sl)),
+    keluar: keluar.filter(e => !idBuku.has(e.book_id)),
+  };
+  if(sisa.trx.length || sisa.fnb.length || sisa.keluar.length) grup.push(sisa);
+  // F&B urut jam seperti transaksi cucinya (server mengirim terbaru dulu).
+  grup.forEach(g => g.fnb.sort((x,y) => String(x.created_at).localeCompare(String(y.created_at))));
+  return grup;
+}
+
+function renderBukuPerBuku(){
+  const wadah = $("bukuPerBuku"); if(!wadah) return;
+  const grup = grupBukuHari();
+  if(!grup.length){
+    wadah.innerHTML = '<div class="cat-kosong">Tidak ada catatan pada tanggal ini.</div>';
+    return;
+  }
   const q = bukuCari.trim().toLowerCase();
-  const cocok = q
-    ? bukuTrxData.filter(r =>
-        (r.vehicle_name||"").toLowerCase().includes(q) ||
-        (r.plate||"").toLowerCase().includes(q.replace(/\s+/g," ")) ||
-        (r.plate||"").toLowerCase().replace(/\s/g,"").includes(q.replace(/\s/g,"")))
-    : bukuTrxData;
-  const totalHal = Math.max(1, Math.ceil(cocok.length/BUKU_PER_HAL));
-  if(bukuHal>totalHal) bukuHal = totalHal;
-  const mulai = (bukuHal-1)*BUKU_PER_HAL;
-  const potong = cocok.slice(mulai, mulai+BUKU_PER_HAL);
-  wadah.innerHTML = potong.length
+  const cocok = r =>
+    (r.vehicle_name||"").toLowerCase().includes(q) ||
+    (r.plate||"").toLowerCase().replace(/\s/g,"").includes(q.replace(/\s/g,""));
+  wadah.innerHTML = grup.map(g => kartuBuku(g, q, cocok)).join("");
+}
+
+/** Judul bagian di dalam sebuah buku — bentuknya sama dengan seksi Cash/TF. */
+function seksiBuku(label, jumlah, nilaiHtml){
+  return '<div class="bayar-seksi"><span>'+label+(jumlah!==null ? ' <span class="waktu">'+jumlah+'x</span>' : '')+'</span>'
+    + '<b>'+nilaiHtml+'</b></div>';
+}
+
+function kartuBuku(g, q, cocok){
+  const b = g.buku;
+  const sah = g.trx.filter(r => !r.voided_at);
+  // Angka buku dari server (sudah menghitung upah); "Tanpa buku" dijumlah di
+  // sini dari barisnya sendiri — upahnya tidak bisa dipisah, jadi tidak ditulis.
+  const cuci  = b ? b.wash_total : sah.reduce((t,r) => t + r.total, 0);
+  const tip   = b ? b.tip : sah.reduce((t,r) => t + (r.tip||0), 0) + g.fnb.reduce((t,sl) => t + (sl.tip||0), 0);
+  const fnbT  = b ? b.fnb_total : g.fnb.reduce((t,sl) => t + sl.total, 0);
+  const kel   = b ? b.expenses : g.keluar.reduce((t,e) => t + e.amount, 0);
+  const upah  = b ? b.wages : null;
+  const hasil = cuci + tip + fnbT - (upah||0) - kel;
+
+  const angka =
+      '<div class="cat-baris"><span>Cuci <span class="waktu">'+sah.length+'x</span></span><b>'+rp(cuci)+'</b></div>'
+    + '<div class="cat-baris"><span>Tip</span><b>'+(tip ? rp(tip) : "kosong")+'</b></div>'
+    + '<div class="cat-baris"><span>F&amp;B</span><b>'+(fnbT ? rp(fnbT) : "kosong")+'</b></div>'
+    + (upah!==null ? '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(upah)+'</b></div>' : '')
+    + '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'+(kel ? '-'+rp(kel) : rp(0))+'</b></div>'
+    + '<div class="cat-baris tebal"><span>'+(upah!==null ? 'Laba buku' : 'Selisih')+'</span><b class="'+(hasil>=0?"hijau":"merah")+'">'+rp(hasil)+'</b></div>'
+    // Uang tunai yang disetor kasir untuk buku ini (cash cuci + cash F&B −
+    // pengeluaran; tip & transfer tidak ikut) — angka yang sama dengan kepala kartu.
+    + (b ? '<div class="cat-baris"><span>Setoran cash <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)+'</span></span><b>'+rp(b.amount||0)+'</b></div>' : '');
+
+  const trxTampilkan = q ? g.trx.filter(cocok) : g.trx;
+  const urut = [...trxTampilkan].sort((x,y) => String(x.created_at).localeCompare(String(y.created_at)));
+  const isiTrx = seksiBuku("Transaksi cuci", sah.length, rp(cuci))
     // Pembatalan di sini sengaja OWNER SAJA, tidak seperti di Rekap Hari Ini
     // yang kasir pun boleh mengajukan. Rekap cuma melayani hari berjalan —
     // uangnya masih di laci dan kasirnya masih ada; tanggal lampau sudah
     // ditutup dan disetor, jadi mengutak-atiknya urusan owner.
-    ? potong.map(r=>trxHTML(r,{koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
-    : '<div class="cat-kosong">'+(q? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>';
-  $("bukuTrxNav").innerHTML = totalHal<=1 ? "" :
-    '<button class="hal-btn" '+(bukuHal<=1?'disabled':'')+' onclick="bukuHal--;renderBukuTrx()">&#8249;</button>'
-    +'<span class="hal-info">Hal '+bukuHal+' / '+totalHal+' &middot; '+cocok.length+' transaksi</span>'
-    +'<button class="hal-btn" '+(bukuHal>=totalHal?'disabled':'')+' onclick="bukuHal++;renderBukuTrx()">&#8250;</button>';
+    + (urut.length
+        ? urut.map(r => trxHTML(r, {koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
+        : '<div class="cat-kosong">'+(q ? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>');
+  const isiFnb = g.fnb.length
+    ? seksiBuku("Penjualan F&amp;B", g.fnb.length, rp(fnbT)) + g.fnb.map(barisFnbRingkas).join("") : "";
+  // Baris yang sama persis dengan layar Pengeluaran — termasuk tombol koreksi
+  // & hapus untuk owner. Ini satu-satunya jalan membetulkan pengeluaran
+  // bertanggal lampau: Rekap cuma melayani hari ini.
+  const isiKeluar = g.keluar.length
+    ? seksiBuku("Pengeluaran", g.keluar.length, '-'+rp(kel)) + g.keluar.map(barisKeluar).join("") : "";
+
+  const kunci = "buku-"+g.kunci;
+  // Sedang mencari: buku yang punya hasil dibuka paksa, supaya hasilnya
+  // langsung terlihat tanpa membuka buku satu per satu.
+  const paksa = q && trxTampilkan.length > 0;
+  if(paksa) rekapBayarBuka.add(kunci);
+  const label = b
+    ? esc(b.label)+' <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)
+      + (b.cashiers && b.cashiers.length ? ' &middot; '+esc(b.cashiers.join(", ")) : '')+'</span>'
+    : 'Tanpa buku <span class="waktu">catatan di luar buku kas</span>';
+  return barisBuka(kunci, label, rp(b ? (b.amount||0) : hasil), "", angka + isiTrx + isiFnb + isiKeluar);
 }
 async function pilihTgl(t){
   tglPilih = (tglPilih===t? null : t); // tap ulang tanggal yang sama = tutup detail
