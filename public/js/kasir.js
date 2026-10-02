@@ -3233,22 +3233,29 @@ async function renderBuku(){
       api("/fnb-sales?date="+tgl),
     ]);
     if(tglPilih !== tgl) return; // pilihan sudah berubah — hasil ini basi, jangan render
-    // Detail satu tanggal (permintaan owner 03/10): ringkasan sehari dibuat
-    // pendek, dan SEMUA rinciannya — angka, transaksi cuci, F&B, pengeluaran
-    // — dipindah ke dalam bukunya masing-masing (renderBukuPerBuku).
-    const masuk = uangMasukHari(h);
-    const isiUpah = h.worker_wages.map(w =>
-      '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' <span class="waktu">'+w.vehicles+' kendaraan</span></span><b>'+rp(w.wage)+'</b></div>').join("");
+    // Ringkasan sehari tetap seperti dulu (permintaan owner 03/10: jangan
+    // diubah). Yang baru hanya blok "Per buku" di bawahnya: transaksi cuci,
+    // F&B, dan pengeluaran dirinci di dalam bukunya masing-masing
+    // (renderBukuPerBuku), menggantikan daftar buku yang dulu tidak bisa dibuka.
+    const upahRows = h.worker_wages.map(w =>
+      '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' &middot; '+w.vehicles+' kendaraan</span><b>'+rp(w.wage)+'</b></div>').join("");
     $("detailHari").innerHTML =
       '<div class="cat-blok"><h3>&#128197; '+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
-      +'<div class="cat-baris"><span>Uang masuk<br><span class="waktu">cuci + F&amp;B + tip &middot; '+h.vehicles+' kendaraan</span></span><b style="white-space:nowrap">'+rp(masuk)+'</b></div>'
-      // Upah bisa dibuka: per pekerja. Rinciannya per mobil ada di menu Pekerja & Upah.
-      +(isiUpah
-          ? barisBuka("buku-upah", 'Upah pekerja', '-'+rp(h.wages), "merah", isiUpah)
-          : '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>')
-      +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'+(h.expenses? '-'+rp(h.expenses) : rp(0))+'</b></div>'
-      + barisTitipanRekap(h)
-      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(h.profit>=0?"hijau":"merah")+'">'+rp(h.profit)+'</b></div>'
+      +'<div class="cat-baris"><span>Total</span><b>'+rp(h.total)+'</b></div>'
+      +'<div class="cat-baris"><span>Tip</span><b>'+(h.tip?rp(h.tip):"kosong")+'</b></div>'
+      +'<div class="cat-baris"><span>TF</span><b>'+(h.tf?rp(h.tf):"kosong")+'</b></div>'
+      +'<div class="cat-baris"><span>Cash Motor</span><b>'+(h.cash_motor?rp(h.cash_motor):"kosong")+'</b></div>'
+      +'<div class="cat-baris"><span>Cash Mobil</span><b>'+(h.cash_mobil?rp(h.cash_mobil):"kosong")+'</b></div>'
+      +'<div class="cat-baris"><span>F&amp;B</span><b>'+(h.fnb_total?rp(h.fnb_total):"kosong")+'</b></div>'
+      +'<div class="cat-baris"><span>Cash Total</span><b>'+rp(h.cash_total)+'</b></div>'
+      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
+      +upahRows
+      +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>'
+      // Baris yang sama persis dengan layar Pengeluaran — termasuk tombol
+      // koreksi & hapus untuk owner. Ini satu-satunya jalan membetulkan
+      // pengeluaran bertanggal lampau: Rekap cuma melayani hari ini.
+      +(h.expense_list||[]).map(e => barisKeluar(e)).join("")
+      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="hijau">'+rp(h.profit)+'</b></div>'
       +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
       +'</div>'
       +'<div class="cat-blok"><h3>&#128214; Per buku</h3>'
