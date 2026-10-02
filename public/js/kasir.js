@@ -3240,15 +3240,19 @@ async function renderBuku(){
     // diubah). Yang baru hanya blok "Per buku" di bawahnya: transaksi cuci,
     // F&B, dan pengeluaran dirinci di dalam bukunya masing-masing
     // (renderBukuPerBuku), menggantikan daftar buku yang dulu tidak bisa dibuka.
+    const pisah = pisahBayarHari(trx, fnb);
     const upahRows = h.worker_wages.map(w =>
       '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' &middot; '+w.vehicles+' kendaraan</span><b>'+rp(w.wage)+'</b></div>').join("");
     $("detailHari").innerHTML =
       '<div class="cat-blok"><h3>&#128197; '+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
       +'<div class="cat-baris"><span>Total</span><b>'+rp(h.total)+'</b></div>'
-      +'<div class="cat-baris"><span>Tip</span><b>'+(h.tip?rp(h.tip):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>TF</span><b>'+(h.tf?rp(h.tf):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>Cash Motor</span><b>'+(h.cash_motor?rp(h.cash_motor):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>Cash Mobil</span><b>'+(h.cash_mobil?rp(h.cash_mobil):"kosong")+'</b></div>'
+      // Tip, Cuci Motor, dan Cuci Mobil bisa dibuka: masing-masing dipisah
+      // Cash dan TF (permintaan owner 03/10). Menggantikan tiga baris lama
+      // "TF / Cash Motor / Cash Mobil", yang tidak menyebut TF motor & TF
+      // mobil secara terpisah dan tidak menyebut tip sama sekali.
+      +barisPisahBayar("buku-tip", "Tip", pisah.tip)
+      +barisPisahBayar("buku-motor", "Cuci Motor", pisah.motor)
+      +barisPisahBayar("buku-mobil", "Cuci Mobil", pisah.mobil)
       +'<div class="cat-baris"><span>F&amp;B</span><b>'+(h.fnb_total?rp(h.fnb_total):"kosong")+'</b></div>'
       +'<div class="cat-baris"><span>Cash Total</span><b>'+rp(h.cash_total)+'</b></div>'
       +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
@@ -3275,6 +3279,41 @@ async function renderBuku(){
     renderBukuPerBuku();
   }catch(e){ gagal(e); }
 }
+/* ---------- PEMBUKUAN: CASH vs TF DI RINGKASAN SEHARI ----------
+   Dihitung di sini dari transaksi & penjualan F&B tanggal itu yang SAH —
+   himpunan yang sama dengan yang dijumlah server (Transaction::valid,
+   FnbSale::valid) — jadi Cash+TF tiap baris selalu sama dengan totalnya.
+   "Mobil" = semua jenis selain motor, sama dengan cash_mobil di server. */
+function pisahBayarHari(trx, fnb){
+  const kosong = () => ({cash:{n:0, rp:0}, tf:{n:0, rp:0}});
+  const hasil = {tip: kosong(), motor: kosong(), mobil: kosong()};
+  const tambah = (ember, metode, nominal) => {
+    const e = ember[metode === "tf" ? "tf" : "cash"];
+    e.n++; e.rp += nominal;
+  };
+  trx.filter(r => !r.voided_at).forEach(r => {
+    tambah(r.category === "motor" ? hasil.motor : hasil.mobil, r.payment_method, r.total);
+    if(r.tip > 0) tambah(hasil.tip, r.payment_method, r.tip);
+  });
+  fnb.filter(fnbSah).forEach(sl => {
+    if(sl.tip > 0) tambah(hasil.tip, sl.payment_method, sl.tip);
+  });
+  return hasil;
+}
+
+/** Satu baris ringkasan yang dibuka jadi dua: Cash dan TF, dengan jumlah transaksinya. */
+function barisPisahBayar(kunci, label, d){
+  const total = d.cash.rp + d.tf.rp;
+  if(!total && !d.cash.n && !d.tf.n){
+    return '<div class="cat-baris"><span>'+label+'</span><b>kosong</b></div>';
+  }
+  const baris = (nama, e, kelas) =>
+    '<div class="cat-baris"><span>'+nama+' <span class="waktu">'+e.n+'x</span></span>'
+    + '<b class="'+kelas+'">'+(e.rp ? rp(e.rp) : "kosong")+'</b></div>';
+  return barisBuka(kunci, label+' <span class="waktu">'+(d.cash.n + d.tf.n)+'x</span>', rp(total), "",
+    baris("Cash", d.cash, "") + baris("TF", d.tf, "biru-t"));
+}
+
 /* ---------- PEMBUKUAN: RINCIAN PER BUKU ----------
    Setiap buku kas pada tanggal yang dibuka menjadi satu dropdown berisi
    angkanya sendiri lalu transaksi cuci, penjualan F&B, dan pengeluarannya.
