@@ -785,6 +785,8 @@
     font-size:15px;font-weight:800;color:var(--ink);background:var(--card);
     border:2px solid var(--line);cursor:pointer}
   .btn-cetak-ulang:active{transform:scale(.98)}
+  /* Tombol batal di dalam detail transaksi (Rekap, bentuk ringkas). */
+  .btn-batal-trx{color:#C0392B;border-color:#E8C4BE;margin-top:0}
   .btn-cetak-mini{padding:0 4px;font-size:15px;background:none;border:none;cursor:pointer}
   /* Pratinjau resi di layar. Kelas .r-* aslinya hanya hidup di @media print;
      di sini dibuat versi layarnya, bentuknya meniru kertas struk supaya yang

@@ -1851,7 +1851,7 @@ function barisBayar(p, trx){
     const rows = trx.filter(r => r.category === x.category);
     return '<div class="bayar-seksi"><span>'+esc(labelKat(x.category))+' <span class="waktu">'+x.count+'x</span></span>'
       + '<b>'+rp(x.total)+'</b></div>'
-      + rows.map(r => trxHTML(r, {batal:true})).join("");
+      + rows.map(r => trxHTML(r, {batal:true, ringkas:true})).join("");
   }).join("");
 
   return barisBuka(p.method, esc(label)+' <span class="waktu">'+p.count+'x</span>', rp(p.total), kelas,
@@ -1876,10 +1876,32 @@ function mobilFnb(sl){
   return sl.transaction || sl.customer_transaction || null;
 }
 
-/* "Isuzu Panther · B 1234 XY" — urutannya sama dengan baris transaksi cuci. */
-function labelMobil(t){
-  if(!t) return '<span class="waktu">&#128694; bukan pelanggan cuci</span>';
-  return esc(t.vehicle_name||"")+' &middot; '+esc(t.plate||"plat kosong");
+/* Plat untuk baris detail; "—" bila pembelinya bukan pelanggan cuci. */
+function platMobil(t){
+  return t ? esc(t.plate||"plat kosong") : "&mdash;";
+}
+
+/* Baris ringkas di dropdown Tip & F&B, bentuknya sama dengan transaksi cuci
+   (trxHTML ringkas): kepala cukup jam, nama kendaraan, dan nominal; plat dan
+   rincian lain muncul saat barisnya diketuk. */
+function barisRingkas(waktu, mobil, nominal, rincian){
+  return '<div class="trx-item">'
+    + '<div class="cat-baris trx-head" onclick="toggleTrx(this)"><span>'
+    +   '<span class="waktu">'+jam(waktu)+'</span> &middot; '
+    +   (mobil ? esc(mobil.vehicle_name||"") : '<span class="waktu">&#128694; bukan pelanggan cuci</span>')
+    + '</span><span><b>'+rp(nominal)+'</b> <span class="trx-panah">&#9662;</span></span></div>'
+    + '<div class="trx-detail">'
+    +   rincian.map(b => '<div class="cat-baris trx-det-baris"><span class="waktu">'+b[0]+'</span><span>'+b[1]+'</span></div>').join("")
+    + '</div></div>';
+}
+
+/* Satu penjualan F&B dalam bentuk ringkas — dipakai Rekap dan Pembukuan. */
+function barisFnbRingkas(sl){
+  return barisRingkas(sl.created_at, mobilFnb(sl), sl.total,
+    [["Plat", platMobil(mobilFnb(sl))]]
+      .concat(sl.items.map(i => ["&#127860; "+esc(i.product_name)+" x"+i.qty, rp(i.subtotal)]))
+      .concat(sl.tip ? [["Tip", rp(sl.tip)]] : [])
+      .concat(sl.created_by ? [["Dicatat oleh", "&#128100; "+esc(sl.created_by)]] : []));
 }
 
 /* Baris F&B Cash / TF di Rekap: dropdown berisi tiap penjualan beserta platnya
@@ -1889,10 +1911,7 @@ function barisFnbBayar(metode, label, total, kelas, fnb){
   if(!total && rows.length===0){
     return '<div class="cat-baris"><span>'+label+'</span><b class="'+kelas+'">kosong</b></div>';
   }
-  const isi = rows.map(sl =>
-    '<div class="cat-baris"><span><span class="waktu">'+jam(sl.created_at)+'</span> &middot; '+labelMobil(mobilFnb(sl))
-    + '<br><span class="waktu">'+sl.items.map(i=>esc(i.product_name)+' x'+i.qty).join(", ")+'</span></span>'
-    + '<b>'+rp(sl.total)+'</b></div>').join("");
+  const isi = rows.map(barisFnbRingkas).join("");
   return barisBuka("fnb-"+metode, label+' <span class="waktu">'+rows.length+'x</span>', rp(total), kelas, isi);
 }
 
@@ -2135,9 +2154,10 @@ async function renderRekap(){
     const tipRows = trxSah.filter(r => r.tip>0).map(r => ({waktu:r.created_at, mobil:r, asal:"cuci", tip:r.tip}))
       .concat(fnb.filter(sl => sl.tip>0).map(sl => ({waktu:sl.created_at, mobil:mobilFnb(sl), asal:"F&B", tip:sl.tip})))
       .sort((a,b) => String(a.waktu).localeCompare(String(b.waktu)));
-    const isiTip = tipRows.map(t =>
-      '<div class="cat-baris"><span><span class="waktu">'+jam(t.waktu)+'</span> &middot; '+labelMobil(t.mobil)
-      + ' <span class="waktu">'+esc(t.asal)+'</span></span><b>'+rp(t.tip)+'</b></div>').join("");
+    const isiTip = tipRows.map(t => barisRingkas(t.waktu, t.mobil, t.tip, [
+      ["Plat", platMobil(t.mobil)],
+      ["Tip dari", t.asal==="cuci" ? "Cucian" : "Makanan/minuman"],
+    ])).join("");
 
     $("rekapCuci").innerHTML =
       // Semua cucian hari ini urut jam (paling pagi di atas) — permintaan
@@ -2145,7 +2165,7 @@ async function renderRekap(){
       (trx.length
           ? barisBuka("cuci", 'Total Cuci <span class="waktu">'+trxSah.length+'x</span>', rp(cuciTotal), "",
               [...trx].sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)))
-                .map(r => trxHTML(r, {batal:true})).join(""))
+                .map(r => trxHTML(r, {batal:true, ringkas:true})).join(""))
           : '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>')
       +(h.tip
           ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "", isiTip)
@@ -2849,30 +2869,42 @@ function trxHTML(r, opsi){
   const sv = CFG.services[r.service];
   const fnb = itemFnb(r);
   const grand = totalTrx(r);
+  // Rekap Hari Ini & Pembukuan (permintaan owner 03/10): kepala baris cukup jam, nama
+  // kendaraan, dan harga supaya muat satu baris di HP. Plat, chip, serta
+  // tombol koreksi & batal pindah ke dalam detail yang dibuka dengan ketukan.
+  // Chip BATAL / MENUNGGU tetap di kepala — status itu harus terlihat tanpa
+  // membuka apa pun. Pembukuan memakai bentuk yang sama.
+  const ringkas = !!(opsi && opsi.ringkas);
+  const tombolKoreksi = bolehKoreksi && !batal && !menunggu;
+  const tombolVoid    = bolehVoid && !batal && !menunggu;
 
   const kepala = '<div class="cat-baris trx-head'+(batal?' trx-batal':'')+'" onclick="toggleTrx(this)"><span>'
-    +'<span class="waktu">'+jam(r.created_at)+'</span> &middot; '+esc(r.vehicle_name)+' &middot; '+esc(r.plate||"plat kosong")+' '
-    +'<span class="'+(r.payment_method==="tf"?"chip-tf":"chip-cash")+'">'+(r.payment_method==="tf"?"TF":"CASH")+'</span>'
-    /* chip BONUS hanya untuk catatan lama — fiturnya sendiri sudah dihapus */
-    +(r.is_bonus?' <span class="chip-bonus">GRATIS</span>':'')
+    +'<span class="waktu">'+jam(r.created_at)+'</span> &middot; '+esc(r.vehicle_name)
+    +(ringkas ? '' : ' &middot; '+esc(r.plate||"plat kosong")+' '
+      +'<span class="'+(r.payment_method==="tf"?"chip-tf":"chip-cash")+'">'+(r.payment_method==="tf"?"TF":"CASH")+'</span>'
+      /* chip BONUS hanya untuk catatan lama — fiturnya sendiri sudah dihapus */
+      +(r.is_bonus?' <span class="chip-bonus">GRATIS</span>':''))
     +(batal?' <span class="chip-batal">BATAL</span>':'')
     +(menunggu?' <span class="chip-tunggu">MENUNGGU APPROVAL</span>':'')
     // Koreksi tidak mencoret barisnya seperti pembatalan, jadi tanpa chip ini
     // angka yang sudah diubah owner tidak bisa dibedakan dari yang asli.
-    +(r.edit_count?' <span class="chip-edit" title="Pernah dikoreksi owner">&#9998; DIKOREKSI'+(r.edit_count>1?' '+r.edit_count+'&times;':'')+'</span>':'')
-    +(fnb.length?' <span class="chip-fnb">&#127860; '+fnb.length+'</span>':'')
+    +(ringkas ? '' :
+       (r.edit_count?' <span class="chip-edit" title="Pernah dikoreksi owner">&#9998; DIKOREKSI'+(r.edit_count>1?' '+r.edit_count+'&times;':'')+'</span>':'')
+      +(fnb.length?' <span class="chip-fnb">&#127860; '+fnb.length+'</span>':''))
     +'</span><span><b>'+rp(grand)+'</b>'
     // Koreksi hanya di Pembukuan & owner: membetulkan isi transaksi yang tetap
     // terjadi, lawan dari void yang membatalkan transaksi yang tidak jadi.
-    +((bolehKoreksi && !batal && !menunggu)?' <button class="btn-edit-pk" title="Koreksi transaksi" onclick="event.stopPropagation();editTrx('+r.id+')">&#9998;</button>':'')
+    +((tombolKoreksi && !ringkas)?' <button class="btn-edit-pk" title="Koreksi transaksi" onclick="event.stopPropagation();editTrx('+r.id+')">&#9998;</button>':'')
     // Kasir tetap boleh menekan tombol ini — bedanya jadi PENGAJUAN, bukan pembatalan.
-    +((bolehVoid && !batal && !menunggu)?' <button class="btn-void" title="'+(ROLE==="owner"?"Batalkan transaksi":"Ajukan pembatalan")+'" onclick="event.stopPropagation();voidTrx('+r.id+',\''+jsStr(r.vehicle_name+' · '+rp(grand))+'\')">&#10005;</button>':'')
+    +((tombolVoid && !ringkas)?' <button class="btn-void" title="'+(ROLE==="owner"?"Batalkan transaksi":"Ajukan pembatalan")+'" onclick="event.stopPropagation();voidTrx('+r.id+',\''+jsStr(r.vehicle_name+' · '+rp(grand))+'\')">&#10005;</button>':'')
     +' <span class="trx-panah">&#9662;</span></span></div>';
 
   const baris = [
     // Nomor yang sama dengan yang tercetak di resi — pegangan untuk mencocokkan
     // transfer masuk ke catatannya, terutama saat dua transfer bernilai sama.
     ["No. Nota", nomorNota("C", r.id)],
+    // Di bentuk ringkas plat tidak ada di kepala baris, jadi disebut di sini.
+    ...(ringkas ? [["Plat", esc(r.plate||"plat kosong")]] : []),
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
     ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
     ["Pembayaran", r.payment_method==="tf" ? "Transfer" : "Cash"],
@@ -2931,9 +2963,24 @@ function trxHTML(r, opsi){
         ? '<button class="btn-cetak-ulang" onclick="event.stopPropagation();lihatResiCucian('+r.id+')">'
           + '&#129534; Lihat Resi</button>'
         : '')
+    // Bentuk ringkas: tombol yang tadinya di kepala baris, kini bertulisan
+    // lengkap supaya tidak tertekan tanpa sengaja saat membuka detail.
+    + ((ringkas && tombolKoreksi)
+        ? '<button class="btn-cetak-ulang" onclick="event.stopPropagation();editTrx('+r.id+')">&#9998; Koreksi transaksi</button>'
+        : '')
+    + ((ringkas && tombolVoid)
+        ? '<button class="btn-cetak-ulang btn-batal-trx" data-id="'+r.id+'" onclick="event.stopPropagation();batalDariDetail('+r.id+')">&#10005; '
+          + (ROLE==="owner"?"Batalkan transaksi":"Ajukan pembatalan")+'</button>'
+        : '')
     + '</div>';
 
   return '<div class="trx-item">'+kepala+detail+'</div>';
+}
+/* Tombol batal di dalam detail (bentuk ringkas). Keterangan untuk layar
+   konfirmasi dirakit dari trxTampil, bukan diselipkan ke atribut onclick. */
+function batalDariDetail(id){
+  const r = trxTampil.get(id);
+  if(r) voidTrx(id, r.vehicle_name+' · '+rp(totalTrx(r)));
 }
 function toggleTrx(el){
   el.parentElement.classList.toggle("buka");
@@ -3208,7 +3255,7 @@ async function renderBuku(){
       +'<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;" oninput="bukuCari=this.value;bukuHal=1;renderBukuTrx()">'
       +'<div id="bukuTrxList"></div><div id="bukuTrxNav" class="hal-nav"></div></div>'
       +'<div class="cat-blok"><h3>&#127860; Penjualan F&amp;B</h3>'
-      +(fnb.length? fnb.map(sl=>'<div class="cat-baris"><span><span class="waktu">'+jam(sl.created_at)+'</span> &middot; '+labelMobil(mobilFnb(sl))+' &middot; '+sl.items.map(i=>esc(i.product_name)+' x'+i.qty).join(", ")+(sl.created_by?' <span class="waktu">&#128100; '+esc(sl.created_by)+'</span>':'')+'</span><b>'+rp(sl.total)+'</b></div>').join("") : '<div class="cat-kosong">Tidak ada penjualan F&amp;B.</div>')+'</div>';
+      +(fnb.length? fnb.map(barisFnbRingkas).join("") : '<div class="cat-kosong">Tidak ada penjualan F&amp;B.</div>')+'</div>';
     bukuTrxData = trx; bukuCari=""; bukuHal=1;
     renderBukuTrx();
   }catch(e){ gagal(e); }
@@ -3250,7 +3297,7 @@ function renderBukuTrx(){
     // yang kasir pun boleh mengajukan. Rekap cuma melayani hari berjalan —
     // uangnya masih di laci dan kasirnya masih ada; tanggal lampau sudah
     // ditutup dan disetor, jadi mengutak-atiknya urusan owner.
-    ? potong.map(r=>trxHTML(r,{koreksi:true, batal: ROLE==="owner"})).join("")
+    ? potong.map(r=>trxHTML(r,{koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
     : '<div class="cat-kosong">'+(q? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>';
   $("bukuTrxNav").innerHTML = totalHal<=1 ? "" :
     '<button class="hal-btn" '+(bukuHal<=1?'disabled':'')+' onclick="bukuHal--;renderBukuTrx()">&#8249;</button>'
