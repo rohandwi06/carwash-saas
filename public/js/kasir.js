@@ -3259,7 +3259,6 @@ async function renderBuku(){
       +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
       +'</div>'
       +'<div class="cat-blok"><h3>&#128214; Per buku</h3>'
-      +'<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;" oninput="bukuCari=this.value;renderBukuPerBuku()">'
       +'<div id="bukuPerBuku"></div></div>';
     // Tanggal baru dibuka: buku tunggal langsung terbuka (tidak ada yang perlu
     // dipilih); beberapa buku mulai tertutup supaya daftarnya muat selayar.
@@ -3270,7 +3269,6 @@ async function renderBuku(){
     bukuHari = {tgl, h, trx, fnb};
     const grup = grupBukuHari();
     if(grup.length === 1) rekapBayarBuka.add("buku-"+grup[0].kunci);
-    $("bukuCariIn").value = bukuCari;
     renderBukuPerBuku();
   }catch(e){ gagal(e); }
 }
@@ -3324,11 +3322,10 @@ function renderBukuPerBuku(){
     wadah.innerHTML = '<div class="cat-kosong">Tidak ada catatan pada tanggal ini.</div>';
     return;
   }
-  const q = bukuCari.trim().toLowerCase();
-  const cocok = r =>
-    (r.vehicle_name||"").toLowerCase().includes(q) ||
-    (r.plate||"").toLowerCase().replace(/\s/g,"").includes(q.replace(/\s/g,""));
-  wadah.innerHTML = grup.map(g => kartuBuku(g, q, cocok)).join("");
+  wadah.innerHTML = grup.map(kartuBuku).join("");
+  // Jendela detail yang sedang terbuka ikut disegarkan — mis. sesudah owner
+  // mengoreksi atau membatalkan satu transaksi dari dalamnya.
+  renderDetailBuku();
 }
 
 /** Judul bagian di dalam sebuah buku — bentuknya sama dengan seksi Cash/TF. */
@@ -3337,7 +3334,7 @@ function seksiBuku(label, jumlah, nilaiHtml){
     + '<b>'+nilaiHtml+'</b></div>';
 }
 
-function kartuBuku(g, q, cocok){
+function kartuBuku(g){
   const b = g.buku;
   const sah = g.trx.filter(r => !r.voided_at);
   // Angka buku dari server (sudah menghitung upah); "Tanpa buku" dijumlah di
@@ -3365,18 +3362,13 @@ function kartuBuku(g, q, cocok){
     // pengeluaran; tip & transfer tidak ikut) — angka yang sama dengan kepala kartu.
     + (b ? '<div class="cat-baris"><span>Setoran cash</span><b>'+rp(b.amount||0)+'</b></div>' : '');
 
-  const trxTampilkan = q ? g.trx.filter(cocok) : g.trx;
-  const urut = [...trxTampilkan].sort((x,y) => String(x.created_at).localeCompare(String(y.created_at)));
-  const isiTrx = seksiBuku("Transaksi cuci", sah.length, rp(cuci))
-    // Pembatalan di sini sengaja OWNER SAJA, tidak seperti di Rekap Hari Ini
-    // yang kasir pun boleh mengajukan. Rekap cuma melayani hari berjalan —
-    // uangnya masih di laci dan kasirnya masih ada; tanggal lampau sudah
-    // ditutup dan disetor, jadi mengutak-atiknya urusan owner.
-    + (urut.length
-        ? urut.map(r => trxHTML(r, {koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
-        : '<div class="cat-kosong">'+(q ? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>');
-  const isiFnb = g.fnb.length
-    ? seksiBuku("Penjualan F&amp;B", g.fnb.length, rp(fnbT)) + g.fnb.map(barisFnbRingkas).join("") : "";
+  // Daftar transaksi cuci & F&B tidak lagi dibentangkan di sini (permintaan
+  // owner 03/10): satu tombol membuka jendela berisi keduanya, terpisah per
+  // tab, supaya isi buku tetap pendek walau cuciannya puluhan.
+  const tombol = (g.trx.length || g.fnb.length)
+    ? '<button class="btn-cetak-ulang" onclick="bukaDetailBuku(\''+g.kunci+'\')">&#128203; Detail transaksi'
+      + ' <span class="waktu">cuci '+sah.length+' &middot; F&amp;B '+g.fnb.length+'</span></button>'
+    : '';
   // Baris yang sama persis dengan layar Pengeluaran — termasuk tombol koreksi
   // & hapus untuk owner. Ini satu-satunya jalan membetulkan pengeluaran
   // bertanggal lampau: Rekap cuma melayani hari ini.
@@ -3384,14 +3376,115 @@ function kartuBuku(g, q, cocok){
     ? seksiBuku("Pengeluaran", g.keluar.length, '-'+rp(kel)) + g.keluar.map(barisKeluar).join("") : "";
 
   const kunci = "buku-"+g.kunci;
-  // Sedang mencari: buku yang punya hasil dibuka paksa, supaya hasilnya
-  // langsung terlihat tanpa membuka buku satu per satu.
-  const paksa = q && trxTampilkan.length > 0;
-  if(paksa) rekapBayarBuka.add(kunci);
   // Kepala kartu cukup nama buku & nominalnya (permintaan owner 03/10);
   // status setoran dan nama kasir ada di dalam, di baris paling atas.
   const label = b ? esc(b.label) : 'Tanpa buku';
-  return barisBuka(kunci, label, rp(b ? (b.amount||0) : hasil), "", angka + isiTrx + isiFnb + isiKeluar);
+  return barisBuka(kunci, label, rp(b ? (b.amount||0) : hasil), "", angka + tombol + isiKeluar);
+}
+
+/* ---------- PEMBUKUAN: JENDELA DETAIL TRANSAKSI SATU BUKU ----------
+   Dibuka dari tombol "Detail transaksi" di dalam kartu buku. Dua tab —
+   Cuci dan F&B — supaya keduanya tidak bercampur dalam satu daftar panjang.
+
+   Elemennya dibuat di sini, bukan di Blade, dan diselipkan sebagai anak
+   PERTAMA <body>: semua .ai-overlay ber-z-index sama, jadi yang letaknya
+   lebih akhir di dokumen menang. Dengan begitu jendela resi, pembatalan,
+   dan koreksi yang dibuka dari dalam daftar ini muncul DI ATASNYA. */
+let detailBukuKunci = null;     // kunci kelompok (id buku / "tanpa") yang sedang dibuka
+let detailBukuTab = "cuci";
+
+function wadahDetailBuku(){
+  let el = $("detailBukuOverlay");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "detailBukuOverlay";
+    el.className = "ai-overlay";
+    el.onclick = e => { if(e.target === el) tutupDetailBuku(); };
+    el.innerHTML = '<div class="ai-modal">'
+      + '<div class="ai-judul"><span id="detailBukuJudul"></span>'
+      +   '<button class="ai-tutup" onclick="tutupDetailBuku()">&#10005;</button></div>'
+      + '<div class="set-tabs" id="detailBukuTabs"></div>'
+      + '<div id="detailBukuIsi"></div>'
+      + '</div>';
+    document.body.insertBefore(el, document.body.firstChild);
+  }
+  return el;
+}
+
+function bukaDetailBuku(kunci){
+  detailBukuKunci = String(kunci);
+  detailBukuTab = "cuci";
+  bukuCari = "";
+  wadahDetailBuku().classList.add("buka");
+  renderDetailBuku();
+}
+function tutupDetailBuku(){
+  detailBukuKunci = null;
+  const el = $("detailBukuOverlay");
+  if(el) el.classList.remove("buka");
+}
+function gantiTabDetailBuku(tab){
+  detailBukuTab = tab;
+  renderDetailBuku();
+}
+
+/** Kelompok buku yang sedang dibuka di jendela detail (atau undefined). */
+function grupDetailBuku(){
+  return grupBukuHari().find(g => String(g.kunci) === detailBukuKunci);
+}
+
+function renderDetailBuku(){
+  if(detailBukuKunci === null) return;
+  const g = grupDetailBuku();
+  // Bukunya sudah tidak ada di tanggal yang kini dibuka — tutup saja.
+  if(!g){ tutupDetailBuku(); return; }
+
+  const sah = g.trx.filter(r => !r.voided_at);
+  // Buku tanpa cucian tapi punya F&B: langsung ke tab yang ada isinya.
+  if(detailBukuTab === "cuci" && !g.trx.length && g.fnb.length) detailBukuTab = "fnb";
+
+  $("detailBukuJudul").innerHTML = '&#128203; '+(g.buku ? esc(g.buku.label) : 'Tanpa buku')
+    + ' <span class="waktu">'+fmtTgl(bukuHari.tgl)+'</span>';
+  $("detailBukuTabs").innerHTML =
+      '<button class="set-tab'+(detailBukuTab==="cuci" ? ' aktif' : '')+'" onclick="gantiTabDetailBuku(\'cuci\')">&#128663; Cuci ('+sah.length+')</button>'
+    + '<button class="set-tab'+(detailBukuTab==="fnb" ? ' aktif' : '')+'" onclick="gantiTabDetailBuku(\'fnb\')">&#127860; F&amp;B ('+g.fnb.length+')</button>';
+
+  if(detailBukuTab === "fnb"){
+    const total = g.fnb.reduce((t,sl) => t + sl.total, 0);
+    $("detailBukuIsi").innerHTML = g.fnb.length
+      ? seksiBuku("Penjualan F&amp;B", g.fnb.length, rp(total)) + g.fnb.map(barisFnbRingkas).join("")
+      : '<div class="cat-kosong">Tidak ada penjualan F&amp;B di buku ini.</div>';
+    return;
+  }
+
+  // Kotak cari digambar sekali; mengetik hanya menggambar ulang daftarnya
+  // (renderDaftarCuciBuku) supaya kursor tidak terlempar keluar dari kotak.
+  $("detailBukuIsi").innerHTML =
+      '<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;"'
+    + ' oninput="bukuCari=this.value;renderDaftarCuciBuku()">'
+    + '<div id="detailBukuCuci"></div>';
+  $("bukuCariIn").value = bukuCari;
+  renderDaftarCuciBuku();
+}
+
+function renderDaftarCuciBuku(){
+  const wadah = $("detailBukuCuci"); const g = grupDetailBuku();
+  if(!wadah || !g) return;
+  const sah = g.trx.filter(r => !r.voided_at);
+  const q = bukuCari.trim().toLowerCase();
+  const cocok = r =>
+    (r.vehicle_name||"").toLowerCase().includes(q) ||
+    (r.plate||"").toLowerCase().replace(/\s/g,"").includes(q.replace(/\s/g,""));
+  const urut = (q ? g.trx.filter(cocok) : g.trx)
+    .slice().sort((x,y) => String(x.created_at).localeCompare(String(y.created_at)));
+  wadah.innerHTML = seksiBuku("Transaksi cuci", sah.length, rp(sah.reduce((t,r) => t + r.total, 0)))
+    // Pembatalan di sini sengaja OWNER SAJA, tidak seperti di Rekap Hari Ini
+    // yang kasir pun boleh mengajukan. Rekap cuma melayani hari berjalan —
+    // uangnya masih di laci dan kasirnya masih ada; tanggal lampau sudah
+    // ditutup dan disetor, jadi mengutak-atiknya urusan owner.
+    + (urut.length
+        ? urut.map(r => trxHTML(r, {koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
+        : '<div class="cat-kosong">'+(q ? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>');
 }
 async function pilihTgl(t){
   tglPilih = (tglPilih===t? null : t); // tap ulang tanggal yang sama = tutup detail
