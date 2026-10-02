@@ -2151,12 +2151,14 @@ async function renderRekap(){
     const trxSah = trx.filter(r => !r.voided_at);
 
     // Tip dari cucian dan dari jajanan, diurut jam — tiap baris menyebut platnya.
-    const tipRows = trxSah.filter(r => r.tip>0).map(r => ({waktu:r.created_at, mobil:r, asal:"cuci", tip:r.tip}))
-      .concat(fnb.filter(sl => sl.tip>0).map(sl => ({waktu:sl.created_at, mobil:mobilFnb(sl), asal:"F&B", tip:sl.tip})))
+    const tipRows = trxSah.filter(r => r.tip>0).map(r => ({waktu:r.created_at, mobil:r, asal:"cuci", tip:r.tip, bayar:r.payment_method}))
+      .concat(fnb.filter(sl => sl.tip>0).map(sl => ({waktu:sl.created_at, mobil:mobilFnb(sl), asal:"F&B", tip:sl.tip, bayar:sl.payment_method})))
       .sort((a,b) => String(a.waktu).localeCompare(String(b.waktu)));
     const isiTip = tipRows.map(t => barisRingkas(t.waktu, t.mobil, t.tip, [
       ["Plat", platMobil(t.mobil)],
       ["Tip dari", t.asal==="cuci" ? "Cucian" : "Makanan/minuman"],
+      // Tip ikut cara bayar transaksinya — dipakai mencocokkan uang laci vs transfer.
+      ["Pembayaran", t.bayar==="tf" ? "Transfer" : "Cash"],
     ])).join("");
 
     $("rekapCuci").innerHTML =
