@@ -3338,8 +3338,10 @@ function kartuBuku(g, q, cocok){
   const cuci  = b ? b.wash_total : sah.reduce((t,r) => t + r.total, 0);
   const tip   = b ? b.tip : sah.reduce((t,r) => t + (r.tip||0), 0) + g.fnb.reduce((t,sl) => t + (sl.tip||0), 0);
   const fnbT  = b ? b.fnb_total : g.fnb.reduce((t,sl) => t + sl.total, 0);
-  const kel   = b ? b.expenses : g.keluar.reduce((t,e) => t + e.amount, 0);
-  const upah  = b ? b.wages : null;
+  // b.expenses / b.wages belum ada bila server masih versi lama (zip public
+  // naik lebih dulu dari zip app) — jatuh ke hitungan di sini, bukan "NaN".
+  const kel   = (b && b.expenses != null) ? b.expenses : g.keluar.reduce((t,e) => t + e.amount, 0);
+  const upah  = (b && b.wages != null) ? b.wages : null;
   const hasil = cuci + tip + fnbT - (upah||0) - kel;
 
   const angka =
