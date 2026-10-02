@@ -3352,7 +3352,10 @@ function kartuBuku(g, q, cocok){
   const hasil = cuci + tip + fnbT - (upah||0) - kel;
 
   const angka =
-      '<div class="cat-baris"><span>Cuci <span class="waktu">'+sah.length+'x</span></span><b>'+rp(cuci)+'</b></div>'
+      (b ? '<div class="cat-baris"><span>Status</span><b>'+(LABEL_STATUS_BUKU[b.status]||b.status)+'</b></div>'
+           + '<div class="cat-baris"><span>Kasir</span><b>'+(b.cashiers && b.cashiers.length ? esc(b.cashiers.join(", ")) : "&mdash;")+'</b></div>'
+         : '<div class="cat-baris"><span class="waktu">Catatan di luar buku kas</span></div>')
+    + '<div class="cat-baris"><span>Cuci <span class="waktu">'+sah.length+'x</span></span><b>'+rp(cuci)+'</b></div>'
     + '<div class="cat-baris"><span>Tip</span><b>'+(tip ? rp(tip) : "kosong")+'</b></div>'
     + '<div class="cat-baris"><span>F&amp;B</span><b>'+(fnbT ? rp(fnbT) : "kosong")+'</b></div>'
     + (upah!==null ? '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(upah)+'</b></div>' : '')
@@ -3360,7 +3363,7 @@ function kartuBuku(g, q, cocok){
     + '<div class="cat-baris tebal"><span>'+(upah!==null ? 'Laba buku' : 'Selisih')+'</span><b class="'+(hasil>=0?"hijau":"merah")+'">'+rp(hasil)+'</b></div>'
     // Uang tunai yang disetor kasir untuk buku ini (cash cuci + cash F&B −
     // pengeluaran; tip & transfer tidak ikut) — angka yang sama dengan kepala kartu.
-    + (b ? '<div class="cat-baris"><span>Setoran cash <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)+'</span></span><b>'+rp(b.amount||0)+'</b></div>' : '');
+    + (b ? '<div class="cat-baris"><span>Setoran cash</span><b>'+rp(b.amount||0)+'</b></div>' : '');
 
   const trxTampilkan = q ? g.trx.filter(cocok) : g.trx;
   const urut = [...trxTampilkan].sort((x,y) => String(x.created_at).localeCompare(String(y.created_at)));
@@ -3385,10 +3388,9 @@ function kartuBuku(g, q, cocok){
   // langsung terlihat tanpa membuka buku satu per satu.
   const paksa = q && trxTampilkan.length > 0;
   if(paksa) rekapBayarBuka.add(kunci);
-  const label = b
-    ? esc(b.label)+' <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)
-      + (b.cashiers && b.cashiers.length ? ' &middot; '+esc(b.cashiers.join(", ")) : '')+'</span>'
-    : 'Tanpa buku <span class="waktu">catatan di luar buku kas</span>';
+  // Kepala kartu cukup nama buku & nominalnya (permintaan owner 03/10);
+  // status setoran dan nama kasir ada di dalam, di baris paling atas.
+  const label = b ? esc(b.label) : 'Tanpa buku';
   return barisBuka(kunci, label, rp(b ? (b.amount||0) : hasil), "", angka + isiTrx + isiFnb + isiKeluar);
 }
 async function pilihTgl(t){

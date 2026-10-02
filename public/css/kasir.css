@@ -689,6 +689,7 @@
   .rincian-bayar .cat-baris{padding:5px 0;font-size:13.5px;border-bottom:none}
   .rincian-bayar .cat-baris b{font-weight:800;white-space:nowrap}   /* "Rp 5.000" tidak patah di HP */
   .baris-buka.buka .trx-panah{display:inline-block;transform:rotate(180deg)}
+  .baris-buka > b{white-space:nowrap}   /* nominal & panah tidak turun baris */
   /* Judul seksi per jenis kendaraan di dalam dropdown Cash/TF — jumlah &
      rupiahnya dipakai mencocokkan uang di laci tanpa menjumlah baris. */
   .bayar-seksi{display:flex;justify-content:space-between;gap:10px;
