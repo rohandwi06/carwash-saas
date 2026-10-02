@@ -1542,18 +1542,23 @@ function kartuUpah(w, entri, rekap){
         +   '</span></span>'
         + '<b class="hijau">'+rp(d.wage)+'</b>'
         + '</div>').join("")
-    // Barisnya sengaja SAMA dengan riwayat di Rekap Hari Ini — jam,
-    // kendaraan, plat, dan totalnya — supaya upah bisa ditelusuri ke transaksinya.
+    // Bentuknya SAMA dengan baris ringkas di Rekap Hari Ini (permintaan owner
+    // 03/10): kepala cukup jam, kendaraan, dan upahnya; plat, jenis, layanan,
+    // dan harga cucinya muncul saat diketuk — supaya upah tetap bisa
+    // ditelusuri ke transaksinya tanpa membuat kartunya panjang di HP.
     : (w.breakdown||[]).map(t =>
-        '<div class="upah-trx">'
-        + '<span class="upah-trx-kiri">'
-        +   '<span class="waktu">'+esc(t.time||"")+'</span> '+esc(t.vehicle_name)
-        +   '<span class="upah-trx-sub">'+esc(t.plate || "plat kosong")
-        +     ' &middot; '+esc(labelKat(t.category))+' &middot; '+esc(labelSvc(t.service))
-        +     ' &middot; '+rp(t.total)+'</span>'
-        + '</span>'
-        + '<b class="hijau">'+rp(t.wage)+'</b>'
-        + '</div>').join("");
+        '<div class="trx-item">'
+        + '<div class="cat-baris trx-head" onclick="toggleTrx(this)"><span>'
+        +   '<span class="waktu">'+esc((t.time||"").replace(":", "."))+'</span> &middot; '+esc(t.vehicle_name)
+        + '</span><span><b class="hijau">'+rp(t.wage)+'</b> <span class="trx-panah">&#9662;</span></span></div>'
+        + '<div class="trx-detail">'
+        +   [["Plat", esc(t.plate || "plat kosong")],
+             ["Jenis", esc(labelKat(t.category))],
+             ["Layanan", esc(labelSvc(t.service))],
+             ["Harga cuci", rp(t.total)],
+             ["Upah", rp(t.wage)]]
+              .map(b => '<div class="cat-baris trx-det-baris"><span class="waktu">'+b[0]+'</span><span>'+b[1]+'</span></div>').join("")
+        + '</div></div>').join("");
 
   // Bagian potongan & ringkasan hanya kalau ada — kartu yang normal tetap
   // seringkas dulu, dan yang dipotong langsung terlihat kenapa angkanya beda.
