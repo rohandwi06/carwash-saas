@@ -3395,6 +3395,38 @@ function kartuBuku(g){
    dan koreksi yang dibuka dari dalam daftar ini muncul DI ATASNYA. */
 let detailBukuKunci = null;     // kunci kelompok (id buku / "tanpa") yang sedang dibuka
 let detailBukuTab = "cuci";
+// Halaman tiap tab (10 baris per halaman) — hari ramai bisa puluhan cucian,
+// dan jendela ini tidak boleh jadi gulungan panjang lagi.
+let detailBukuHal = {cuci:1, fnb:1};
+const DETAIL_BUKU_PER_HAL = 10;
+
+/** Potong daftar ke halaman aktif sebuah tab; halaman dijepit bila daftarnya menyusut. */
+function potongHalDetailBuku(tab, daftar){
+  const totalHal = Math.max(1, Math.ceil(daftar.length / DETAIL_BUKU_PER_HAL));
+  if(detailBukuHal[tab] > totalHal) detailBukuHal[tab] = totalHal;
+  if(detailBukuHal[tab] < 1) detailBukuHal[tab] = 1;
+  const mulai = (detailBukuHal[tab]-1) * DETAIL_BUKU_PER_HAL;
+  return {potong: daftar.slice(mulai, mulai + DETAIL_BUKU_PER_HAL), totalHal};
+}
+
+/** Tombol ‹ Hal x / y › — kosong bila semuanya muat satu halaman. */
+function navHalDetailBuku(tab, totalHal, jumlah, satuan){
+  if(totalHal <= 1) return "";
+  const hal = detailBukuHal[tab];
+  return '<div class="hal-nav">'
+    + '<button class="hal-btn" '+(hal<=1 ? 'disabled' : '')+' onclick="gantiHalDetailBuku(\''+tab+'\',-1)">&#8249;</button>'
+    + '<span class="hal-info">Hal '+hal+' / '+totalHal+' &middot; '+jumlah+' '+satuan+'</span>'
+    + '<button class="hal-btn" '+(hal>=totalHal ? 'disabled' : '')+' onclick="gantiHalDetailBuku(\''+tab+'\',1)">&#8250;</button>'
+    + '</div>';
+}
+
+function gantiHalDetailBuku(tab, d){
+  detailBukuHal[tab] += d;
+  if(tab === "cuci") renderDaftarCuciBuku(); else renderDetailBuku();
+  // Halaman baru dibaca dari atas, bukan dari posisi tombol di dasar daftar.
+  const modal = document.querySelector("#detailBukuOverlay .ai-modal");
+  if(modal) modal.scrollTop = 0;
+}
 
 function wadahDetailBuku(){
   let el = $("detailBukuOverlay");
@@ -3417,6 +3449,7 @@ function wadahDetailBuku(){
 function bukaDetailBuku(kunci){
   detailBukuKunci = String(kunci);
   detailBukuTab = "cuci";
+  detailBukuHal = {cuci:1, fnb:1};
   bukuCari = "";
   wadahDetailBuku().classList.add("buka");
   renderDetailBuku();
@@ -3454,8 +3487,10 @@ function renderDetailBuku(){
 
   if(detailBukuTab === "fnb"){
     const total = g.fnb.reduce((t,sl) => t + sl.total, 0);
+    const hal = potongHalDetailBuku("fnb", g.fnb);
     $("detailBukuIsi").innerHTML = g.fnb.length
-      ? seksiBuku("Penjualan F&amp;B", g.fnb.length, rp(total)) + g.fnb.map(barisFnbRingkas).join("")
+      ? seksiBuku("Penjualan F&amp;B", g.fnb.length, rp(total)) + hal.potong.map(barisFnbRingkas).join("")
+        + navHalDetailBuku("fnb", hal.totalHal, g.fnb.length, "penjualan")
       : '<div class="cat-kosong">Tidak ada penjualan F&amp;B di buku ini.</div>';
     return;
   }
@@ -3464,7 +3499,7 @@ function renderDetailBuku(){
   // (renderDaftarCuciBuku) supaya kursor tidak terlempar keluar dari kotak.
   $("detailBukuIsi").innerHTML =
       '<input id="bukuCariIn" class="cari-kecil" placeholder="&#128269; Cari nama kendaraan / plat&hellip;"'
-    + ' oninput="bukuCari=this.value;renderDaftarCuciBuku()">'
+    + ' oninput="bukuCari=this.value;detailBukuHal.cuci=1;renderDaftarCuciBuku()">'
     + '<div id="detailBukuCuci"></div>';
   $("bukuCariIn").value = bukuCari;
   renderDaftarCuciBuku();
@@ -3480,13 +3515,15 @@ function renderDaftarCuciBuku(){
     (r.plate||"").toLowerCase().replace(/\s/g,"").includes(q.replace(/\s/g,""));
   const urut = (q ? g.trx.filter(cocok) : g.trx)
     .slice().sort((x,y) => String(x.created_at).localeCompare(String(y.created_at)));
+  const hal = potongHalDetailBuku("cuci", urut);
   wadah.innerHTML = seksiBuku("Transaksi cuci", sah.length, rp(sah.reduce((t,r) => t + r.total, 0)))
     // Pembatalan di sini sengaja OWNER SAJA, tidak seperti di Rekap Hari Ini
     // yang kasir pun boleh mengajukan. Rekap cuma melayani hari berjalan —
     // uangnya masih di laci dan kasirnya masih ada; tanggal lampau sudah
     // ditutup dan disetor, jadi mengutak-atiknya urusan owner.
     + (urut.length
-        ? urut.map(r => trxHTML(r, {koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
+        ? hal.potong.map(r => trxHTML(r, {koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
+          + navHalDetailBuku("cuci", hal.totalHal, urut.length, "transaksi")
         : '<div class="cat-kosong">'+(q ? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>');
 }
 async function pilihTgl(t){
