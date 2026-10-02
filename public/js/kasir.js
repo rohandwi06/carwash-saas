@@ -1881,9 +1881,10 @@ function mobilFnb(sl){
   return sl.transaction || sl.customer_transaction || null;
 }
 
-/* Plat untuk baris detail; "—" bila pembelinya bukan pelanggan cuci. */
+/* Plat untuk baris detail; bila pembelinya bukan pelanggan cuci, di sinilah
+   keterangan lengkapnya ditulis (kepala baris hanya "Non-cuci"). */
 function platMobil(t){
-  return t ? esc(t.plate||"plat kosong") : "&mdash;";
+  return t ? esc(t.plate||"plat kosong") : "bukan pelanggan cuci";
 }
 
 /* Baris ringkas di dropdown Tip & F&B, bentuknya sama dengan transaksi cuci
@@ -1893,7 +1894,9 @@ function barisRingkas(waktu, mobil, nominal, rincian){
   return '<div class="trx-item">'
     + '<div class="cat-baris trx-head" onclick="toggleTrx(this)"><span>'
     +   '<span class="waktu">'+jam(waktu)+'</span> &middot; '
-    +   (mobil ? esc(mobil.vehicle_name||"") : '<span class="waktu">&#128694; bukan pelanggan cuci</span>')
+    // "Non-cuci" = pembelinya bukan pelanggan cuci. Sengaja pendek supaya
+    // kepala baris tetap satu baris di HP; kepanjangannya ada di detail.
+    +   (mobil ? esc(mobil.vehicle_name||"") : '<span class="waktu">Non-cuci</span>')
     + '</span><span><b>'+rp(nominal)+'</b> <span class="trx-panah">&#9662;</span></span></div>'
     + '<div class="trx-detail">'
     +   rincian.map(b => '<div class="cat-baris trx-det-baris"><span class="waktu">'+b[0]+'</span><span>'+b[1]+'</span></div>').join("")
