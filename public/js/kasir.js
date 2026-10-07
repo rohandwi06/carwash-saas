@@ -1828,39 +1828,44 @@ async function hapusPenyesuaian(id){
 /**
  * Satu cara bayar (Cash / TF) sebagai baris yang bisa dibuka.
  *
- * Isinya transaksi-transaksi yang dibayar dengan cara itu — dulu cuma
- * ringkasan per jenis kendaraan, dan transaksinya ada di blok "Riwayat
- * transaksi hari ini" terpisah di bawah. Permintaan owner (29/09): satukan,
- * supaya membuka Cash langsung memperlihatkan transaksinya; tiap baris
- * diketuk untuk keterangannya (trxHTML, lengkap dengan tombol batal & resi).
- * Ringkasan per jenis kendaraan tetap ada sebagai satu baris di atasnya —
- * itu yang dipakai mencocokkan uang di laci.
+ * Isinya ringkasan per jenis kendaraan — itu yang dipakai mencocokkan uang
+ * di laci — lalu tombol "Detail transaksi" yang membuka jendela berisi
+ * transaksi cara bayar itu (cari + halaman; tiap baris diketuk untuk
+ * keterangan, resi, dan tombol batal). Riwayatnya dulu dibentangkan langsung
+ * di sini (29/09); dipindah ke jendela atas permintaan owner (07/10) supaya
+ * Rekap tetap pendek di hari ramai.
  *
  * Dibiarkan TERTUTUP saat pertama tampil supaya bentuk rekap sehari-hari tidak
- * berubah; yang sedang dibuka tetap terbuka saat Rekap dimuat ulang (mis.
- * sesudah membatalkan satu transaksi di dalamnya).
+ * berubah; yang sedang dibuka tetap terbuka saat Rekap dimuat ulang.
  */
 function barisBayar(p, trx){
   const label = {cash:"Cash", tf:"TF"}[p.method] || p.method.toUpperCase();
   const kelas = p.method === "tf" ? "biru-t" : "";
-  // Dibagi per jenis kendaraan (permintaan owner 30/09): judul seksi memuat
-  // jumlah & rupiahnya — pengganti baris ringkasan satu kalimat yang dulu —
-  // lalu transaksinya di bawah. Urutan seksi mengikuti katalog (p.rows sudah
-  // diurut server). Jenis yang isinya tinggal transaksi batal (terlihat
-  // owner) tidak ada di p.rows, jadi ditambahkan di belakang dengan 0x.
+  // Isi dropdown cukup ringkasan per jenis kendaraan (urutan katalog — p.rows
+  // sudah diurut server) lalu satu tombol; daftar transaksinya dibuka di
+  // jendela detail (permintaan owner 07/10), sama seperti kartu buku di
+  // Pembukuan. Jenis yang isinya tinggal transaksi batal (terlihat owner)
+  // tidak ada di p.rows, jadi ditambahkan di belakang dengan 0x.
   const seksi = (p.rows||[]).map(r => ({...r}));
   trx.forEach(r => {
     if(!seksi.some(x => x.category === r.category)) seksi.push({category:r.category, count:0, total:0});
   });
-  const isi = seksi.map(x => {
-    const rows = trx.filter(r => r.category === x.category);
-    return '<div class="bayar-seksi"><span>'+esc(labelKat(x.category))+' <span class="waktu">'+x.count+'x</span></span>'
-      + '<b>'+rp(x.total)+'</b></div>'
-      + rows.map(r => trxHTML(r, {batal:true, ringkas:true})).join("");
-  }).join("");
-
   return barisBuka(p.method, esc(label)+' <span class="waktu">'+p.count+'x</span>', rp(p.total), kelas,
-    isi || '<div class="cat-kosong">Tidak ada transaksi.</div>');
+    seksi.map(barisJenisRekap).join("")
+    + (trx.length ? tombolDetailRekap(p.method, "Detail transaksi", "cuci "+p.count)
+                  : '<div class="cat-kosong">Tidak ada transaksi.</div>'));
+}
+
+/** Satu baris ringkasan per jenis kendaraan di dalam dropdown Rekap. */
+function barisJenisRekap(x){
+  return '<div class="cat-baris"><span>'+esc(labelKat(x.category))+' <span class="waktu">'+x.count+'x</span></span>'
+    + '<b>'+rp(x.total)+'</b></div>';
+}
+
+/** Tombol pembuka jendela detail dari sebuah dropdown Rekap — lihat bukaDetailRekap(). */
+function tombolDetailRekap(jenis, teks, sub){
+  return '<button class="btn-cetak-ulang" onclick="bukaDetailRekap(\''+jenis+'\')">&#128203; '+teks
+    + ' <span class="waktu">'+sub+'</span></button>';
 }
 
 /* Baris rekap yang bisa dibuka: kepala (label + nominal) dan isinya.
@@ -1919,8 +1924,8 @@ function barisFnbBayar(metode, label, total, kelas, fnb){
   if(!total && rows.length===0){
     return '<div class="cat-baris"><span>'+label+'</span><b class="'+kelas+'">kosong</b></div>';
   }
-  const isi = rows.map(barisFnbRingkas).join("");
-  return barisBuka("fnb-"+metode, label+' <span class="waktu">'+rows.length+'x</span>', rp(total), kelas, isi);
+  return barisBuka("fnb-"+metode, label+' <span class="waktu">'+rows.length+'x</span>', rp(total), kelas,
+    tombolDetailRekap("fnb-"+metode, "Detail penjualan", "F&amp;B "+rows.length));
 }
 
 let rekapBayarBuka = new Set();   // cara bayar yang dropdown-nya sedang terbuka
@@ -2162,23 +2167,40 @@ async function renderRekap(){
     const tipRows = trxSah.filter(r => r.tip>0).map(r => ({waktu:r.created_at, mobil:r, asal:"cuci", tip:r.tip, bayar:r.payment_method}))
       .concat(fnb.filter(sl => sl.tip>0).map(sl => ({waktu:sl.created_at, mobil:mobilFnb(sl), asal:"F&B", tip:sl.tip, bayar:sl.payment_method})))
       .sort((a,b) => String(a.waktu).localeCompare(String(b.waktu)));
-    const isiTip = tipRows.map(t => barisRingkas(t.waktu, t.mobil, t.tip, [
-      ["Plat", platMobil(t.mobil)],
-      ["Tip dari", t.asal==="cuci" ? "Cucian" : "Makanan/minuman"],
-      // Tip ikut cara bayar transaksinya — dipakai mencocokkan uang laci vs transfer.
-      ["Pembayaran", t.bayar==="tf" ? "Transfer" : "Cash"],
-    ])).join("");
+    // Bahan jendela detail (bukaDetailRekap): daftar yang SAMA dengan yang
+    // dijumlah di layar ini, sudah disaring buku & peran.
+    rekapHari = {trx, fnb, tip: tipRows};
+
+    // Total Cuci dibuka: ringkasan per jenis kendaraan (cash + TF digabung),
+    // urut katalog.
+    const urutanKat = Object.keys(CFG.categories || {});
+    const perJenis = [];
+    trxSah.forEach(r => {
+      let x = perJenis.find(k => k.category === r.category);
+      if(!x){ x = {category:r.category, count:0, total:0}; perJenis.push(x); }
+      x.count++; x.total += r.total;
+    });
+    perJenis.sort((a,b) => urutanKat.indexOf(a.category) - urutanKat.indexOf(b.category));
+
+    // Tip dibuka: dipisah Cash dan TF, mengikuti cara bayar transaksinya.
+    const tipBayar = m => tipRows.filter(t => (t.bayar==="tf" ? "tf" : "cash") === m);
+    const barisTipBayar = (nama, m, kelas) => {
+      const rows = tipBayar(m);
+      const jml = rows.reduce((t,x) => t + x.tip, 0);
+      return '<div class="cat-baris"><span>'+nama+' <span class="waktu">'+rows.length+'x</span></span>'
+        + '<b class="'+kelas+'">'+(jml ? rp(jml) : "kosong")+'</b></div>';
+    };
 
     $("rekapCuci").innerHTML =
-      // Semua cucian hari ini urut jam (paling pagi di atas) — permintaan
-      // owner 30/09. Isinya sama dengan dropdown Cash/TF, hanya tidak dipilah.
       (trx.length
           ? barisBuka("cuci", 'Total Cuci <span class="waktu">'+trxSah.length+'x</span>', rp(cuciTotal), "",
-              [...trx].sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)))
-                .map(r => trxHTML(r, {batal:true, ringkas:true})).join(""))
+              perJenis.map(barisJenisRekap).join("")
+              + tombolDetailRekap("cuci", "Detail transaksi", "cuci "+trxSah.length+" &middot; F&amp;B "+fnb.length))
           : '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>')
       +(h.tip
-          ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "", isiTip)
+          ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "",
+              barisTipBayar("Cash", "cash", "") + barisTipBayar("TF", "tf", "biru-t")
+              + tombolDetailRekap("tip", "Detail tip", tipRows.length+"x"))
           : '<div class="cat-baris"><span>Tip</span><b>kosong</b></div>')
       + (bayar.length
           ? bayar.map(p => barisBayar(p, perBayar[p.method] || [])).join("")
@@ -2214,6 +2236,9 @@ async function renderRekap(){
     $("statLaba").textContent = rp(h.profit);
     renderApproval();
     renderApprovalSetoran();
+    // Jendela detail yang sedang terbuka ikut disegarkan — mis. sesudah satu
+    // transaksi di dalamnya dibatalkan.
+    renderDetailBuku();
   }catch(e){ gagal(e); }
 }
 /* Uang masuk hari itu: cucian + makanan/minuman + tip. Ini angka KOTOR,
@@ -3424,20 +3449,29 @@ function kartuBuku(g){
   return barisBuka(kunci, label, rp(b ? (b.amount||0) : hasil), "", angka + tombol + isiKeluar);
 }
 
-/* ---------- PEMBUKUAN: JENDELA DETAIL TRANSAKSI SATU BUKU ----------
-   Dibuka dari tombol "Detail transaksi" di dalam kartu buku. Dua tab —
-   Cuci dan F&B — supaya keduanya tidak bercampur dalam satu daftar panjang.
+/* ---------- JENDELA DETAIL TRANSAKSI (Pembukuan & Rekap Hari Ini) ----------
+   Dibuka dari tombol "Detail transaksi" di kartu buku Pembukuan dan di
+   dropdown Rekap Hari Ini. Isinya bertab — Cuci, F&B, Tip — supaya tidak
+   bercampur dalam satu daftar panjang; tab yang tampil mengikuti SUMBERNYA
+   (mis. dropdown Cash hanya punya tab Cuci), dan bilah tab disembunyikan
+   bila cuma satu.
+
+   Sumber = fungsi yang dipanggil ulang tiap kali jendela digambar, supaya
+   isinya selalu mengikuti data terbaru di layar asalnya:
+     {judul, sub, trx?, fnb?, tip?, opsi}   — atau null bila sudah tidak ada.
 
    Elemennya dibuat di sini, bukan di Blade, dan diselipkan sebagai anak
    PERTAMA <body>: semua .ai-overlay ber-z-index sama, jadi yang letaknya
    lebih akhir di dokumen menang. Dengan begitu jendela resi, pembatalan,
    dan koreksi yang dibuka dari dalam daftar ini muncul DI ATASNYA. */
-let detailBukuKunci = null;     // kunci kelompok (id buku / "tanpa") yang sedang dibuka
+let detailSumber = null;
 let detailBukuTab = "cuci";
 // Halaman tiap tab (10 baris per halaman) — hari ramai bisa puluhan cucian,
 // dan jendela ini tidak boleh jadi gulungan panjang lagi.
-let detailBukuHal = {cuci:1, fnb:1};
+let detailBukuHal = {cuci:1, fnb:1, tip:1};
 const DETAIL_BUKU_PER_HAL = 10;
+// Bahan jendela detail dari Rekap Hari Ini — diisi renderRekap().
+let rekapHari = {trx:[], fnb:[], tip:[]};
 
 /** Potong daftar ke halaman aktif sebuah tab; halaman dijepit bila daftarnya menyusut. */
 function potongHalDetailBuku(tab, daftar){
@@ -3485,16 +3519,51 @@ function wadahDetailBuku(){
   return el;
 }
 
-function bukaDetailBuku(kunci){
-  detailBukuKunci = String(kunci);
+function bukaJendelaDetail(sumber){
+  detailSumber = sumber;
   detailBukuTab = "cuci";
-  detailBukuHal = {cuci:1, fnb:1};
+  detailBukuHal = {cuci:1, fnb:1, tip:1};
   bukuCari = "";
   wadahDetailBuku().classList.add("buka");
   renderDetailBuku();
 }
+
+/** Pembukuan: satu buku (atau "Tanpa buku") pada tanggal yang sedang dibuka. */
+function bukaDetailBuku(kunci){
+  const k = String(kunci);
+  bukaJendelaDetail(() => {
+    const g = grupBukuHari().find(x => String(x.kunci) === k);
+    // Bukunya sudah tidak ada di tanggal yang kini dibuka — jendela ditutup.
+    if(!g) return null;
+    return {
+      judul: g.buku ? g.buku.label : "Tanpa buku",
+      sub: fmtTgl(bukuHari.tgl),
+      trx: g.trx, fnb: g.fnb,
+      // Pembatalan di Pembukuan sengaja OWNER SAJA, tidak seperti di Rekap
+      // Hari Ini yang kasir pun boleh mengajukan. Rekap cuma melayani hari
+      // berjalan — uangnya masih di laci dan kasirnya masih ada; tanggal
+      // lampau sudah ditutup dan disetor, jadi mengutak-atiknya urusan owner.
+      opsi: {koreksi:true, batal: ROLE==="owner", ringkas:true},
+    };
+  });
+}
+
+/** Rekap Hari Ini: jenis = cuci | cash | tf | tip | fnb-cash | fnb-tf (kunci dropdown-nya). */
+function bukaDetailRekap(jenis){
+  bukaJendelaDetail(() => {
+    const d = {sub: fmtTgl(hariIni()), opsi: {batal:true, ringkas:true}};
+    if(jenis === "cuci")      return {...d, judul:"Total Cuci", trx: rekapHari.trx, fnb: rekapHari.fnb};
+    if(jenis === "tip")       return {...d, judul:"Tip", tip: rekapHari.tip};
+    if(jenis.startsWith("fnb-")){
+      const m = jenis.slice(4);
+      return {...d, judul:"F&B "+(m==="tf" ? "TF" : "Cash"), fnb: rekapHari.fnb.filter(sl => sl.payment_method === m)};
+    }
+    return {...d, judul: jenis==="tf" ? "TF" : "Cash", trx: rekapHari.trx.filter(r => r.payment_method === jenis)};
+  });
+}
+
 function tutupDetailBuku(){
-  detailBukuKunci = null;
+  detailSumber = null;
   const el = $("detailBukuOverlay");
   if(el) el.classList.remove("buka");
 }
@@ -3503,34 +3572,51 @@ function gantiTabDetailBuku(tab){
   renderDetailBuku();
 }
 
-/** Kelompok buku yang sedang dibuka di jendela detail (atau undefined). */
-function grupDetailBuku(){
-  return grupBukuHari().find(g => String(g.kunci) === detailBukuKunci);
+/** Satu tip dalam bentuk ringkas; plat, asal, dan cara bayarnya muncul saat diketuk. */
+function barisTipRingkas(t){
+  return barisRingkas(t.waktu, t.mobil, t.tip, [
+    ["Plat", platMobil(t.mobil)],
+    ["Tip dari", t.asal==="cuci" ? "Cucian" : "Makanan/minuman"],
+    // Tip ikut cara bayar transaksinya — dipakai mencocokkan uang laci vs transfer.
+    ["Pembayaran", t.bayar==="tf" ? "Transfer" : "Cash"],
+  ]);
 }
 
 function renderDetailBuku(){
-  if(detailBukuKunci === null) return;
-  const g = grupDetailBuku();
-  // Bukunya sudah tidak ada di tanggal yang kini dibuka — tutup saja.
-  if(!g){ tutupDetailBuku(); return; }
+  if(!detailSumber) return;
+  const d = detailSumber();
+  if(!d){ tutupDetailBuku(); return; }
 
-  const sah = g.trx.filter(r => !r.voided_at);
-  // Buku tanpa cucian tapi punya F&B: langsung ke tab yang ada isinya.
-  if(detailBukuTab === "cuci" && !g.trx.length && g.fnb.length) detailBukuTab = "fnb";
+  const sah = (d.trx||[]).filter(r => !r.voided_at);
+  const tabs = [];
+  if(d.trx) tabs.push(["cuci", "&#128663; Cuci ("+sah.length+")"]);
+  if(d.fnb) tabs.push(["fnb", "&#127860; F&amp;B ("+d.fnb.length+")"]);
+  if(d.tip) tabs.push(["tip", "&#128176; Tip ("+d.tip.length+")"]);
+  if(!tabs.some(t => t[0] === detailBukuTab)) detailBukuTab = tabs[0][0];
+  // Tanpa cucian tapi punya F&B: langsung ke tab yang ada isinya.
+  if(detailBukuTab === "cuci" && !d.trx.length && d.fnb && d.fnb.length) detailBukuTab = "fnb";
 
-  $("detailBukuJudul").innerHTML = '&#128203; '+(g.buku ? esc(g.buku.label) : 'Tanpa buku')
-    + ' <span class="waktu">'+fmtTgl(bukuHari.tgl)+'</span>';
-  $("detailBukuTabs").innerHTML =
-      '<button class="set-tab'+(detailBukuTab==="cuci" ? ' aktif' : '')+'" onclick="gantiTabDetailBuku(\'cuci\')">&#128663; Cuci ('+sah.length+')</button>'
-    + '<button class="set-tab'+(detailBukuTab==="fnb" ? ' aktif' : '')+'" onclick="gantiTabDetailBuku(\'fnb\')">&#127860; F&amp;B ('+g.fnb.length+')</button>';
+  $("detailBukuJudul").innerHTML = '&#128203; '+esc(d.judul)+' <span class="waktu">'+esc(d.sub)+'</span>';
+  $("detailBukuTabs").classList.toggle("hidden", tabs.length < 2);
+  $("detailBukuTabs").innerHTML = tabs.map(t =>
+    '<button class="set-tab'+(detailBukuTab===t[0] ? ' aktif' : '')+'" onclick="gantiTabDetailBuku(\''+t[0]+'\')">'+t[1]+'</button>').join("");
 
   if(detailBukuTab === "fnb"){
-    const total = g.fnb.reduce((t,sl) => t + sl.total, 0);
-    const hal = potongHalDetailBuku("fnb", g.fnb);
-    $("detailBukuIsi").innerHTML = g.fnb.length
-      ? seksiBuku("Penjualan F&amp;B", g.fnb.length, rp(total)) + hal.potong.map(barisFnbRingkas).join("")
-        + navHalDetailBuku("fnb", hal.totalHal, g.fnb.length, "penjualan")
-      : '<div class="cat-kosong">Tidak ada penjualan F&amp;B di buku ini.</div>';
+    const total = d.fnb.reduce((t,sl) => t + sl.total, 0);
+    const hal = potongHalDetailBuku("fnb", d.fnb);
+    $("detailBukuIsi").innerHTML = d.fnb.length
+      ? seksiBuku("Penjualan F&amp;B", d.fnb.length, rp(total)) + hal.potong.map(barisFnbRingkas).join("")
+        + navHalDetailBuku("fnb", hal.totalHal, d.fnb.length, "penjualan")
+      : '<div class="cat-kosong">Tidak ada penjualan F&amp;B.</div>';
+    return;
+  }
+  if(detailBukuTab === "tip"){
+    const total = d.tip.reduce((t,x) => t + x.tip, 0);
+    const hal = potongHalDetailBuku("tip", d.tip);
+    $("detailBukuIsi").innerHTML = d.tip.length
+      ? seksiBuku("Tip", d.tip.length, rp(total)) + hal.potong.map(barisTipRingkas).join("")
+        + navHalDetailBuku("tip", hal.totalHal, d.tip.length, "tip")
+      : '<div class="cat-kosong">Tidak ada tip.</div>';
     return;
   }
 
@@ -3545,23 +3631,20 @@ function renderDetailBuku(){
 }
 
 function renderDaftarCuciBuku(){
-  const wadah = $("detailBukuCuci"); const g = grupDetailBuku();
-  if(!wadah || !g) return;
-  const sah = g.trx.filter(r => !r.voided_at);
+  const wadah = $("detailBukuCuci");
+  const d = detailSumber && detailSumber();
+  if(!wadah || !d || !d.trx) return;
+  const sah = d.trx.filter(r => !r.voided_at);
   const q = bukuCari.trim().toLowerCase();
   const cocok = r =>
     (r.vehicle_name||"").toLowerCase().includes(q) ||
     (r.plate||"").toLowerCase().replace(/\s/g,"").includes(q.replace(/\s/g,""));
-  const urut = (q ? g.trx.filter(cocok) : g.trx)
+  const urut = (q ? d.trx.filter(cocok) : d.trx)
     .slice().sort((x,y) => String(x.created_at).localeCompare(String(y.created_at)));
   const hal = potongHalDetailBuku("cuci", urut);
   wadah.innerHTML = seksiBuku("Transaksi cuci", sah.length, rp(sah.reduce((t,r) => t + r.total, 0)))
-    // Pembatalan di sini sengaja OWNER SAJA, tidak seperti di Rekap Hari Ini
-    // yang kasir pun boleh mengajukan. Rekap cuma melayani hari berjalan —
-    // uangnya masih di laci dan kasirnya masih ada; tanggal lampau sudah
-    // ditutup dan disetor, jadi mengutak-atiknya urusan owner.
     + (urut.length
-        ? hal.potong.map(r => trxHTML(r, {koreksi:true, batal: ROLE==="owner", ringkas:true})).join("")
+        ? hal.potong.map(r => trxHTML(r, d.opsi)).join("")
           + navHalDetailBuku("cuci", hal.totalHal, urut.length, "transaksi")
         : '<div class="cat-kosong">'+(q ? 'Tidak ada yang cocok dengan "'+esc(bukuCari)+'".' : 'Tidak ada transaksi.')+'</div>');
 }
