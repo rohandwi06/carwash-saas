@@ -1,0 +1,30 @@
+{
+  "slug": "thamrin",
+  "nama_bisnis": "THAMRIN CARWASH",
+  "status": "disiapkan",
+  "paket_harga": "kecil",
+  "domain": "thamrin-carwash.byrapiin.my.id",
+  "zona_waktu": "Asia/Jakarta",
+  "hosting": {
+    "jenis": "mandiri",
+    "cpanel_user": "byrapiin",
+    "folder_app": "thamrin-app",
+    "docroot": "thamrin-carwash.byrapiin.my.id",
+    "prefix_db": "byrapiin"
+  },
+  "owner": {
+    "nama": null
+  },
+  "mulai": null,
+  "versi": {
+    "commit": null,
+    "pasti": true,
+    "migrasi_terakhir": null
+  },
+  "catatan": [
+    "Klien percobaan pertama setelah OTIN. Menumpang di akun cPanel byrapiin (hosting biasa ArenHost) bersama demo, bukan akun sendiri - pindahkan ke reseller saat jadi berlangganan.",
+    "Subdomain dibuat Rohan 2026-10-09; docroot ~/thamrin-carwash.byrapiin.my.id sejajar ~/thamrin-app (BUKAN rapiin-app, itu milik demo).",
+    "Database & user MySQL: byrapiin_thamrin.",
+    "owner.nama belum diisi - Rohan belum menyebut nama pemiliknya."
+  ]
+}
