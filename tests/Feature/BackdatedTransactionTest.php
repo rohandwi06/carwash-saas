@@ -86,6 +86,38 @@ class BackdatedTransactionTest extends TestCase
             'Hari ini tidak ikut terisi.');
     }
 
+    public function test_masuk_buku_pilihan_yang_langsung_disetor(): void
+    {
+        $tgl = now()->subDays(3)->toDateString();
+        $kirim = fn (array $isi) => $this->postJson('/api/transactions/backdated', ['date' => $tgl] + $isi, $this->header());
+
+        // Buku 1 belum ada -> dibuat, langsung disetor, setoran = cash-nya saja.
+        $kirim(['book_number' => 1, 'rows' => [
+            $this->baris(), $this->baris(['payment_method' => 'tf']),
+        ]])->assertCreated();
+
+        $buku1 = CashBook::where('date', $tgl)->where('number', 1)->firstOrFail();
+        $this->assertSame('deposited', $buku1->status);
+        $this->assertSame(30000, $buku1->amount, 'TF tidak ikut setoran cash.');
+        $this->assertStringContainsString('susulan', $buku1->opened_by);
+        $this->assertSame([$buku1->id, $buku1->id], Transaction::pluck('book_id')->all());
+
+        // Menambah lagi ke Buku 1: buku yang sama, setorannya ikut naik.
+        $kirim(['book_number' => 1, 'rows' => [$this->baris()]])->assertCreated();
+        $this->assertSame(1, CashBook::where('date', $tgl)->count());
+        $this->assertSame(60000, $buku1->fresh()->amount);
+
+        // Buku 2 = buku berikutnya, boleh. Buku 4 melompati Buku 3, ditolak.
+        $kirim(['book_number' => 2, 'rows' => [$this->baris()]])->assertCreated();
+        $kirim(['book_number' => 4, 'rows' => [$this->baris()]])->assertStatus(422);
+        $this->assertSame([1, 2], CashBook::where('date', $tgl)->orderBy('number')->pluck('number')->all());
+        $this->assertSame(0, CashBook::where('status', 'open')->count(), 'Tidak ada buku terbuka di tanggal lampau.');
+
+        $rekap = app(BookkeepingService::class)->dailyRecap($tgl);
+        $this->assertSame([60000, 30000], array_column($rekap['books'], 'amount'));
+        $this->assertSame(['deposited', 'deposited'], array_column($rekap['books'], 'status'));
+    }
+
     public function test_hanya_owner(): void
     {
         $this->postJson('/api/transactions/backdated', [

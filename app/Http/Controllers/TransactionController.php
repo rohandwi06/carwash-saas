@@ -38,7 +38,7 @@ class TransactionController extends Controller
     }
 
     /**
-     * POST /api/transactions/backdated {date, worker_ids?, rows:[...]} — owner saja.
+     * POST /api/transactions/backdated {date, book_number?, worker_ids?, rows:[...]} — owner saja.
      * Cucian tanggal lampau, banyak baris sekaligus. Aturannya di
      * TransactionService::createBackdated().
      */
@@ -46,6 +46,8 @@ class TransactionController extends Controller
     {
         $data = $request->validate([
             'date'                  => ['required', 'date_format:Y-m-d', 'before:today'],
+            // Nomor buku kas tanggal itu (Buku 1, Buku 2, ...). Kosong = tanpa buku.
+            'book_number'           => ['nullable', 'integer', 'min:1', 'max:20'],
             'worker_ids'            => ['sometimes', 'array'],
             'worker_ids.*'          => ['integer', 'exists:workers,id'],
             'rows'                  => ['required', 'array', 'min:1', 'max:100'],
@@ -63,6 +65,7 @@ class TransactionController extends Controller
             $data['rows'],
             $data['worker_ids'] ?? [],
             $request->attributes->get('auth_name'),
+            isset($data['book_number']) ? (int) $data['book_number'] : null,
         );
 
         return response()->json(['data' => $trx], 201);

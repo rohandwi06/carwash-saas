@@ -3331,11 +3331,41 @@ async function renderBuku(){
    satu cucian, disimpan sekali (semua atau tidak sama sekali).
 
    Aturannya di server (TransactionService::createBackdated): hanya tanggal
-   yang sudah lewat, tidak masuk buku kas mana pun (tampil di "Tanpa buku"),
-   tanpa add-on & F&B, harga dan upah memakai katalog saat diisi. Pekerja
+   yang sudah lewat, tanpa add-on & F&B, harga dan upah memakai katalog saat
+   diisi. Bukunya dipilih owner (Buku 1, Buku 2, ...): buku yang belum ada
+   dibuat langsung berstatus "disetor" dan setoran cash-nya dihitung dari
+   isinya; "Tanpa buku" tetap tersedia. Pekerja
    dipilih sekali untuk semua baris; kalau regunya berbeda, simpan dulu lalu
    isi lagi dengan pekerja lain. */
-let susulan = null;   // {tgl, pekerja:Set<id>, semuaPekerja:[], katalog:[], rows:[]}
+let susulan = null;   // {tgl, buku:nomor|null, bukuAda:[], pekerja:Set<id>, semuaPekerja:[], katalog:[], rows:[]}
+
+/** Buku kas yang sudah ada pada tanggal susulan + pilihan bawaannya. */
+async function muatBukuSusulan(){
+  const s = susulan; if(!s) return;
+  const tgl = s.tgl;
+  let books = [];
+  try{ books = (await api("/reports/daily?date="+tgl)).books || []; }catch(e){ /* daftar kosong: Buku 1 baru */ }
+  if(!susulan || susulan.tgl !== tgl) return;   // tanggal sudah diganti lagi selagi menunggu
+  s.bukuAda = books.map(b => ({number:b.number, label:b.label, status:b.status}));
+  // Bawaan: buku terakhir yang ada, atau Buku 1 (baru) bila hari itu kosong.
+  s.buku = s.bukuAda.length ? s.bukuAda[s.bukuAda.length - 1].number : 1;
+  gambarSusulan();
+}
+
+/** Nomor buku berikutnya yang boleh dibuat untuk tanggal susulan. */
+function bukuBaruSusulan(){
+  return susulan.bukuAda.reduce((m, b) => Math.max(m, b.number), 0) + 1;
+}
+
+function pilihBukuSusulan(nomor){
+  susulan.buku = nomor;
+  gambarSusulan();
+}
+
+async function gantiTglSusulan(tgl){
+  susulan.tgl = tgl;
+  await muatBukuSusulan();
+}
 
 /** Tombol di bawah kalender Pembukuan — dibuat sekali, hanya untuk owner. */
 function pasangTombolSusulan(){
@@ -3379,7 +3409,7 @@ async function bukaSusulan(){
     // Tanggal yang sedang dibuka di Pembukuan dipakai bila sudah lewat;
     // selain itu kemarin.
     const tgl = (tglPilih && tglPilih < hariIni()) ? tglPilih : kemarinYmd();
-    susulan = {tgl, pekerja:new Set(), semuaPekerja:pekerja, katalog:katalog || [], rows:[]};
+    susulan = {tgl, buku:1, bukuAda:[], pekerja:new Set(), semuaPekerja:pekerja, katalog:katalog || [], rows:[]};
     susulan.rows.push(barisSusulanBaru());
 
     let el = $("susulanOverlay");
@@ -3397,6 +3427,7 @@ async function bukaSusulan(){
     }
     el.classList.add("buka");
     gambarSusulan();
+    await muatBukuSusulan();
   }catch(e){ gagal(e); }
 }
 
@@ -3419,8 +3450,19 @@ function gambarSusulan(){
   $("susulanIsi").innerHTML =
       '<div class="field" style="margin-bottom:10px"><label for="susulanTgl">Tanggal</label>'
     +   '<input id="susulanTgl" type="date" max="'+kemarinYmd()+'" value="'+s.tgl+'" style="text-transform:none"'
-    +   ' onchange="susulan.tgl=this.value"></div>'
-    + '<div class="sec-label">Pekerja hari itu <span class="waktu">berlaku untuk semua baris</span></div>'
+    +   ' onchange="gantiTglSusulan(this.value)"></div>'
+    // Buku kas tanggal itu. Yang sudah ada tampil dengan statusnya; "+ Buku N"
+    // membuat buku berikutnya (langsung disetor). Nomornya selalu berurutan.
+    + '<div class="sec-label">Buku <span class="waktu">baru = disetor</span></div>'
+    + '<div class="susulan-pekerja">'
+    +   s.bukuAda.map(b => '<button class="btn-hadir'+(s.buku===b.number ? ' aktif' : '')+'"'
+          + ' onclick="pilihBukuSusulan('+b.number+')">'+esc(b.label)
+          + ' <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)+'</span></button>').join("")
+    +   '<button class="btn-hadir'+(s.buku===bukuBaruSusulan() ? ' aktif' : '')+'"'
+    +     ' onclick="pilihBukuSusulan('+bukuBaruSusulan()+')">&#10133; Buku '+bukuBaruSusulan()+'</button>'
+    +   '<button class="btn-hadir'+(s.buku===null ? ' aktif' : '')+'" onclick="pilihBukuSusulan(null)">Tanpa buku</button>'
+    + '</div>'
+    + '<div class="sec-label">Pekerja <span class="waktu">semua baris</span></div>'
     + '<div class="susulan-pekerja">'
     +   (s.semuaPekerja.length
           ? s.semuaPekerja.map(p => '<button class="btn-hadir'+(s.pekerja.has(p.id) ? ' aktif' : '')+'"'
@@ -3532,13 +3574,18 @@ async function simpanSusulan(){
       + "<br>Pekerja: "+(s.pekerja.size
           ? esc(s.semuaPekerja.filter(p => s.pekerja.has(p.id)).map(p => p.name).join(", "))
           : "<b>tidak ada</b> (upah tidak tercatat)")
-      + "<br><br>Tidak masuk buku kas mana pun &mdash; tampil di \"Tanpa buku\".",
+      + "<br><br>"+(s.buku === null
+          ? "Tidak masuk buku kas mana pun &mdash; tampil di \"Tanpa buku\"."
+          : "Masuk <b>Buku "+s.buku+"</b>"+(s.bukuAda.some(b => b.number === s.buku)
+              ? " (sudah ada)." : " &mdash; buku baru, langsung berstatus disetor.")
+            + " Setoran cash buku dihitung ulang dari isinya."),
     showCancelButton:true, confirmButtonText:"Ya, simpan", cancelButtonText:"Batal", confirmButtonColor:"#1B9E62",
   });
   if(!tanya.isConfirmed) return;
   try{
     await api("/transactions/backdated", {method:"POST", body:{
       date: s.tgl,
+      book_number: s.buku,
       worker_ids: [...s.pekerja],
       rows: rows.map(r => {
         const b = {vehicle_name: r.nama.trim(), category: r.kat, service: r.svc, payment_method: r.bayar,

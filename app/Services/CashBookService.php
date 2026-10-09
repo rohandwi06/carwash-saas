@@ -48,6 +48,52 @@ class CashBookService
     }
 
     /**
+     * Buku kas untuk TANGGAL LAMPAU, dipakai saat owner mengisi cucian
+     * susulan dari Pembukuan (TransactionService::createBackdated).
+     *
+     * Buku yang sudah ada dipakai apa adanya. Yang belum ada dibuat LANGSUNG
+     * berstatus 'deposited' (keputusan owner 2026-10-09): uang hari itu sudah
+     * lama dihitung di luar aplikasi, jadi tidak ada setoran yang perlu
+     * diajukan atau disetujui lagi. Membuatnya 'open' akan melanggar aturan
+     * "satu buku terbuka per hari" dan meninggalkan buku yang tidak pernah
+     * bisa ditutup — tombol tutup buku hanya ada untuk hari berjalan.
+     *
+     * Nomor harus berurutan: Buku 3 tidak bisa dibuat sebelum Buku 2 ada,
+     * supaya tidak ada nomor bolong yang kelak dikira buku hilang.
+     */
+    public function backdated(string $date, int $number, ?string $by = null): CashBook
+    {
+        return DB::transaction(function () use ($date, $number, $by) {
+            $ada = CashBook::where('date', $date)->where('number', $number)->lockForUpdate()->first();
+            if ($ada) {
+                return $ada;
+            }
+
+            $berikut = (int) CashBook::where('date', $date)->max('number') + 1;
+            if ($number !== $berikut) {
+                throw new \InvalidArgumentException(
+                    "Buku {$number} belum bisa dibuat - buku berikutnya untuk tanggal ini adalah Buku {$berikut}."
+                );
+            }
+
+            $pencatat = trim(($by ?? 'Owner').' (susulan '.now()->format('d/m').')');
+
+            return CashBook::create([
+                'date'         => $date,
+                'number'       => $number,
+                'status'       => 'deposited',
+                'opened_at'    => now(),
+                'opened_by'    => $pencatat,
+                'requested_at' => now(),
+                'requested_by' => $pencatat,
+                'approved_at'  => now(),
+                'approved_by'  => $by,
+                'amount'       => 0,   // diisi createBackdated() setelah barisnya masuk
+            ]);
+        });
+    }
+
+    /**
      * Catat saldo awal (kas kecil) buku ini — biasanya diisi kasir tiap pagi
      * sebelum transaksi pertama, dari uang tunai yang sudah ada di
      * tangannya. Boleh diubah berkali-kali selama buku masih terbuka (mis.

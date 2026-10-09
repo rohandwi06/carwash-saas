@@ -193,12 +193,18 @@ class TransactionService
      * Bedanya dengan create():
      *  - tanggalnya dipilih, bukan hari ini, dan HARUS sudah lewat — cucian
      *    hari ini dicatat lewat layar kasir supaya masuk buku kas yang benar;
-     *  - TIDAK masuk buku kas mana pun (book_id null), sama seperti
-     *    pengeluaran bertanggal lampau (ExpenseController::store): memanggil
-     *    CashBookService::current() untuk tanggal lampau akan membuka kembali
-     *    buku hari yang sudah ditutup & disetor. Di Pembukuan barisnya tampil
-     *    di kelompok "Tanpa buku"; rekap harian, upah, dan laba tetap
-     *    menghitungnya karena semuanya berdasarkan tanggal;
+     *  - bukunya DIPILIH owner ($bookNumber: Buku 1, Buku 2, ...), bukan buku
+     *    yang sedang terbuka. Buku yang belum ada dibuat langsung berstatus
+     *    'deposited' (CashBookService::backdated) dan setoran cash-nya
+     *    dihitung dari isinya. Buku lama yang sudah ditutup ikut diperbarui
+     *    angka bekunya — sama seperti koreksi transaksi di update() — supaya
+     *    setoran yang tertulis tetap cocok dengan barisnya. Tidak pernah
+     *    memanggil CashBookService::current(): itu akan membuka buku baru
+     *    'open' di hari yang sudah lewat;
+     *  - $bookNumber null = tanpa buku (book_id null), seperti pengeluaran
+     *    bertanggal lampau; di Pembukuan tampil di kelompok "Tanpa buku".
+     *    Rekap harian, upah, dan laba menghitung keduanya karena semuanya
+     *    berdasarkan tanggal;
      *  - tanpa add-on dan tanpa F&B (keputusan owner 2026-10-09: cucian saja).
      *
      * Harga & upah memakai katalog dan cara hitung yang berlaku SAAT DIISI —
@@ -211,15 +217,17 @@ class TransactionService
      *
      * @param  array<int,array{vehicle_name:string,category:string,service?:string,payment_method:string,plate?:?string,tip?:int,time?:?string}>  $rows
      * @param  array<int>  $workerIds  pekerja hari itu — berlaku untuk semua baris
+     * @param  int|null    $bookNumber nomor buku kas tanggal itu, atau null = tanpa buku
      * @return array<int,Transaction>
      */
-    public function createBackdated(string $date, array $rows, array $workerIds = [], ?string $by = null): array
+    public function createBackdated(string $date, array $rows, array $workerIds = [], ?string $by = null, ?int $bookNumber = null): array
     {
         if ($date >= now()->toDateString()) {
             throw new InvalidArgumentException('Tanggal harus sebelum hari ini. Cucian hari ini dicatat lewat layar kasir.');
         }
 
-        return DB::transaction(function () use ($date, $rows, $workerIds, $by) {
+        return DB::transaction(function () use ($date, $rows, $workerIds, $by, $bookNumber) {
+            $buku = $bookNumber !== null ? $this->books->backdated($date, $bookNumber, $by) : null;
             $antrian = $this->nextQueueNo($date);
             $pencatat = trim(($by ?? 'Owner').' (susulan '.now()->format('d/m').')');
             $hasil = [];
@@ -249,7 +257,7 @@ class TransactionService
                     'tip'            => $row['tip'] ?? 0,
                     'total'          => $total,
                     'date'           => $date,
-                    'book_id'        => null,
+                    'book_id'        => $buku?->id,
                     'created_by'     => $pencatat,
                 ]);
                 // created_at diisi sendiri: Eloquent hanya mengisinya otomatis
@@ -260,6 +268,13 @@ class TransactionService
                 $this->wages->attachWorkers($trx, $workerIds);
 
                 $hasil[] = $trx->load('workers', 'addons', 'fnbSales.items');
+            }
+
+            // Buku tertutup memakai angka BEKU: perbarui supaya setoran yang
+            // tertulis memuat cucian yang baru masuk. Buku yang masih terbuka
+            // dihitung hidup, tidak perlu disentuh.
+            if ($buku !== null && $buku->status !== 'open') {
+                $buku->update(['amount' => $this->books->cashAmount($buku)]);
             }
 
             return $hasil;
