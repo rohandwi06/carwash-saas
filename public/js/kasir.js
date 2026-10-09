@@ -3334,10 +3334,10 @@ async function renderBuku(){
    yang sudah lewat, tanpa add-on & F&B, harga dan upah memakai katalog saat
    diisi. Bukunya dipilih owner (Buku 1, Buku 2, ...): buku yang belum ada
    dibuat langsung berstatus "disetor" dan setoran cash-nya dihitung dari
-   isinya; "Tanpa buku" tetap tersedia. Selain cucian, formulir ini memuat
-   makanan/minuman (satu menu x jumlah per baris; stok TIDAK dipotong dan
-   barang titipan tidak ditawarkan) dan pengeluaran hari itu — semuanya
-   masuk ke buku yang sama. Pekerja
+   isinya; "Tanpa buku" tetap tersedia. Formulirnya tiga tab yang berdiri
+   sendiri — Cucian, Makanan/minuman (satu menu x jumlah per baris; stok
+   TIDAK dipotong dan barang titipan tidak ditawarkan), dan Pengeluaran —
+   semuanya masuk ke buku yang sama, dan salah satu saja sudah cukup. Pekerja
    dipilih sekali untuk semua baris; kalau regunya berbeda, simpan dulu lalu
    isi lagi dengan pekerja lain. */
 let susulan = null;   // {tgl, buku:nomor|null, bukuAda:[], pekerja:Set<id>, semuaPekerja:[], katalog:[], rows:[]}
@@ -3414,7 +3414,12 @@ async function bukaSusulan(){
     const tgl = (tglPilih && tglPilih < hariIni()) ? tglPilih : kemarinYmd();
     susulan = {tgl, buku:1, bukuAda:[], pekerja:new Set(), semuaPekerja:pekerja, katalog:katalog || [], rows:[],
                // Barang titipan tidak ditawarkan: penjualan lampaunya ditolak server.
-               menu:(menu || []).filter(m => !m.consignor_id), fnb:[], keluar:[]};
+               menu:(menu || []).filter(m => !m.consignor_id), fnb:[], keluar:[],
+               // Tiga bagian yang BERDIRI SENDIRI: F&B atau pengeluaran bisa diisi
+               // tanpa satu pun cucian (koreksi owner 09/10 — dulu ketiganya
+               // menumpuk di satu halaman di bawah baris cucian, sehingga
+               // terkesan harus ada kendaraan dulu).
+               tab:"cuci"};
     susulan.rows.push(barisSusulanBaru());
 
     let el = $("susulanOverlay");
@@ -3453,7 +3458,7 @@ async function tutupSusulan(){
 function gambarSusulan(){
   const s = susulan; if(!s) return;
   const kat = Object.keys(CFG.categories);
-  $("susulanIsi").innerHTML =
+  const kepala =
       '<div class="field" style="margin-bottom:10px"><label for="susulanTgl">Tanggal</label>'
     +   '<input id="susulanTgl" type="date" max="'+kemarinYmd()+'" value="'+s.tgl+'" style="text-transform:none"'
     +   ' onchange="gantiTglSusulan(this.value)"></div>'
@@ -3467,7 +3472,20 @@ function gambarSusulan(){
     +   '<button class="btn-hadir'+(s.buku===bukuBaruSusulan() ? ' aktif' : '')+'"'
     +     ' onclick="pilihBukuSusulan('+bukuBaruSusulan()+')">&#10133; Buku '+bukuBaruSusulan()+'</button>'
     +   '<button class="btn-hadir'+(s.buku===null ? ' aktif' : '')+'" onclick="pilihBukuSusulan(null)">Tanpa buku</button>'
-    + '</div>'
+    + '</div>';
+
+  // Tab: jumlah di tiap tab = baris yang benar-benar akan tersimpan.
+  const jml = {
+    cuci: s.rows.filter(r => r.nama.trim() !== "").length,
+    fnb: fnbSusulanSah().length,
+    keluar: keluarSusulanSah().length,
+  };
+  const tab = (id, label) => '<button class="set-tab'+(s.tab===id ? ' aktif' : '')+'" onclick="gantiTabSusulan(\''+id+'\')">'
+    + label+(jml[id] ? ' ('+jml[id]+')' : '')+'</button>';
+  const tabs = '<div class="set-tabs" style="position:static;margin:12px 0 10px">'
+    + tab("cuci", "&#128663; Cucian") + tab("fnb", "&#127860; F&amp;B") + tab("keluar", "&#128184; Pengeluaran") + '</div>';
+
+  const bagianCuci = ""
     + '<div class="sec-label">Pekerja <span class="waktu">semua baris</span></div>'
     + '<div class="susulan-pekerja">'
     +   (s.semuaPekerja.length
@@ -3479,11 +3497,11 @@ function gambarSusulan(){
     + s.rows.map((r, i) =>
         '<div class="susulan-baris">'
         + '<div class="susulan-kepala"><span>Cucian '+(i+1)+' &middot; <span id="susulanHarga'+i+'">'+rp(hargaSusulan(r))+'</span></span>'
-        +   (s.rows.length > 1 ? '<button class="btn-hapus-pk" title="Hapus baris" onclick="hapusBarisSusulan('+i+')">&#10005;</button>' : '')
+        +   '<button class="btn-hapus-pk" title="Hapus baris" onclick="hapusBarisSusulan('+i+')">&#10005;</button>'
         + '</div>'
         + '<div class="susulan-grid">'
         +   '<input class="lebar" placeholder="Kendaraan (mis. Avanza)" list="susulanKatalog" value="'+esc(r.nama)+'"'
-        +     ' oninput="susulan.rows['+i+'].nama=this.value" onchange="cocokkanKatalogSusulan('+i+')">'
+        +     ' oninput="susulan.rows['+i+'].nama=this.value;segarkanHargaSusulan()" onchange="cocokkanKatalogSusulan('+i+')">'
         +   '<input placeholder="Plat (boleh kosong)" value="'+esc(r.plat)+'" style="text-transform:uppercase"'
         +     ' oninput="susulan.rows['+i+'].plat=this.value">'
         +   '<input type="time" title="Jam (boleh kosong)" value="'+esc(r.jam)+'"'
@@ -3502,9 +3520,12 @@ function gambarSusulan(){
         +   '<input type="number" inputmode="numeric" min="0" placeholder="Tip (Rp)" value="'+esc(r.tip)+'"'
         +     ' oninput="susulan.rows['+i+'].tip=this.value;segarkanHargaSusulan()">'
         + '</div></div>').join("")
-    + '<button class="btn-cetak-ulang" onclick="tambahBarisSusulan()">&#10133; Tambah baris cucian</button>'
+    + (s.rows.length === 0 ? '<div class="cat-kosong">Belum ada cucian. Tab ini boleh dikosongkan.</div>' : '')
+    + '<button class="btn-cetak-ulang" onclick="tambahBarisSusulan()">&#10133; Tambah baris cucian</button>';
+
+  const bagianFnb = ""
     // ---- Makanan/minuman: satu menu x jumlah per baris ----
-    + '<div class="sec-label" style="margin-top:14px">Makanan/minuman <span class="waktu">stok tidak dipotong</span></div>'
+    + '<div class="sec-label">Makanan/minuman <span class="waktu">stok tidak dipotong</span></div>'
     + s.fnb.map((f, i) =>
         '<div class="susulan-baris"><div class="susulan-grid">'
         + '<select class="lebar" onchange="susulan.fnb['+i+'].id=+this.value;segarkanHargaSusulan()">'
@@ -3520,9 +3541,11 @@ function gambarSusulan(){
         + '</div></div>').join("")
     + (s.menu.length
         ? '<button class="btn-cetak-ulang" onclick="tambahFnbSusulan()">&#10133; Tambah makanan/minuman</button>'
-        : '<div class="cat-kosong">Belum ada menu. Tambahkan di Pengaturan &rarr; Makanan.</div>')
+        : '<div class="cat-kosong">Belum ada menu. Tambahkan di Pengaturan &rarr; Makanan.</div>');
+
+  const bagianKeluar = ""
     // ---- Pengeluaran hari itu ----
-    + '<div class="sec-label" style="margin-top:14px">Pengeluaran <span class="waktu">mengurangi setoran buku</span></div>'
+    + '<div class="sec-label">Pengeluaran <span class="waktu">mengurangi setoran buku</span></div>'
     + s.keluar.map((k, i) =>
         '<div class="susulan-baris"><div class="susulan-grid">'
         + '<input class="lebar" placeholder="Keterangan (sabun, bensin...)" value="'+esc(k.ket)+'"'
@@ -3531,12 +3554,18 @@ function gambarSusulan(){
         +   ' oninput="susulan.keluar['+i+'].jml=this.value;segarkanHargaSusulan()">'
         + '<button class="btn-hapus-pk" style="justify-self:end" title="Hapus baris" onclick="hapusKeluarSusulan('+i+')">&#10005; hapus</button>'
         + '</div></div>').join("")
-    + '<button class="btn-cetak-ulang" onclick="tambahKeluarSusulan()">&#10133; Tambah pengeluaran</button>'
+    + '<button class="btn-cetak-ulang" onclick="tambahKeluarSusulan()">&#10133; Tambah pengeluaran</button>';
+
+  const kaki = ""
     + '<div class="susulan-kaki">'
     +   '<div class="cat-baris tebal"><span id="susulanJumlah"></span><b id="susulanTotal"></b></div>'
     +   '<div class="waktu" id="susulanRinci" style="font-size:12px;white-space:normal;line-height:1.4"></div>'
     +   '<button class="btn-catat" style="background:var(--go);width:100%;margin-top:8px" onclick="simpanSusulan()">&#10003; Simpan semua</button>'
     + '</div>';
+
+  $("susulanIsi").innerHTML = kepala + tabs
+    + (s.tab === "fnb" ? bagianFnb : s.tab === "keluar" ? bagianKeluar : bagianCuci)
+    + kaki;
   segarkanHargaSusulan();
 }
 
@@ -3546,7 +3575,9 @@ function segarkanHargaSusulan(){
   const s = susulan; if(!s) return;
   let total = 0, tip = 0;
   s.rows.forEach((r, i) => {
-    const h = hargaSusulan(r); total += h; tip += Math.max(0, parseInt(r.tip, 10) || 0);
+    const h = hargaSusulan(r);
+    // Baris tanpa nama kendaraan dilewati saat menyimpan, jadi tidak dijumlah.
+    if(r.nama.trim() !== ""){ total += h; tip += Math.max(0, parseInt(r.tip, 10) || 0); }
     const el = $("susulanHarga"+i); if(el) el.textContent = rp(h);
   });
   const fnb = fnbSusulanSah().reduce((t, f) => t + f.harga * f.qty, 0);
@@ -3557,11 +3588,11 @@ function segarkanHargaSusulan(){
   $("susulanJumlah").textContent = "Uang masuk";
   $("susulanTotal").textContent = rp(total + fnb);
   $("susulanRinci").innerHTML = [
-    s.rows.length+' cucian '+rp(total)+(cuciTerisi < s.rows.length ? ' ('+(s.rows.length - cuciTerisi)+' belum bernama)' : ''),
+    cuciTerisi ? cuciTerisi+' cucian '+rp(total) : '',
     fnb ? 'F&amp;B '+rp(fnb) : '',
     tip ? 'tip '+rp(tip) : '',
     keluar ? 'pengeluaran -'+rp(keluar) : '',
-  ].filter(Boolean).join(' &middot; ');
+  ].filter(Boolean).join(' &middot; ') || 'Belum ada isinya.';
 }
 
 /** Baris F&B yang layak dikirim: menunya masih ada dan jumlahnya minimal 1. */
@@ -3576,6 +3607,10 @@ function fnbSusulanSah(){
 function keluarSusulanSah(){
   return susulan.keluar.map(k => ({ket:k.ket.trim(), jml:parseInt(k.jml, 10) || 0}))
     .filter(k => k.ket !== "" && k.jml >= 1);
+}
+function gantiTabSusulan(tab){
+  susulan.tab = tab;
+  gambarSusulan();
 }
 function tambahFnbSusulan(){
   const akhir = susulan.fnb[susulan.fnb.length - 1];
@@ -3663,9 +3698,12 @@ async function simpanSusulan(){
   const tanya = await Swal.fire({
     icon:"question", title:"Simpan data "+fmtTglPendek(s.tgl)+"?",
     html: "<b>"+fmtTgl(s.tgl)+"</b><br>"+isiSimpan.join("<br>")
-      + "<br>Pekerja: "+(s.pekerja.size
-          ? esc(s.semuaPekerja.filter(p => s.pekerja.has(p.id)).map(p => p.name).join(", "))
-          : "<b>tidak ada</b> (upah tidak tercatat)")
+      // Pekerja hanya menyangkut cucian — tanpa cucian barisnya tidak relevan.
+      + (rows.length
+          ? "<br>Pekerja: "+(s.pekerja.size
+              ? esc(s.semuaPekerja.filter(p => s.pekerja.has(p.id)).map(p => p.name).join(", "))
+              : "<b>tidak ada</b> (upah tidak tercatat)")
+          : "")
       + "<br><br>"+(s.buku === null
           ? "Tidak masuk buku kas mana pun &mdash; tampil di \"Tanpa buku\"."
           : "Masuk <b>Buku "+s.buku+"</b>"+(s.bukuAda.some(b => b.number === s.buku)
