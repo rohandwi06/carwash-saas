@@ -3288,7 +3288,10 @@ async function renderBuku(){
       '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' &middot; '+w.vehicles+' kendaraan</span><b>'+rp(w.wage)+'</b></div>').join("");
     $("detailHari").innerHTML =
       '<div class="cat-blok"><h3>&#128197; '+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
-      +'<div class="cat-baris"><span>Total</span><b>'+rp(h.total)+'</b></div>'
+      // Total = cucian + F&B (koreksi owner 09/10; dulu cucian saja, sehingga
+      // hari yang hanya berisi jajanan tertulis Rp 0). Sama dengan jumlah
+      // baris Cuci Motor + Cuci Mobil + F&B di bawahnya; tip tidak ikut.
+      +'<div class="cat-baris"><span>Total</span><b>'+rp((h.total||0) + (h.fnb_total||0))+'</b></div>'
       // Tip, Cuci Motor, dan Cuci Mobil bisa dibuka: masing-masing dipisah
       // Cash dan TF (permintaan owner 03/10). Menggantikan tiga baris lama
       // "TF / Cash Motor / Cash Mobil", yang tidak menyebut TF motor & TF
