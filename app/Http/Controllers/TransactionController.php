@@ -38,8 +38,8 @@ class TransactionController extends Controller
     }
 
     /**
-     * POST /api/transactions/backdated {date, book_number?, worker_ids?, rows:[...]} — owner saja.
-     * Cucian tanggal lampau, banyak baris sekaligus. Aturannya di
+     * POST /api/transactions/backdated {date, book_number?, worker_ids?, rows:[...], fnb:[...], expenses:[...]} — owner saja.
+     * Cucian, makanan/minuman, dan pengeluaran tanggal lampau, banyak baris sekaligus. Aturannya di
      * TransactionService::createBackdated().
      */
     public function storeBackdated(Request $request): JsonResponse
@@ -50,7 +50,9 @@ class TransactionController extends Controller
             'book_number'           => ['nullable', 'integer', 'min:1', 'max:20'],
             'worker_ids'            => ['sometimes', 'array'],
             'worker_ids.*'          => ['integer', 'exists:workers,id'],
-            'rows'                  => ['required', 'array', 'min:1', 'max:100'],
+            // Boleh kosong bila hanya menyusulkan pengeluaran; minimal salah
+            // satu harus terisi (diperiksa di service).
+            'rows'                  => ['nullable', 'array', 'max:100'],
             'rows.*.vehicle_name'   => ['required', 'string', 'max:100'],
             'rows.*.category'       => ['required', Rule::exists('wash_categories', 'slug')],
             'rows.*.service'        => ['sometimes', Rule::exists('wash_services', 'slug')],
@@ -58,14 +60,23 @@ class TransactionController extends Controller
             'rows.*.plate'          => ['nullable', 'string', 'max:20'],
             'rows.*.tip'            => ['sometimes', 'integer', 'min:0', 'max:1000000'],
             'rows.*.time'           => ['nullable', 'date_format:H:i'],
+            'fnb'                    => ['nullable', 'array', 'max:50'],
+            'fnb.*.product_id'       => ['required', 'integer', 'exists:products,id'],
+            'fnb.*.qty'              => ['required', 'integer', 'min:1', 'max:1000'],
+            'fnb.*.payment_method'   => ['required', Rule::in(['cash', 'tf'])],
+            'expenses'               => ['nullable', 'array', 'max:50'],
+            'expenses.*.description' => ['required', 'string', 'max:160'],
+            'expenses.*.amount'      => ['required', 'integer', 'min:1', 'max:100000000'],
         ]);
 
         $trx = $this->service->createBackdated(
             $data['date'],
-            $data['rows'],
+            $data['rows'] ?? [],
             $data['worker_ids'] ?? [],
             $request->attributes->get('auth_name'),
             isset($data['book_number']) ? (int) $data['book_number'] : null,
+            $data['expenses'] ?? [],
+            $data['fnb'] ?? [],
         );
 
         return response()->json(['data' => $trx], 201);

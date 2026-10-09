@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Expense;
 use App\Models\Transaction;
 use App\Models\TransactionDraft;
 use Carbon\Carbon;
@@ -205,7 +206,9 @@ class TransactionService
      *    bertanggal lampau; di Pembukuan tampil di kelompok "Tanpa buku".
      *    Rekap harian, upah, dan laba menghitung keduanya karena semuanya
      *    berdasarkan tanggal;
-     *  - tanpa add-on dan tanpa F&B (keputusan owner 2026-10-09: cucian saja).
+     *  - tanpa add-on. F&B lampau diisi sebagai baris tersendiri ($fnb: satu
+     *    menu x jumlah), TIDAK memotong stok dan tidak untuk barang titipan —
+     *    alasannya di FnbService::createBackdated().
      *
      * Harga & upah memakai katalog dan cara hitung yang berlaku SAAT DIISI —
      * aplikasi tidak menyimpan riwayat harga, jadi tidak ada angka lain yang
@@ -218,15 +221,26 @@ class TransactionService
      * @param  array<int,array{vehicle_name:string,category:string,service?:string,payment_method:string,plate?:?string,tip?:int,time?:?string}>  $rows
      * @param  array<int>  $workerIds  pekerja hari itu — berlaku untuk semua baris
      * @param  int|null    $bookNumber nomor buku kas tanggal itu, atau null = tanpa buku
+     * @param  array<int,array{description:string,amount:int}>  $expenses
+     *         pengeluaran hari itu — masuk ke buku yang SAMA dengan cuciannya,
+     *         supaya setoran cash buku = cash masuk dikurangi pengeluaran,
+     *         persis aturan buku harian (CashBookService::cashAmount). Boleh
+     *         diisi tanpa satu pun cucian (mis. hanya menyusulkan nota).
+     * @param  array<int,array{product_id:int,qty:int,payment_method:string}>  $fnb
+     *         penjualan makanan/minuman hari itu, masuk ke buku yang sama
      * @return array<int,Transaction>
      */
-    public function createBackdated(string $date, array $rows, array $workerIds = [], ?string $by = null, ?int $bookNumber = null): array
+    public function createBackdated(string $date, array $rows, array $workerIds = [], ?string $by = null, ?int $bookNumber = null, array $expenses = [], array $fnb = []): array
     {
+        if (count($rows) === 0 && count($expenses) === 0 && count($fnb) === 0) {
+            throw new InvalidArgumentException('Isi minimal satu cucian, makanan/minuman, atau pengeluaran.');
+        }
+
         if ($date >= now()->toDateString()) {
             throw new InvalidArgumentException('Tanggal harus sebelum hari ini. Cucian hari ini dicatat lewat layar kasir.');
         }
 
-        return DB::transaction(function () use ($date, $rows, $workerIds, $by, $bookNumber) {
+        return DB::transaction(function () use ($date, $rows, $workerIds, $by, $bookNumber, $expenses, $fnb) {
             $buku = $bookNumber !== null ? $this->books->backdated($date, $bookNumber, $by) : null;
             $antrian = $this->nextQueueNo($date);
             $pencatat = trim(($by ?? 'Owner').' (susulan '.now()->format('d/m').')');
@@ -268,6 +282,34 @@ class TransactionService
                 $this->wages->attachWorkers($trx, $workerIds);
 
                 $hasil[] = $trx->load('workers', 'addons', 'fnbSales.items');
+            }
+
+            foreach (array_values($fnb) as $i => $jual) {
+                try {
+                    $this->fnb->createBackdated([
+                        'product_id'     => $jual['product_id'],
+                        'qty'            => $jual['qty'],
+                        'payment_method' => $jual['payment_method'],
+                        'date'           => $date,
+                        'book_id'        => $buku?->id,
+                        'created_by'     => $pencatat,
+                        // Sesudah semua cucian, urut pengisian.
+                        'created_at'     => Carbon::createFromFormat('Y-m-d H:i:s', $date.' 00:00:00')
+                            ->addSeconds($antrian + count($rows) + $i),
+                    ]);
+                } catch (InvalidArgumentException $e) {
+                    throw new InvalidArgumentException('Makanan/minuman baris '.($i + 1).': '.$e->getMessage());
+                }
+            }
+
+            foreach ($expenses as $keluar) {
+                Expense::create([
+                    'description' => $keluar['description'],
+                    'amount'      => (int) $keluar['amount'],
+                    'date'        => $date,
+                    'book_id'     => $buku?->id,
+                    'created_by'  => $pencatat,
+                ]);
             }
 
             // Buku tertutup memakai angka BEKU: perbarui supaya setoran yang

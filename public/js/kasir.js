@@ -3334,7 +3334,10 @@ async function renderBuku(){
    yang sudah lewat, tanpa add-on & F&B, harga dan upah memakai katalog saat
    diisi. Bukunya dipilih owner (Buku 1, Buku 2, ...): buku yang belum ada
    dibuat langsung berstatus "disetor" dan setoran cash-nya dihitung dari
-   isinya; "Tanpa buku" tetap tersedia. Pekerja
+   isinya; "Tanpa buku" tetap tersedia. Selain cucian, formulir ini memuat
+   makanan/minuman (satu menu x jumlah per baris; stok TIDAK dipotong dan
+   barang titipan tidak ditawarkan) dan pengeluaran hari itu — semuanya
+   masuk ke buku yang sama. Pekerja
    dipilih sekali untuk semua baris; kalau regunya berbeda, simpan dulu lalu
    isi lagi dengan pekerja lain. */
 let susulan = null;   // {tgl, buku:nomor|null, bukuAda:[], pekerja:Set<id>, semuaPekerja:[], katalog:[], rows:[]}
@@ -3374,7 +3377,7 @@ function pasangTombolSusulan(){
   const b = document.createElement("button");
   b.id = "btnSusulan";
   b.className = "btn-cetak-ulang";
-  b.innerHTML = "&#10133; Tambah cucian tanggal lampau";
+  b.innerHTML = "&#10133; Tambah data tanggal lampau";
   b.onclick = () => bukaSusulan();
   info.insertAdjacentElement("afterend", b);
 }
@@ -3405,11 +3408,13 @@ function hargaSusulan(r){
 async function bukaSusulan(){
   try{
     if(!CFG) CFG = await api("/config");
-    const [pekerja, katalog] = await Promise.all([api("/workers"), api("/vehicles")]);
+    const [pekerja, katalog, menu] = await Promise.all([api("/workers"), api("/vehicles"), api("/products?active=1")]);
     // Tanggal yang sedang dibuka di Pembukuan dipakai bila sudah lewat;
     // selain itu kemarin.
     const tgl = (tglPilih && tglPilih < hariIni()) ? tglPilih : kemarinYmd();
-    susulan = {tgl, buku:1, bukuAda:[], pekerja:new Set(), semuaPekerja:pekerja, katalog:katalog || [], rows:[]};
+    susulan = {tgl, buku:1, bukuAda:[], pekerja:new Set(), semuaPekerja:pekerja, katalog:katalog || [], rows:[],
+               // Barang titipan tidak ditawarkan: penjualan lampaunya ditolak server.
+               menu:(menu || []).filter(m => !m.consignor_id), fnb:[], keluar:[]};
     susulan.rows.push(barisSusulanBaru());
 
     let el = $("susulanOverlay");
@@ -3420,7 +3425,7 @@ async function bukaSusulan(){
       // Sengaja TIDAK menutup saat latar diketuk: satu ketukan meleset akan
       // membuang puluhan baris yang sudah diketik.
       el.innerHTML = '<div class="ai-modal">'
-        + '<div class="ai-judul"><span>&#10133; Cucian tanggal lampau</span>'
+        + '<div class="ai-judul"><span>&#10133; Data tanggal lampau</span>'
         +   '<button class="ai-tutup" onclick="tutupSusulan()">&#10005;</button></div>'
         + '<div id="susulanIsi"></div></div>';
       document.body.insertBefore(el, document.body.firstChild);
@@ -3432,7 +3437,8 @@ async function bukaSusulan(){
 }
 
 async function tutupSusulan(){
-  const terisi = susulan && susulan.rows.some(r => r.nama.trim() !== "");
+  const terisi = susulan && (susulan.rows.some(r => r.nama.trim() !== "")
+    || susulan.fnb.length > 0 || susulan.keluar.some(k => k.ket.trim() !== "" || k.jml !== ""));
   if(terisi){
     const t = await Swal.fire({icon:"warning", title:"Buang isian?",
       text:"Baris yang sudah diketik belum disimpan.",
@@ -3496,9 +3502,39 @@ function gambarSusulan(){
         +   '<input type="number" inputmode="numeric" min="0" placeholder="Tip (Rp)" value="'+esc(r.tip)+'"'
         +     ' oninput="susulan.rows['+i+'].tip=this.value;segarkanHargaSusulan()">'
         + '</div></div>').join("")
-    + '<button class="btn-cetak-ulang" onclick="tambahBarisSusulan()">&#10133; Tambah baris</button>'
+    + '<button class="btn-cetak-ulang" onclick="tambahBarisSusulan()">&#10133; Tambah baris cucian</button>'
+    // ---- Makanan/minuman: satu menu x jumlah per baris ----
+    + '<div class="sec-label" style="margin-top:14px">Makanan/minuman <span class="waktu">stok tidak dipotong</span></div>'
+    + s.fnb.map((f, i) =>
+        '<div class="susulan-baris"><div class="susulan-grid">'
+        + '<select class="lebar" onchange="susulan.fnb['+i+'].id=+this.value;segarkanHargaSusulan()">'
+        +   s.menu.map(m => '<option value="'+m.id+'"'+(m.id===f.id ? ' selected' : '')+'>'+esc(m.name)+' &middot; '+rp(m.price)+'</option>').join("")
+        + '</select>'
+        + '<input type="number" inputmode="numeric" min="1" placeholder="Jumlah" value="'+esc(f.qty)+'"'
+        +   ' oninput="susulan.fnb['+i+'].qty=this.value;segarkanHargaSusulan()">'
+        + '<div class="susulan-bayar">'
+        +   '<button class="'+(f.bayar==="cash" ? 'aktif' : '')+'" onclick="bayarFnbSusulan('+i+',\'cash\')">Cash</button>'
+        +   '<button class="'+(f.bayar==="tf" ? 'aktif' : '')+'" onclick="bayarFnbSusulan('+i+',\'tf\')">TF</button>'
+        + '</div>'
+        + '<button class="btn-hapus-pk lebar" style="justify-self:end" title="Hapus baris" onclick="hapusFnbSusulan('+i+')">&#10005; hapus</button>'
+        + '</div></div>').join("")
+    + (s.menu.length
+        ? '<button class="btn-cetak-ulang" onclick="tambahFnbSusulan()">&#10133; Tambah makanan/minuman</button>'
+        : '<div class="cat-kosong">Belum ada menu. Tambahkan di Pengaturan &rarr; Makanan.</div>')
+    // ---- Pengeluaran hari itu ----
+    + '<div class="sec-label" style="margin-top:14px">Pengeluaran <span class="waktu">mengurangi setoran buku</span></div>'
+    + s.keluar.map((k, i) =>
+        '<div class="susulan-baris"><div class="susulan-grid">'
+        + '<input class="lebar" placeholder="Keterangan (sabun, bensin...)" value="'+esc(k.ket)+'"'
+        +   ' oninput="susulan.keluar['+i+'].ket=this.value">'
+        + '<input type="number" inputmode="numeric" min="1" placeholder="Jumlah (Rp)" value="'+esc(k.jml)+'"'
+        +   ' oninput="susulan.keluar['+i+'].jml=this.value;segarkanHargaSusulan()">'
+        + '<button class="btn-hapus-pk" style="justify-self:end" title="Hapus baris" onclick="hapusKeluarSusulan('+i+')">&#10005; hapus</button>'
+        + '</div></div>').join("")
+    + '<button class="btn-cetak-ulang" onclick="tambahKeluarSusulan()">&#10133; Tambah pengeluaran</button>'
     + '<div class="susulan-kaki">'
     +   '<div class="cat-baris tebal"><span id="susulanJumlah"></span><b id="susulanTotal"></b></div>'
+    +   '<div class="waktu" id="susulanRinci" style="font-size:12px;white-space:normal;line-height:1.4"></div>'
     +   '<button class="btn-catat" style="background:var(--go);width:100%;margin-top:8px" onclick="simpanSusulan()">&#10003; Simpan semua</button>'
     + '</div>';
   segarkanHargaSusulan();
@@ -3513,9 +3549,48 @@ function segarkanHargaSusulan(){
     const h = hargaSusulan(r); total += h; tip += Math.max(0, parseInt(r.tip, 10) || 0);
     const el = $("susulanHarga"+i); if(el) el.textContent = rp(h);
   });
-  $("susulanJumlah").innerHTML = s.rows.length+' cucian'+(tip ? ' <span class="waktu">+ tip '+rp(tip)+'</span>' : '');
-  $("susulanTotal").textContent = rp(total);
+  const fnb = fnbSusulanSah().reduce((t, f) => t + f.harga * f.qty, 0);
+  const keluar = keluarSusulanSah().reduce((t, k) => t + k.jml, 0);
+  // Kaki: uang masuk (cuci + F&B). Tip dan pengeluaran disebut terpisah di
+  // bawahnya supaya angka besarnya tetap berarti satu hal.
+  const cuciTerisi = s.rows.filter(r => r.nama.trim() !== "").length;
+  $("susulanJumlah").textContent = "Uang masuk";
+  $("susulanTotal").textContent = rp(total + fnb);
+  $("susulanRinci").innerHTML = [
+    s.rows.length+' cucian '+rp(total)+(cuciTerisi < s.rows.length ? ' ('+(s.rows.length - cuciTerisi)+' belum bernama)' : ''),
+    fnb ? 'F&amp;B '+rp(fnb) : '',
+    tip ? 'tip '+rp(tip) : '',
+    keluar ? 'pengeluaran -'+rp(keluar) : '',
+  ].filter(Boolean).join(' &middot; ');
 }
+
+/** Baris F&B yang layak dikirim: menunya masih ada dan jumlahnya minimal 1. */
+function fnbSusulanSah(){
+  return susulan.fnb.map(f => {
+    const m = susulan.menu.find(x => x.id === f.id);
+    const qty = parseInt(f.qty, 10) || 0;
+    return m && qty >= 1 ? {id:m.id, nama:m.name, harga:m.price, qty, bayar:f.bayar} : null;
+  }).filter(Boolean);
+}
+/** Baris pengeluaran yang layak dikirim: ada keterangan dan nominalnya. */
+function keluarSusulanSah(){
+  return susulan.keluar.map(k => ({ket:k.ket.trim(), jml:parseInt(k.jml, 10) || 0}))
+    .filter(k => k.ket !== "" && k.jml >= 1);
+}
+function tambahFnbSusulan(){
+  const akhir = susulan.fnb[susulan.fnb.length - 1];
+  susulan.fnb.push({id: susulan.menu[0].id, qty:"1", bayar: akhir ? akhir.bayar : "cash"});
+  gambarSusulan();
+}
+function hapusFnbSusulan(i){ susulan.fnb.splice(i, 1); gambarSusulan(); }
+function bayarFnbSusulan(i, m){ susulan.fnb[i].bayar = m; gambarSusulan(); }
+function tambahKeluarSusulan(){
+  susulan.keluar.push({ket:"", jml:""});
+  gambarSusulan();
+  const isian = document.querySelectorAll('#susulanIsi input[placeholder^="Keterangan"]');
+  if(isian.length){ isian[isian.length - 1].scrollIntoView({block:"center"}); isian[isian.length - 1].focus(); }
+}
+function hapusKeluarSusulan(i){ susulan.keluar.splice(i, 1); gambarSusulan(); }
 
 function pilihPekerjaSusulan(id){
   if(susulan.pekerja.has(id)) susulan.pekerja.delete(id); else susulan.pekerja.add(id);
@@ -3563,14 +3638,31 @@ async function simpanSusulan(){
     Swal.fire({icon:"warning", title:"Tanggal belum benar", text:"Pilih tanggal sebelum hari ini.", confirmButtonColor:"#1B9E62"});
     return;
   }
-  if(rows.length === 0){
-    Swal.fire({icon:"warning", title:"Belum ada cucian", text:"Isi nama kendaraan minimal di satu baris.", confirmButtonColor:"#1B9E62"});
+  const fnb = fnbSusulanSah();
+  const keluar = keluarSusulanSah();
+  if(rows.length === 0 && fnb.length === 0 && keluar.length === 0){
+    Swal.fire({icon:"warning", title:"Belum ada isinya",
+      text:"Isi minimal satu cucian (nama kendaraan), makanan/minuman, atau pengeluaran.", confirmButtonColor:"#1B9E62"});
+    return;
+  }
+  // Pengeluaran yang baru terisi separuh (keterangan tanpa nominal atau
+  // sebaliknya) jangan diam-diam terlewat.
+  if(keluar.length < s.keluar.filter(k => k.ket.trim() !== "" || k.jml !== "").length){
+    Swal.fire({icon:"warning", title:"Pengeluaran belum lengkap",
+      text:"Tiap pengeluaran butuh keterangan dan jumlah rupiahnya.", confirmButtonColor:"#1B9E62"});
     return;
   }
   const total = rows.reduce((t, r) => t + hargaSusulan(r), 0);
+  const totalFnb = fnb.reduce((t, f) => t + f.harga * f.qty, 0);
+  const totalKeluar = keluar.reduce((t, k) => t + k.jml, 0);
+  const isiSimpan = [
+    rows.length ? rows.length+" cucian "+rp(total) : "",
+    fnb.length ? fnb.length+" makanan/minuman "+rp(totalFnb) : "",
+    keluar.length ? keluar.length+" pengeluaran -"+rp(totalKeluar) : "",
+  ].filter(Boolean);
   const tanya = await Swal.fire({
-    icon:"question", title:"Simpan "+rows.length+" cucian?",
-    html: "<b>"+fmtTgl(s.tgl)+"</b> &middot; "+rp(total)
+    icon:"question", title:"Simpan data "+fmtTglPendek(s.tgl)+"?",
+    html: "<b>"+fmtTgl(s.tgl)+"</b><br>"+isiSimpan.join("<br>")
       + "<br>Pekerja: "+(s.pekerja.size
           ? esc(s.semuaPekerja.filter(p => s.pekerja.has(p.id)).map(p => p.name).join(", "))
           : "<b>tidak ada</b> (upah tidak tercatat)")
@@ -3594,6 +3686,8 @@ async function simpanSusulan(){
         if(r.jam) b.time = r.jam;
         return b;
       }),
+      fnb: fnb.map(f => ({product_id: f.id, qty: f.qty, payment_method: f.bayar})),
+      expenses: keluar.map(k => ({description: k.ket, amount: k.jml})),
     }});
     const tgl = s.tgl;
     susulan = null;
@@ -3604,7 +3698,7 @@ async function simpanSusulan(){
     await renderBuku();
     if($("detailHari")) $("detailHari").scrollIntoView({behavior:"smooth", block:"start"});
     Swal.fire({toast:true, position:"top-end", icon:"success",
-      title: rows.length+" cucian tersimpan", text: fmtTgl(tgl), showConfirmButton:false, timer:2200});
+      title: "Data tersimpan", text: fmtTgl(tgl)+" · "+isiSimpan.join(", "), showConfirmButton:false, timer:2600});
   }catch(e){ gagal(e); }
 }
 

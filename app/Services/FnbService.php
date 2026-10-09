@@ -120,6 +120,59 @@ class FnbService
     }
 
     /**
+     * Penjualan F&B TANGGAL LAMPAU — satu menu x jumlah, diisi owner dari
+     * Pembukuan bersama cucian susulannya (TransactionService::createBackdated).
+     *
+     * Bedanya dengan create():
+     *  - STOK TIDAK DIPOTONG. Stok yang tercatat sekarang adalah isi rak hari
+     *    ini; barang yang laku berhari-hari lalu sudah tidak ada di rak, jadi
+     *    memotongnya lagi membuat stok kurang dua kali;
+     *  - barang titipan ditolak: lakunya menimbulkan hak penitip yang harus
+     *    cocok dengan barang masuk & sisa di rak — itu tetap lewat alur titip
+     *    jual, bukan diisi belakangan;
+     *  - tanggal, buku, dan jamnya ditentukan pemanggil, bukan "sekarang".
+     *
+     * Harga memakai katalog saat diisi (tidak ada riwayat harga).
+     */
+    public function createBackdated(array $data): FnbSale
+    {
+        $product = Product::find($data['product_id'])
+            ?? throw new InvalidArgumentException('Menu tidak ditemukan.');
+        if ($product->isTitipan()) {
+            throw new InvalidArgumentException(
+                "{$product->name} barang titipan - penjualan lampaunya tidak bisa diisi dari sini."
+            );
+        }
+
+        $qty      = max(1, (int) $data['qty']);
+        $subtotal = (int) $product->price * $qty;
+
+        $sale = new FnbSale([
+            'payment_method' => $data['payment_method'],
+            'total'          => $subtotal,
+            'tip'            => 0,
+            'date'           => $data['date'],
+            'book_id'        => $data['book_id'] ?? null,
+            'created_by'     => $data['created_by'] ?? null,
+        ]);
+        // created_at diisi sendiri supaya jamnya jatuh di tanggal lampau itu.
+        $sale->created_at = $data['created_at'];
+        $sale->save();
+
+        $sale->items()->create([
+            'product_id'      => $product->id,
+            'product_name'    => $product->name,
+            'price'           => $product->price,
+            'qty'             => $qty,
+            'subtotal'        => $subtotal,
+            'consignor_id'    => null,
+            'consignor_share' => 0,
+        ]);
+
+        return $sale;
+    }
+
+    /**
      * Kembalikan stok dari penjualan yang dibatalkan, supaya menu yang batal
      * terjual tidak ikut hangus di layar kasir.
      *

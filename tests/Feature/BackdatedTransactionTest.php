@@ -118,6 +118,95 @@ class BackdatedTransactionTest extends TestCase
         $this->assertSame(['deposited', 'deposited'], array_column($rekap['books'], 'status'));
     }
 
+    public function test_pengeluaran_lampau_ikut_buku_dan_mengurangi_setoran(): void
+    {
+        $tgl = now()->subDays(2)->toDateString();
+
+        $this->postJson('/api/transactions/backdated', [
+            'date' => $tgl, 'book_number' => 1,
+            'rows' => [$this->baris(), $this->baris()],
+            'expenses' => [
+                ['description' => 'Sabun', 'amount' => 15000],
+                ['description' => 'Bensin genset', 'amount' => 10000],
+            ],
+        ], $this->header())->assertCreated();
+
+        $buku = CashBook::where('date', $tgl)->firstOrFail();
+        $keluar = \App\Models\Expense::orderBy('id')->get();
+        $this->assertCount(2, $keluar);
+        $this->assertSame([$buku->id, $buku->id], $keluar->pluck('book_id')->all());
+        $this->assertSame($tgl, $keluar[0]->date->toDateString());
+        $this->assertStringContainsString('susulan', $keluar[0]->created_by);
+        $this->assertSame(35000, $buku->amount, 'Setoran = cash 60.000 - pengeluaran 25.000.');
+
+        $rekap = app(BookkeepingService::class)->dailyRecap($tgl);
+        $this->assertSame(25000, $rekap['expenses']);
+        $this->assertSame(35000, $rekap['profit'], 'Laba = cuci 60.000 - pengeluaran 25.000 (tanpa pekerja, upah 0).');
+    }
+
+    public function test_boleh_hanya_pengeluaran_tapi_tidak_boleh_kosong(): void
+    {
+        $tgl = now()->subDays(2)->toDateString();
+
+        $this->postJson('/api/transactions/backdated', [
+            'date' => $tgl, 'expenses' => [['description' => 'Nota lama', 'amount' => 5000]],
+        ], $this->header())->assertCreated()->assertJsonCount(0, 'data');
+        $this->assertSame(1, \App\Models\Expense::count());
+        $this->assertNull(\App\Models\Expense::first()->book_id, 'Tanpa buku bila tidak dipilih.');
+
+        $this->postJson('/api/transactions/backdated', ['date' => $tgl, 'rows' => [], 'expenses' => []],
+            $this->header())->assertStatus(422);
+    }
+
+    public function test_fnb_lampau_masuk_buku_tanpa_memotong_stok(): void
+    {
+        $tgl = now()->subDays(2)->toDateString();
+        $kopi = \App\Models\Product::create(['name' => 'Kopi', 'type' => 'minuman', 'price' => 5000,
+            'stock' => 3, 'is_active' => true]);
+
+        $this->postJson('/api/transactions/backdated', [
+            'date' => $tgl, 'book_number' => 1,
+            'rows' => [$this->baris()],
+            'fnb' => [
+                ['product_id' => $kopi->id, 'qty' => 10, 'payment_method' => 'cash'],
+                ['product_id' => $kopi->id, 'qty' => 2, 'payment_method' => 'tf'],
+            ],
+        ], $this->header())->assertCreated();
+
+        $this->assertSame(3, $kopi->fresh()->stock, 'Stok hari ini tidak boleh ikut terpotong.');
+
+        $buku = CashBook::where('date', $tgl)->firstOrFail();
+        $jual = \App\Models\FnbSale::with('items')->orderBy('id')->get();
+        $this->assertCount(2, $jual);
+        $this->assertSame([$buku->id, $buku->id], $jual->pluck('book_id')->all());
+        $this->assertSame($tgl, $jual[0]->date->toDateString());
+        $this->assertSame($tgl, $jual[0]->created_at->toDateString());
+        $this->assertSame(50000, $jual[0]->total);
+        $this->assertSame(10, $jual[0]->items[0]->qty);
+        $this->assertSame(30000 + 50000, $buku->amount, 'Setoran = cash cuci + cash F&B; TF tidak ikut.');
+
+        $rekap = app(BookkeepingService::class)->dailyRecap($tgl);
+        $this->assertSame(60000, $rekap['fnb_total']);
+        $this->assertSame(50000, $rekap['fnb_cash']);
+        $this->assertSame(10000, $rekap['fnb_tf']);
+    }
+
+    public function test_fnb_lampau_menolak_barang_titipan(): void
+    {
+        $penitip = \App\Models\Consignor::create(['name' => 'Bu Sri', 'share_mode' => 'setor']);
+        $kue = \App\Models\Product::create(['name' => 'Kue', 'type' => 'makanan', 'price' => 5000, 'stock' => 5,
+            'is_active' => true, 'consignor_id' => $penitip->id, 'payout_price' => 4000]);
+
+        $this->postJson('/api/transactions/backdated', [
+            'date' => now()->subDay()->toDateString(),
+            'rows' => [$this->baris()],
+            'fnb' => [['product_id' => $kue->id, 'qty' => 1, 'payment_method' => 'cash']],
+        ], $this->header())->assertStatus(422);
+
+        $this->assertSame(0, Transaction::count(), 'Cuciannya ikut batal - semua atau tidak sama sekali.');
+        $this->assertSame(0, \App\Models\FnbSale::count());
+    }
+
     public function test_hanya_owner(): void
     {
         $this->postJson('/api/transactions/backdated', [
