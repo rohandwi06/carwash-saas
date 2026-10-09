@@ -2221,14 +2221,19 @@ async function renderRekap(){
     // bawah kartu ini, dan menampilkannya dua kali membuat orang mengira
     // keduanya angka yang berbeda. Barisnya SELALU ada, termasuk saat
     // pengeluaran masih kosong, supaya letaknya tidak berpindah-pindah.
+    // Daftarnya di dalam dropdown (permintaan owner 09/10), seragam dengan
+    // Total Cuci / Cash / TF di atasnya: yang selalu tampil cukup totalnya.
+    const keluar = h.expense_list || [];
     $("rekapKeluar").innerHTML =
-      ((h.expense_list||[]).length===0
+      (keluar.length===0
         ? '<div class="cat-kosong">Belum ada pengeluaran hari ini.</div>'
-        : (h.expense_list||[]).map(e =>
-            '<div class="cat-baris"><span>'+esc(e.description)+'</span>'
-            +'<b class="merah">-'+rp(e.amount)+'</b></div>').join(""))
-      + '<div class="cat-baris tebal"><span>Total Pengeluaran</span><b class="merah">'
-      +   (h.expenses? '-'+rp(h.expenses) : rp(0))+'</b></div>'
+          + '<div class="cat-baris tebal"><span>Total Pengeluaran</span><b class="merah">'+rp(0)+'</b></div>'
+        : barisBuka("keluar", 'Total Pengeluaran <span class="waktu">'+keluar.length+'x</span>',
+            '-'+rp(h.expenses), "merah",
+            keluar.map(e =>
+              '<div class="cat-baris"><span>'+esc(e.description)
+              + (e.created_by ? ' <span class="waktu">&#128100; '+esc(e.created_by)+'</span>' : '')+'</span>'
+              + '<b class="merah">-'+rp(e.amount)+'</b></div>').join("")))
       + barisTitipanRekap(h);
 
     $("statMasuk").textContent = rp(omzetHari(h));
@@ -3282,11 +3287,14 @@ async function renderBuku(){
       +'<div class="cat-baris"><span>Cash Total</span><b>'+rp(h.cash_total)+'</b></div>'
       +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
       +upahRows
-      +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>'
-      // Baris yang sama persis dengan layar Pengeluaran — termasuk tombol
-      // koreksi & hapus untuk owner. Ini satu-satunya jalan membetulkan
-      // pengeluaran bertanggal lampau: Rekap cuma melayani hari ini.
-      +(h.expense_list||[]).map(e => barisKeluar(e)).join("")
+      // Pengeluaran bisa dibuka (permintaan owner 09/10). Isinya baris yang
+      // sama persis dengan layar Pengeluaran — termasuk tombol koreksi &
+      // hapus untuk owner. Ini satu-satunya jalan membetulkan pengeluaran
+      // bertanggal lampau: Rekap cuma melayani hari ini.
+      +((h.expense_list||[]).length
+          ? barisBuka("buku-keluar", 'Pengeluaran <span class="waktu">'+h.expense_list.length+'x</span>',
+              '-'+rp(h.expenses), "merah", h.expense_list.map(e => barisKeluar(e)).join(""))
+          : '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="hijau">'+rp(h.profit)+'</b></div>'
       +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
       +'</div>'
