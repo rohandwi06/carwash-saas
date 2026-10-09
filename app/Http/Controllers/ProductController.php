@@ -34,6 +34,8 @@ class ProductController extends Controller
             'type'         => ['required', Rule::in(['makanan', 'minuman'])],
             'price'        => ['required', 'integer', 'min:100', 'max:10000000'],
             'stock'        => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            // false = menu tanpa stok (dibuat saat dipesan). Lihat tanpaStok().
+            'track_stock'  => ['sometimes', 'boolean'],
             'consignor_id' => ['nullable', 'integer', 'exists:consignors,id'],
             'payout_price' => ['nullable', 'integer', 'min:0', 'max:10000000'],
         ]);
@@ -46,7 +48,11 @@ class ProductController extends Controller
         // sejak baris pertama.
         $data['stock'] = empty($data['consignor_id']) ? ($data['stock'] ?? 0) : 0;
 
-        return response()->json(['data' => Product::create($data)], 201);
+        $data = $this->tanpaStok($data, ! empty($data['consignor_id']));
+
+        // fresh(): supaya balasannya memuat nilai bawaan kolom (track_stock)
+        // yang tidak ikut dikirim layar.
+        return response()->json(['data' => Product::create($data)->fresh()], 201);
     }
 
     /** PATCH /api/products/{product} — ubah nama / kategori / harga / stok / toggle aktif */
@@ -57,6 +63,7 @@ class ProductController extends Controller
             'type'         => ['sometimes', Rule::in(['makanan', 'minuman'])],
             'price'        => ['sometimes', 'integer', 'min:100', 'max:10000000'],
             'stock'        => ['sometimes', 'integer', 'min:0', 'max:1000000'],
+            'track_stock'  => ['sometimes', 'boolean'],
             'is_active'    => ['sometimes', 'boolean'],
             'consignor_id' => ['sometimes', 'nullable', 'integer', 'exists:consignors,id'],
             'payout_price' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:10000000'],
@@ -77,9 +84,38 @@ class ProductController extends Controller
                 'Stok barang titipan diubah lewat "Barang masuk" atau "Retur", bukan diketik langsung.']);
         }
 
+        $data = $this->tanpaStok($data, $gabungan['consignor_id'] !== null);
+
         $product->update($data);
 
         return response()->json(['data' => $product]);
+    }
+
+    /**
+     * Menu tanpa stok, berlaku di dua jalur (tambah & ubah):
+     *  - barang titipan tidak boleh tanpa stok — sisa di rak adalah dasar
+     *    hitungan dengan penitipnya;
+     *  - begitu sebuah menu jadi tanpa stok, angka stoknya dinolkan supaya
+     *    tidak ada sisa angka lama yang tampil lagi kalau kelak dikembalikan
+     *    jadi berstok (owner mengisi stok barunya saat itu).
+     */
+    private function tanpaStok(array $data, bool $titipan): array
+    {
+        if (! array_key_exists('track_stock', $data)) {
+            return $data;
+        }
+        if ($data['track_stock'] === false || $data['track_stock'] === 0 || $data['track_stock'] === '0') {
+            if ($titipan) {
+                throw ValidationException::withMessages(['track_stock' =>
+                    'Barang titipan harus berstok — sisa di rak dipakai menghitung setoran ke penitipnya.']);
+            }
+            $data['track_stock'] = false;
+            $data['stock'] = 0;
+        } else {
+            $data['track_stock'] = true;
+        }
+
+        return $data;
     }
 
     /**

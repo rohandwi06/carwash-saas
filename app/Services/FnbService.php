@@ -51,7 +51,8 @@ class FnbService
                     ?? throw new InvalidArgumentException('Produk tidak ditemukan atau nonaktif.');
 
                 $qty      = max(1, (int) $row['qty']);
-                if ($product->stock < $qty) {
+                // Menu tanpa stok (dibuat saat dipesan) tidak pernah "habis".
+                if ($product->pakaiStok() && $product->stock < $qty) {
                     throw new InvalidArgumentException(
                         "Stok {$product->name} tidak cukup. Sisa stok: {$product->stock}."
                     );
@@ -104,7 +105,9 @@ class FnbService
 
             foreach ($data['items'] as $row) {
                 $product = $products->get($row['product_id']);
-                $product->decrement('stock', max(1, (int) $row['qty']));
+                if ($product->pakaiStok()) {
+                    $product->decrement('stock', max(1, (int) $row['qty']));
+                }
             }
 
             // Draft sudah "naik kelas" jadi penjualan — hapus dari daftar tunggu.
@@ -134,7 +137,13 @@ class FnbService
                     continue;
                 }
 
-                Product::whereKey($item->product_id)->increment('stock', $item->qty);
+                // Menu tanpa stok tidak pernah dipotong, jadi tidak ada yang
+                // dikembalikan — kalau tetap ditambah, stoknya tumbuh dari
+                // nol tiap kali ada pembatalan.
+                $produk = Product::find($item->product_id);
+                if ($produk && $produk->pakaiStok()) {
+                    $produk->increment('stock', $item->qty);
+                }
             }
         }
     }

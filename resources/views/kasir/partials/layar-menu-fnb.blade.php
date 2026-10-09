@@ -98,6 +98,13 @@
               <input id="inFnbHarga" type="number" inputmode="numeric" placeholder="Harga (Rp)">
               <input id="inFnbStok" type="number" inputmode="numeric" placeholder="Stok awal">
             </div>
+            {{-- Menu yang dibuat saat dipesan (kopi tubruk, teh): tidak punya
+                 stok, jadi tidak pernah "Habis". Disembunyikan JS untuk barang
+                 titipan, yang wajib berstok. --}}
+            <label class="cek-tanpa-stok" id="wadahTanpaStok">
+              <input type="checkbox" id="inFnbTanpaStok" onchange="gantiTanpaStokBaru()">
+              <span>Tanpa stok <span class="waktu">dibuat saat dipesan (kopi, teh)</span></span>
+            </label>
             {{-- Pemilik barang. Diisi JS (isiPilihanPenitip) karena daftarnya
                  hidup; "Milik cucian" selalu jadi pilihan pertama supaya alur
                  lama tidak berubah sama sekali bagi yang tidak menerima titipan.

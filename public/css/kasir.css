@@ -690,6 +690,10 @@
   .rincian-bayar .cat-baris b{font-weight:800;white-space:nowrap}   /* "Rp 5.000" tidak patah di HP */
   .baris-buka.buka .trx-panah{display:inline-block;transform:rotate(180deg)}
   .baris-buka > b{white-space:nowrap}   /* nominal & panah tidak turun baris */
+  /* Pengaturan > Makanan: centang "Tanpa stok" di formulir tambah menu. */
+  .cek-tanpa-stok{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:15px;font-weight:800;cursor:pointer}
+  .cek-tanpa-stok input{width:22px;height:22px;flex:0 0 auto;accent-color:var(--go)}
+  .cek-tanpa-stok .waktu{font-weight:600}
   /* Pembukuan: isi cucian tanggal lampau (banyak baris). Tiap baris satu
      kartu dua kolom — tabel enam kolom tidak muat di lebar HP. */
   .susulan-baris{padding:10px 0 12px;border-bottom:1.5px solid var(--line)}

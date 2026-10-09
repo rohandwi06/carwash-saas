@@ -720,7 +720,16 @@ function renderConfirm(){
    TIDAK ikut hilang kalau kepencar ke halaman lain — kartunya di modal saja
    yang tidak terlihat, jumlahnya tetap tersimpan di `fnbCuci`, tetap tampil di
    ringkasan layar konfirmasi, dan tetap terhitung di totalnya. */
-function fnbTersedia(){ return produk.filter(p => p.is_active && p.stock>0); }
+/* Menu TANPA STOK (dibuat saat dipesan: kopi tubruk, teh) tidak pernah habis
+   dan tidak punya batas jumlah. `=== false`, bukan `!p.track_stock`: server
+   yang belum mengenal kolom ini tidak mengirimnya sama sekali, dan itu harus
+   dibaca "masih berstok". */
+function pakaiStok(p){ return p.track_stock !== false; }
+function adaStok(p){ return !pakaiStok(p) || p.stock > 0; }
+function sisaStok(p){ return pakaiStok(p) ? p.stock : Infinity; }
+function labelStok(p){ return !pakaiStok(p) ? "Selalu ada" : (p.stock > 0 ? "Stok "+p.stock : "Habis"); }
+
+function fnbTersedia(){ return produk.filter(p => p.is_active && adaStok(p)); }
 
 function gambarFnbCuci(){
   const semua = fnbTersedia();
@@ -777,7 +786,7 @@ function gambarFnbModal(){
           +     (p.consignor_id? ' <span class="fm-titip">&#129309; '+esc(namaPenitip(p))+'</span>' : '')
           +   '</span>'
           +   '<span class="fm-harga">'+rp(p.price)+'</span>'
-          +   '<span class="fm-stok">Stok '+p.stock+'</span>'
+          +   '<span class="fm-stok">'+labelStok(p)+'</span>'
           + '</button>'
           + (qty
               ? '<span class="fm-atur">'
@@ -817,7 +826,7 @@ function ubahQtyFnbCuci(id, d){
   const p = produk.find(x=>x.id==id);
   if(!p) return;
   const next = (fnbCuci[id]||0)+d;
-  if(d>0 && next>p.stock){
+  if(d>0 && next>sisaStok(p)){
     Swal.fire({icon:"warning", title:"Stok tidak cukup", text:"Sisa stok "+p.name+": "+p.stock, confirmButtonColor:"#1B9E62"});
     return;
   }
@@ -4282,7 +4291,7 @@ function gambarGridFnb(){
     ? '<div class="cat-kosong">Menu masih kosong.'
       +'<br><button class="btn-tanya-inline" onclick="pergi(\'layarMenuFnb\')">&#10133; Tambah Menu Makanan/Minuman</button></div>'
     : produk.map(p =>
-        '<button class="fnb-item'+(p.stock<=0?' habis':'')+(p.consignor_id?' titipan':'')+'" '+(p.stock<=0?'disabled':'onclick="tambahKeranjang('+p.id+')"')+'>'
+        '<button class="fnb-item'+(!adaStok(p)?' habis':'')+(p.consignor_id?' titipan':'')+'" '+(!adaStok(p)?'disabled':'onclick="tambahKeranjang('+p.id+')"')+'>'
         +(keranjang[p.id]? '<span class="fnb-qty">'+keranjang[p.id]+'</span>':'')
         // Barang titipan memakai baris jenis untuk menyebut PEMILIKNYA. Kasir
         // tidak perlu berbuat apa-apa dengan informasi itu — tapi begitu ada
@@ -4292,7 +4301,7 @@ function gambarGridFnb(){
             : (p.type==="makanan"?"&#127836; Makanan":"&#129380; Minuman"))+'</span>'
         +'<span class="fnb-nama">'+esc(p.name)+'</span>'
         +'<span class="fnb-harga">'+rp(p.price)+'</span>'
-        +'<span class="fnb-stok">'+(p.stock>0?'Stok '+p.stock:'Habis')+'</span>'
+        +'<span class="fnb-stok">'+labelStok(p)+'</span>'
         +'</button>'
       ).join("");
 }
@@ -4330,8 +4339,8 @@ function tipFnb(){
 }
 function tambahKeranjang(id){
   const p = produk.find(x=>x.id==id);
-  if(!p || p.stock<=0) return;
-  if((keranjang[id]||0) >= p.stock){
+  if(!p || !adaStok(p)) return;
+  if((keranjang[id]||0) >= sisaStok(p)){
     Swal.fire({icon:"warning", title:"Stok tidak cukup", text:"Sisa stok "+p.name+": "+p.stock, confirmButtonColor:"#1B9E62"});
     return;
   }
@@ -4340,7 +4349,7 @@ function tambahKeranjang(id){
 function ubahQty(id,d){
   const p = produk.find(x=>x.id==id);
   const next = (keranjang[id]||0)+d;
-  if(d>0 && p && next>p.stock){
+  if(d>0 && p && next>sisaStok(p)){
     Swal.fire({icon:"warning", title:"Stok tidak cukup", text:"Sisa stok "+p.name+": "+p.stock, confirmButtonColor:"#1B9E62"});
     return;
   }
@@ -5726,6 +5735,7 @@ function isiPilihanPenitip(){
 
 /** Kotak yang relevan saja yang tampil: harga setor vs stok awal. */
 function gantiPemilikBaru(){
+  gantiTanpaStokBaru();
   const id = parseInt($("inFnbPemilik").value,10) || null;
   const c  = id ? penitipSemua.find(x=>x.id===id) : null;
   // Mode persen tidak butuh harga setor — haknya dihitung dari harga jual.
@@ -5836,6 +5846,20 @@ async function editProduk(id, namaLama, jenisLama){
     renderDaftarProduk();
   }catch(e){ gagal(e); }
 }
+/* Centang "Tanpa stok" di formulir tambah menu: kotak stok awal dimatikan
+   supaya jelas angkanya tidak dipakai. Barang titipan wajib berstok, jadi
+   centangnya disembunyikan begitu pemiliknya bukan cucian sendiri. */
+function gantiTanpaStokBaru(){
+  const cek = $("inFnbTanpaStok"); if(!cek) return;
+  const titipan = !!(parseInt(($("inFnbPemilik")||{}).value, 10) || 0);
+  $("wadahTanpaStok").classList.toggle("hidden", titipan);
+  if(titipan) cek.checked = false;
+  const stok = $("inFnbStok");
+  stok.disabled = cek.checked;
+  stok.placeholder = cek.checked ? "Tanpa stok" : "Stok awal";
+  if(cek.checked) stok.value = "";
+}
+
 async function tambahProduk(){
   const nama = $("inFnbNama").value.trim();
   const harga = parseInt($("inFnbHarga").value,10);
@@ -5861,6 +5885,9 @@ async function tambahProduk(){
       }
       body.payout_price = setor;
     }
+  }else if($("inFnbTanpaStok") && $("inFnbTanpaStok").checked){
+    // Menu yang dibuat saat dipesan: tanpa angka stok sama sekali.
+    body.track_stock = false;
   }else{
     body.stock = stok;
   }
@@ -5868,6 +5895,7 @@ async function tambahProduk(){
   try{
     await api("/products",{method:"POST",body});
     $("inFnbNama").value=""; $("inFnbHarga").value=""; $("inFnbStok").value=""; $("inFnbSetor").value="";
+    if($("inFnbTanpaStok")){ $("inFnbTanpaStok").checked = false; gantiTanpaStokBaru(); }
     renderMenuFnb();
   }catch(e){ gagal(e); }
 }
@@ -5879,49 +5907,66 @@ async function ubahHargaProduk(id, v){
    kasir sadar. Sekarang angkanya cuma dipajang, dan perubahannya lewat
    modal yang harus ditekan "Simpan" — lihat ubahStokProduk(). */
 function miniStok(p){
-  return '<button class="mini-field mini-stok'+(p.stock<=0?" habis":"")+'" '
+  // Menu tanpa stok: kotaknya tetap bisa diketuk — dari situ owner bisa
+  // mengembalikannya jadi berstok.
+  const tanpa = !pakaiStok(p);
+  return '<button class="mini-field mini-stok'+(!tanpa && p.stock<=0?" habis":"")+'" '
     + 'title="Ubah stok" onclick="ubahStokProduk('+p.id+')">'
     + '<span class="mini-label">Stok</span>'
-    + '<span class="mini-nilai">'+p.stock+'</span>'
+    + '<span class="mini-nilai">'+(tanpa ? "Tanpa stok" : p.stock)+'</span>'
     + '</button>';
 }
 async function ubahStokProduk(id){
   const p = produkSemua.find(x=>x.id===id);
   if(!p) return;
-  const {value: stok} = await Swal.fire({
+  const tanpaKini = !pakaiStok(p);
+  const {value: hasil} = await Swal.fire({
     // esc(): judul Swal dirender sebagai HTML, dan nama menu diketik owner.
     title: "Stok " + esc(p.name),
     html:
       '<div class="sw-field-label">Stok sekarang</div>'
-      +'<div class="sw-stok-kini">'+p.stock+'</div>'
+      +'<div class="sw-stok-kini">'+(tanpaKini ? "Tanpa stok" : p.stock)+'</div>'
       +'<div class="sw-field-label">Ubah jadi</div>'
       +'<input id="swStok" type="number" inputmode="numeric" min="0" max="1000000" '
-      +  'class="swal2-input" value="'+p.stock+'">',
+      +  'class="swal2-input" value="'+(tanpaKini ? "" : p.stock)+'"'+(tanpaKini ? " disabled" : "")+'>'
+      // Menu yang dibuat saat dipesan (kopi tubruk, teh): tidak pernah
+      // "Habis" dan stoknya tidak dihitung.
+      +'<label class="cek-tanpa-stok" style="justify-content:center;margin-top:12px">'
+      +  '<input type="checkbox" id="swTanpaStok"'+(tanpaKini ? " checked" : "")
+      +  ' onchange="document.getElementById(\'swStok\').disabled=this.checked">'
+      +  '<span>Tanpa stok <span class="waktu">dibuat saat dipesan</span></span></label>',
     focusConfirm: false,
     showCancelButton: true, confirmButtonText: "Simpan", cancelButtonText: "Batal",
     confirmButtonColor: "#1B9E62",
     didOpen: () => {
       // Isian langsung tersorot: kasir tinggal mengetik angka barunya.
       const el = document.getElementById("swStok");
-      el.focus(); el.select();
+      if(!el.disabled){ el.focus(); el.select(); }
     },
     preConfirm: () => {
+      if(document.getElementById("swTanpaStok").checked) return {tanpa:true};
       const v = parseInt(document.getElementById("swStok").value, 10);
       if(isNaN(v))     return Swal.showValidationMessage("Stok harus diisi angka");
       if(v < 0)        return Swal.showValidationMessage("Stok tidak boleh minus");
       if(v > 1000000)  return Swal.showValidationMessage("Stok terlalu besar (maks 1.000.000)");
-      return v;
+      return {tanpa:false, stok:v};
     },
   });
-  // `undefined` = dibatalkan. Dibandingkan begini, bukan `if(!stok)`, supaya
-  // menyetel stok jadi 0 (barang habis) tetap tersimpan.
-  if(stok === undefined) return;
-  if(stok === p.stock) return;   // tidak berubah — tak perlu menembak server
+  // `undefined` = dibatalkan.
+  if(hasil === undefined) return;
+  // Tidak berubah — tak perlu menembak server. Stok 0 (barang habis) tetap
+  // dianggap perubahan yang sah selama angkanya memang beda.
+  if(hasil.tanpa === tanpaKini && (hasil.tanpa || hasil.stok === p.stock)) return;
+  // track_stock hanya dikirim bila statusnya memang berganti, supaya
+  // mengubah angka stok biasa tetap jalan di server yang belum punya kolomnya.
+  const body = hasil.tanpa ? {track_stock:false}
+    : (tanpaKini ? {track_stock:true, stock:hasil.stok} : {stock:hasil.stok});
   try{
-    await api("/products/"+id,{method:"PATCH",body:{stock:stok}});
+    await api("/products/"+id,{method:"PATCH",body});
     renderMenuFnb();
     Swal.fire({toast:true, position:"top-end", icon:"success",
-      title:"Stok "+esc(p.name)+" jadi "+stok, showConfirmButton:false, timer:2000});
+      title: hasil.tanpa ? esc(p.name)+" jadi tanpa stok" : "Stok "+esc(p.name)+" jadi "+hasil.stok,
+      showConfirmButton:false, timer:2000});
   }catch(e){ gagal(e); }
 }
 async function toggleProduk(id, aktif){
