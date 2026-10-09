@@ -2381,8 +2381,8 @@ async function renderDetailKeluar(){
       const h = await api("/reports/daily?date="+keluarTgl);
       const masuk = uangMasukHari(h);
       const omzet = omzetHari(h);
-      hitung = '<div class="cat-baris"><span>Uang masuk (cuci + F&amp;B + tip)</span>'
-        +   '<b>'+rp(masuk)+'</b></div>'
+      hitung = '<div class="cat-baris"><span>Uang masuk<br><span class="waktu">cuci + F&amp;B + tip</span></span>'
+        +   '<b style="white-space:nowrap">'+rp(masuk)+'</b></div>'
         + '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'
         +   (h.expenses? '-'+rp(h.expenses) : rp(0))+'</b></div>'
         + barisTitipanRekap(h)
@@ -2407,41 +2407,26 @@ async function renderDetailKeluar(){
 const keluarTampil = new Map();
 
 /** Satu baris pengeluaran; tombol koreksi & hapus hanya untuk owner. */
-function barisKeluar(e, opsi){
+function barisKeluar(e){
   keluarTampil.set(e.id, e);
-  // Bentuk ringkas (Pembukuan, permintaan owner 09/10): kepala cukup
-  // keterangan & nominal; siapa yang mencatat serta tombol koreksi & hapus
-  // pindah ke dalam detail yang dibuka dengan ketukan — sama dengan baris
-  // transaksi cuci. Layar Pengeluaran sendiri tetap memakai bentuk lengkap.
-  if(opsi && opsi.ringkas){
-    return '<div class="trx-item">'
-      + '<div class="cat-baris trx-head" onclick="toggleTrx(this)"><span>&#128184; '+esc(e.description)+'</span>'
-      +   '<span><b class="merah">-'+rp(e.amount)+'</b> <span class="trx-panah">&#9662;</span></span></div>'
-      + '<div class="trx-detail">'
-      +   '<div class="cat-baris trx-det-baris"><span class="waktu">Dicatat oleh</span><span>'
-      +     (e.created_by ? '&#128100; '+esc(e.created_by) : '&mdash;')+'</span></div>'
-      // Hanya owner — penjaga sebenarnya ada di routes/api.php.
-      +   (ROLE==="owner"
-            ? '<button class="btn-cetak-ulang" onclick="event.stopPropagation();editPengeluaran('+e.id+')">&#9998; Koreksi pengeluaran</button>'
-              + '<button class="btn-cetak-ulang btn-batal-trx" onclick="event.stopPropagation();hapusPengeluaran('+e.id+')">&#10005; Hapus pengeluaran</button>'
-            : '')
-      + '</div></div>';
-  }
-  return '<div class="cat-baris">'
-    + '<span>&#128184; '+esc(e.description)
-    +   (e.created_by? '<span class="waktu"> &#128100; '+esc(e.created_by)+'</span>' : '')
-    + '</span>'
-    // Nominal & tombol dibungkus satu span, seperti trxHTML — lihat .keluar-aksi.
-    + '<span class="keluar-aksi"><b class="merah">-'+rp(e.amount)+'</b>'
+  // Kepala cukup keterangan & nominal (permintaan owner 09/10); siapa yang
+  // mencatat serta tombol koreksi & hapus ada di dalam detail yang dibuka
+  // dengan ketukan — sama dengan baris transaksi cuci. Dulu tombolnya
+  // menempel di baris dan membuat keterangan patah tiga baris di HP.
+  return '<div class="trx-item">'
+    + '<div class="cat-baris trx-head" onclick="toggleTrx(this)"><span>&#128184; '+esc(e.description)+'</span>'
+    +   '<span style="white-space:nowrap"><b class="merah">-'+rp(e.amount)+'</b> <span class="trx-panah">&#9662;</span></span></div>'
+    + '<div class="trx-detail">'
+    +   '<div class="cat-baris trx-det-baris"><span class="waktu">Dicatat oleh</span><span>'
+    +     (e.created_by ? '&#128100; '+esc(e.created_by) : '&mdash;')+'</span></div>'
     // Mengubah angka pengeluaran hanya boleh owner — sama seperti void transaksi.
     // Ini cuma menyembunyikan tombolnya; penjaga sebenarnya ada di routes/api.php,
     // yang tetap menolak walau layar ini dipaksa memunculkannya.
-    + (ROLE==="owner"
-        ? '<button class="btn-edit-pk" title="Koreksi" onclick="editPengeluaran('+e.id+')">&#9998;</button>'
-          + '<button class="btn-hapus-pk" title="Hapus" onclick="hapusPengeluaran('+e.id+')">&#10005;</button>'
-        : '')
-    + '</span>'
-    + '</div>';
+    +   (ROLE==="owner"
+          ? '<button class="btn-cetak-ulang" onclick="event.stopPropagation();editPengeluaran('+e.id+')">&#9998; Koreksi pengeluaran</button>'
+            + '<button class="btn-cetak-ulang btn-batal-trx" onclick="event.stopPropagation();hapusPengeluaran('+e.id+')">&#10005; Hapus pengeluaran</button>'
+          : '')
+    + '</div></div>';
 }
 
 /** Cari pengeluaran pada rentang tanggal (dipilih dengan tahan di kalender). */
@@ -3311,7 +3296,7 @@ async function renderBuku(){
       // bertanggal lampau: Rekap cuma melayani hari ini.
       +((h.expense_list||[]).length
           ? barisBuka("buku-keluar", 'Pengeluaran <span class="waktu">'+h.expense_list.length+'x</span>',
-              '-'+rp(h.expenses), "merah", h.expense_list.map(e => barisKeluar(e, {ringkas:true})).join(""))
+              '-'+rp(h.expenses), "merah", h.expense_list.map(e => barisKeluar(e)).join(""))
           : '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="hijau">'+rp(h.profit)+'</b></div>'
       +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
@@ -3466,7 +3451,7 @@ function kartuBuku(g){
   // & hapus untuk owner. Ini satu-satunya jalan membetulkan pengeluaran
   // bertanggal lampau: Rekap cuma melayani hari ini.
   const isiKeluar = g.keluar.length
-    ? seksiBuku("Pengeluaran", g.keluar.length, '-'+rp(kel)) + g.keluar.map(e => barisKeluar(e, {ringkas:true})).join("") : "";
+    ? seksiBuku("Pengeluaran", g.keluar.length, '-'+rp(kel)) + g.keluar.map(e => barisKeluar(e)).join("") : "";
 
   const kunci = "buku-"+g.kunci;
   // Kepala kartu cukup nama buku & nominalnya (permintaan owner 03/10);
