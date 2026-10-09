@@ -129,6 +129,14 @@
 
         {{-- ================= KARYAWAN (TRAINING) ================= --}}
         <div class="set-grup" data-grup="karyawan">
+          {{-- Cara hitung upah satu cucian: bagi hasil persenan atau upah per
+               mobil. Diisi JS lewat renderBagiHasil(); hanya berlaku untuk
+               transaksi berikutnya (upah lama dibekukan di transaksinya). --}}
+          <div class="cat-blok">
+            <h3>&#129309; Bagi hasil upah</h3>
+            <div id="bagiHasilUpah"></div>
+          </div>
+
           <div class="cat-blok">
             <h3>&#127891; Karyawan training</h3>
             {{-- Satu kalimat aturan hitungnya: tanpa ini, owner tidak tahu apakah

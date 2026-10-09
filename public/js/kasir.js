@@ -5012,6 +5012,109 @@ function setTabPengaturan(tab, gulirKeAtas = true){
   if(gulirKeAtas && layar && !layar.classList.contains("hidden")) window.scrollTo({top:0, behavior:"smooth"});
 }
 
+/* ---------- PENGATURAN: BAGI HASIL UPAH (khusus owner) ----------
+   Dua cara menghitung upah satu cucian:
+     persen   sekian persen dari harga cuci + add-on untuk pekerja, sisanya
+              owner — satu angka untuk semua jenis kendaraan;
+     nominal  upah per mobil, nominal tetap per jenis kendaraan + layanan
+              (diisi di tab Kendaraan) — cara lama.
+   Layar ini hanya memilih & menampilkan contoh; hitungannya di server
+   (WageService::jatahFor), dan hanya berlaku untuk transaksi berikutnya. */
+let bagiHasil = null;   // {tersimpan:{mode,percent}, mode, percent} — mode/percent = yang sedang dipilih di layar
+
+async function muatBagiHasil(){
+  const d = await api("/wage-sharing");
+  bagiHasil = {tersimpan: d, mode: d.mode, percent: d.percent};
+  gambarBagiHasil();
+}
+
+/** Persen yang sedang diketik, dijepit 0–100; kosong/ngawur dianggap 0. */
+function persenBagiHasil(){
+  const v = parseInt(bagiHasil.percent, 10);
+  return isNaN(v) ? 0 : Math.max(0, Math.min(100, v));
+}
+
+function gambarBagiHasil(){
+  const wadah = $("bagiHasilUpah"); if(!wadah || !bagiHasil) return;
+  const persen = bagiHasil.mode === "persen";
+  const berubah = bagiHasil.mode !== bagiHasil.tersimpan.mode
+    || (persen && persenBagiHasil() !== bagiHasil.tersimpan.percent);
+
+  wadah.innerHTML =
+      '<div class="peny-ket">Cara menghitung upah tiap cucian. Berlaku untuk transaksi <b>berikutnya</b> &mdash; '
+    +   'upah yang sudah tercatat tidak berubah.</div>'
+    + '<div class="bayar-grid" style="margin-bottom:12px">'
+    +   '<button class="btn-bayar'+(persen ? ' aktif' : '')+'" style="font-size:15.5px;padding:14px 6px" onclick="pilihModeBagiHasil(\'persen\')">Persenan</button>'
+    +   '<button class="btn-bayar'+(persen ? '' : ' aktif')+'" style="font-size:15.5px;padding:14px 6px" onclick="pilihModeBagiHasil(\'nominal\')">Upah per mobil</button>'
+    + '</div>'
+    + (persen
+        ? '<div class="field" style="margin-bottom:10px"><label for="inPersenUpah">Bagian pekerja (%)</label>'
+          + '<input id="inPersenUpah" type="number" inputmode="numeric" min="0" max="100" value="'+persenBagiHasil()+'"'
+          +   ' style="text-transform:none" oninput="bagiHasil.percent=this.value;gambarContohBagiHasil()"></div>'
+          + '<div id="contohBagiHasil"></div>'
+        : '<div class="cat-baris"><span>Nominal upah diatur per jenis kendaraan &amp; layanan.</span></div>'
+          + '<button class="btn-cetak-ulang" onclick="setTabPengaturan(\'kendaraan\')">&#128663; Atur di tab Kendaraan</button>')
+    + '<button class="btn-catat" id="btnSimpanBagiHasil" onclick="simpanBagiHasil()"'
+    +   ' style="background:var(--go);width:100%;margin-top:12px'+(berubah ? '' : ';opacity:.5')+'"'+(berubah ? '' : ' disabled')+'>'
+    +   (berubah ? '&#10003; Simpan cara hitung' : '&#10003; Tersimpan')+'</button>';
+  gambarContohBagiHasil();
+}
+
+/* Contoh hitungan — digambar terpisah supaya mengetik angka persen tidak
+   menggambar ulang kotak isiannya (kursor terlempar keluar). */
+function gambarContohBagiHasil(){
+  const persen = bagiHasil.mode === "persen";
+  const p = persenBagiHasil();
+  const wadah = $("contohBagiHasil");
+  if(wadah && persen){
+    const cuci = 40000, addon = 10000, dasar = cuci + addon;
+    const upah = Math.floor(dasar * p / 100);
+    wadah.innerHTML =
+        '<div class="cat-baris"><span>Bagian owner</span><b>'+(100 - p)+'%</b></div>'
+      + '<div class="peny-ket" style="margin-top:8px">Contoh: mobil '+rp(cuci)+' + add-on '+rp(addon)+' = <b>'+rp(dasar)+'</b>.'
+      +   '<br>Upah dibagi ke pekerja <b>'+rp(upah)+'</b>, bagian owner <b>'+rp(dasar - upah)+'</b>.'
+      +   '<br>Tip dan F&amp;B tidak ikut dihitung.</div>';
+  }
+  const tombol = $("btnSimpanBagiHasil");
+  if(tombol){
+    const berubah = bagiHasil.mode !== bagiHasil.tersimpan.mode || (persen && p !== bagiHasil.tersimpan.percent);
+    tombol.disabled = !berubah;
+    tombol.style.opacity = berubah ? "" : ".5";
+    tombol.innerHTML = berubah ? "&#10003; Simpan cara hitung" : "&#10003; Tersimpan";
+  }
+}
+
+function pilihModeBagiHasil(mode){
+  bagiHasil.mode = mode;
+  gambarBagiHasil();
+}
+
+async function simpanBagiHasil(){
+  const persen = bagiHasil.mode === "persen";
+  const p = persenBagiHasil();
+  const tanya = await Swal.fire({
+    icon:"question",
+    title: persen ? "Pakai bagi hasil "+p+"% : "+(100 - p)+"%?" : "Pakai upah per mobil?",
+    html: (persen
+        ? "Pekerja <b>"+p+"%</b> dari harga cuci + add-on, owner <b>"+(100 - p)+"%</b>."
+        : "Upah memakai nominal per jenis kendaraan yang diisi di tab Kendaraan.")
+      + "<br><br>Berlaku mulai transaksi berikutnya. Upah yang sudah tercatat tidak berubah.",
+    showCancelButton:true, confirmButtonText:"Ya, simpan", cancelButtonText:"Batal",
+    confirmButtonColor:"#1B9E62",
+  });
+  if(!tanya.isConfirmed) return;
+  try{
+    const body = {mode: bagiHasil.mode};
+    if(persen) body.percent = p;
+    await api("/wage-sharing", {method:"PUT", body});
+    // Dimuat ulang seluruh tab: "jatah pekerja" di daftar training ikut berubah.
+    await renderKaryawanTraining();
+    Swal.fire({toast:true, position:"top-end", icon:"success",
+      title: persen ? "Bagi hasil "+p+"% : "+(100 - p)+"%" : "Upah per mobil",
+      showConfirmButton:false, timer:1800});
+  }catch(e){ gagal(e); }
+}
+
 /* ---------- PENGATURAN: KARYAWAN TRAINING (khusus owner) ----------
    Training TIDAK ikut bagi rata: SETIAP anak training menerima nominal tetap
    per cucian, sisanya baru dibagi ke pekerja senior. Angkanya diatur di sini; perhitungannya
@@ -5024,9 +5127,12 @@ async function renderKaryawanTraining(){
     // mentah ("kecil", "hidro") — tidak salah, tapi tidak terbaca owner.
     if(!CFG) CFG = await api("/config");
 
+    // Blok di atasnya (cara hitung upah) dimuat bersamaan: "jatah pekerja" di
+    // daftar training di bawah mengikuti cara hitung itu.
     const [tarif, daftar] = await Promise.all([
       api("/trainee-wage"),
       api("/workers"),
+      muatBagiHasil(),
     ]);
 
     // Dikelompokkan per kendaraan supaya terbaca sebagai "nyuci motor sekian,

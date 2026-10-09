@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\WageRate;
+use App\Services\PricingService;
 use App\Services\WageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ use Illuminate\Validation\Rule;
  */
 class TraineeWageController extends Controller
 {
-    public function __construct(private WageService $wages) {}
+    public function __construct(private WageService $wages, private PricingService $pricing) {}
 
     /**
      * GET /api/trainee-wage
@@ -49,7 +50,10 @@ class TraineeWageController extends Controller
                 ->map(fn (WageRate $r) => [
                     'category'       => $r->category,
                     'service'        => $r->service,
-                    'wage'           => $r->amount,           // jatah pekerja utk cucian ini
+                    // Jatah pekerja utk cucian ini MENURUT CARA HITUNG YANG BERLAKU:
+                    // nominalnya, atau persen dari harga cucinya (tanpa add-on —
+                    // angka pembanding saja, add-on baru diketahui saat transaksi).
+                    'wage'           => $this->jatahPembanding($r),
                     'trainee_amount' => $r->trainee_amount,
                 ]),
         ]);
@@ -75,5 +79,17 @@ class TraineeWageController extends Controller
             'wage'           => $rate->amount,
             'trainee_amount' => $rate->trainee_amount,
         ]]);
+    }
+
+    /** Jatah pekerja untuk satu kendaraan + layanan, mengikuti mode bagi hasil. */
+    private function jatahPembanding(WageRate $r): int
+    {
+        try {
+            $harga = $this->pricing->total($r->category, $r->service);
+        } catch (\InvalidArgumentException) {
+            $harga = 0;   // baris yatim: layanannya sudah tidak dijual
+        }
+
+        return $this->wages->jatahFor($r->category, $r->service, $harga);
     }
 }

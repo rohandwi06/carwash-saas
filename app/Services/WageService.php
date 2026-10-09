@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\WageAdjustment;
 use App\Models\WageRate;
@@ -15,6 +16,63 @@ use Illuminate\Support\Collection;
  */
 class WageService
 {
+    /** Upah per mobil: nominal tetap per jenis kendaraan + layanan (cara lama). */
+    public const MODE_NOMINAL = 'nominal';
+
+    /** Bagi hasil: sekian persen dari harga cuci + add-on untuk pekerja. */
+    public const MODE_PERSEN = 'persen';
+
+    /** Bagian pekerja bila owner memilih persenan tapi belum pernah mengisi angkanya. */
+    public const PERSEN_BAWAAN = 40;
+
+    /**
+     * Cara hitung upah yang sedang berlaku. Cucian yang belum pernah menyentuh
+     * pengaturan ini tetap 'nominal' — persis perilaku sebelum fitur ini ada.
+     *
+     * @return array{mode:string, percent:int}
+     */
+    public function sharing(): array
+    {
+        $persen = Setting::get('wage_percent');
+
+        return [
+            'mode'    => Setting::get('wage_mode') === self::MODE_PERSEN ? self::MODE_PERSEN : self::MODE_NOMINAL,
+            'percent' => $persen === null ? self::PERSEN_BAWAAN : max(0, min(100, (int) $persen)),
+        ];
+    }
+
+    /** Simpan cara hitung upah. $percent null = angka persen yang tersimpan tidak diubah. */
+    public function setSharing(string $mode, ?int $percent = null): array
+    {
+        Setting::put('wage_mode', $mode === self::MODE_PERSEN ? self::MODE_PERSEN : self::MODE_NOMINAL);
+        if ($percent !== null) {
+            Setting::put('wage_percent', (string) max(0, min(100, $percent)));
+        }
+
+        return $this->sharing();
+    }
+
+    /**
+     * Upah yang DIBAGIKAN ke pekerja untuk satu cucian — satu-satunya tempat
+     * cara hitungnya diputuskan.
+     *
+     *   nominal  tarif per jenis kendaraan + layanan (rateFor)
+     *   persen   persen dari $totalCuci = harga cuci + add-on. Tip dan F&B
+     *            tidak pernah ikut: tip sudah milik pekerja, F&B bukan kerja
+     *            mereka (keputusan owner 2026-10-09).
+     *
+     * Pecahan rupiah dibuang (intdiv), sama seperti pembagian rata di
+     * bagiUpah(): sisanya tinggal di owner, tidak dibulatkan ke atas.
+     */
+    public function jatahFor(string $category, string $service, int $totalCuci): int
+    {
+        $atur = $this->sharing();
+
+        return $atur['mode'] === self::MODE_PERSEN
+            ? intdiv(max(0, $totalCuci) * $atur['percent'], 100)
+            : $this->rateFor($category, $service);
+    }
+
     /**
      * Tarif upah per jenis kendaraan + layanan. Sumbernya tabel wage_rates —
      * owner mengaturnya di Pengaturan saat menambah/mengubah jenis kendaraan.
@@ -57,7 +115,9 @@ class WageService
             return; // boleh tanpa pekerja; upah tidak tercatat
         }
 
-        $jatah = $this->rateFor($transaction->category, $transaction->service);
+        // total = harga cuci + add-on; sudah tersimpan sebelum fungsi ini
+        // dipanggil, baik saat transaksi dibuat maupun dikoreksi.
+        $jatah = $this->jatahFor($transaction->category, $transaction->service, (int) $transaction->total);
         $upahTraining = $this->traineeWageFor($transaction->category, $transaction->service);
         $training = Worker::whereIn('id', $workerIds)->where('is_trainee', true)->pluck('id')->all();
 

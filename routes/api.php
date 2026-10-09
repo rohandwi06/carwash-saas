@@ -22,6 +22,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehicleController;
 use App\Http\Controllers\WageAdjustmentController;
 use App\Http\Controllers\WageRateController;
+use App\Http\Controllers\WageSharingController;
 use App\Http\Controllers\WashCategoryController;
 use App\Http\Controllers\WashServiceController;
 use App\Http\Controllers\WorkerController;
@@ -158,6 +159,9 @@ Route::middleware('pin.auth')->group(function () {
         // Upah karyawan training (nominal tetap per cucian)
         Route::get('/trainee-wage', [TraineeWageController::class, 'index']);
         Route::put('/trainee-wage', [TraineeWageController::class, 'update']);
+        // Cara hitung upah: bagi hasil persenan atau upah per mobil
+        Route::get('/wage-sharing', [WageSharingController::class, 'index']);
+        Route::put('/wage-sharing', [WageSharingController::class, 'update']);
 
         // Pekerja: tambah/ubah/hapus + biodata (NIK, alamat, tanggal lahir)
         Route::post('/workers', [WorkerController::class, 'store']);
