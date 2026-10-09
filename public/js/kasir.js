@@ -3653,7 +3653,7 @@ function cocokkanKatalogSusulan(i){
   // atau diawali "motor" (catatan tangan sering cuma menulis "Motor Beat").
   const kat = v ? v.category
     : Object.keys(CFG.categories).find(k =>
-        labelKat(k).toLowerCase() === nama || (k === "motor" && nama.startsWith("motor")));
+        labelKat(k).toLowerCase() === nama || (adalahMotor(k) && nama.startsWith("motor")));
   if(kat && CFG.categories[kat] && kat !== r.kat) gantiJenisSusulan(i, kat);
 }
 function tambahBarisSusulan(){
@@ -3747,7 +3747,8 @@ async function simpanSusulan(){
    Dihitung di sini dari transaksi & penjualan F&B tanggal itu yang SAH —
    himpunan yang sama dengan yang dijumlah server (Transaction::valid,
    FnbSale::valid) — jadi Cash+TF tiap baris selalu sama dengan totalnya.
-   "Mobil" = semua jenis selain motor, sama dengan cash_mobil di server. */
+   "Motor" = semua jenis berbentuk motor, "Mobil" = sisanya — sama dengan
+   cash_motor / cash_mobil di server. */
 function pisahBayarHari(trx, fnb){
   const kosong = () => ({cash:{n:0, rp:0}, tf:{n:0, rp:0}});
   const hasil = {tip: kosong(), motor: kosong(), mobil: kosong()};
@@ -3756,7 +3757,9 @@ function pisahBayarHari(trx, fnb){
     e.n++; e.rp += nominal;
   };
   trx.filter(r => !r.voided_at).forEach(r => {
-    tambah(r.category === "motor" ? hasil.motor : hasil.mobil, r.payment_method, r.total);
+    // adalahMotor(): dari BENTUK jenisnya, bukan slug "motor" — "Motor Besar"
+    // buatan owner harus ikut kolom Cuci Motor, sama dengan cash_motor di server.
+    tambah(adalahMotor(r.category) ? hasil.motor : hasil.mobil, r.payment_method, r.total);
     if(r.tip > 0) tambah(hasil.tip, r.payment_method, r.tip);
   });
   fnb.filter(fnbSah).forEach(sl => {
