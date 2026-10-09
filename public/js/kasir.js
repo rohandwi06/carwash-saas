@@ -2394,7 +2394,7 @@ async function renderDetailKeluar(){
       '<div class="cat-blok"><h3>&#128197; '+fmtTgl(keluarTgl)+(keluarTgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
       + (list.length===0
           ? '<div class="cat-kosong">Belum ada pengeluaran pada tanggal ini.</div>'
-          : list.map(barisKeluar).join(""))
+          : list.map(e => barisKeluar(e)).join(""))
       + hitung
       + '</div>';
   }catch(e){ gagal(e); }
@@ -2407,8 +2407,26 @@ async function renderDetailKeluar(){
 const keluarTampil = new Map();
 
 /** Satu baris pengeluaran; tombol koreksi & hapus hanya untuk owner. */
-function barisKeluar(e){
+function barisKeluar(e, opsi){
   keluarTampil.set(e.id, e);
+  // Bentuk ringkas (Pembukuan, permintaan owner 09/10): kepala cukup
+  // keterangan & nominal; siapa yang mencatat serta tombol koreksi & hapus
+  // pindah ke dalam detail yang dibuka dengan ketukan — sama dengan baris
+  // transaksi cuci. Layar Pengeluaran sendiri tetap memakai bentuk lengkap.
+  if(opsi && opsi.ringkas){
+    return '<div class="trx-item">'
+      + '<div class="cat-baris trx-head" onclick="toggleTrx(this)"><span>&#128184; '+esc(e.description)+'</span>'
+      +   '<span><b class="merah">-'+rp(e.amount)+'</b> <span class="trx-panah">&#9662;</span></span></div>'
+      + '<div class="trx-detail">'
+      +   '<div class="cat-baris trx-det-baris"><span class="waktu">Dicatat oleh</span><span>'
+      +     (e.created_by ? '&#128100; '+esc(e.created_by) : '&mdash;')+'</span></div>'
+      // Hanya owner — penjaga sebenarnya ada di routes/api.php.
+      +   (ROLE==="owner"
+            ? '<button class="btn-cetak-ulang" onclick="event.stopPropagation();editPengeluaran('+e.id+')">&#9998; Koreksi pengeluaran</button>'
+              + '<button class="btn-cetak-ulang btn-batal-trx" onclick="event.stopPropagation();hapusPengeluaran('+e.id+')">&#10005; Hapus pengeluaran</button>'
+            : '')
+      + '</div></div>';
+  }
   return '<div class="cat-baris">'
     + '<span>&#128184; '+esc(e.description)
     +   (e.created_by? '<span class="waktu"> &#128100; '+esc(e.created_by)+'</span>' : '')
@@ -2451,7 +2469,7 @@ async function cariKeluarRange(dari, sampai){
       const rows = perTgl[tgl];
       const sub  = rows.reduce((t,e)=>t+e.amount, 0);
       html += '<div class="cat-blok"><h3>'+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
-        + rows.map(barisKeluar).join("")
+        + rows.map(e => barisKeluar(e)).join("")
         + '<div class="cat-baris tebal"><span>Subtotal</span><b class="merah">-'+rp(sub)+'</b></div>'
         + '</div>';
     });
@@ -3293,7 +3311,7 @@ async function renderBuku(){
       // bertanggal lampau: Rekap cuma melayani hari ini.
       +((h.expense_list||[]).length
           ? barisBuka("buku-keluar", 'Pengeluaran <span class="waktu">'+h.expense_list.length+'x</span>',
-              '-'+rp(h.expenses), "merah", h.expense_list.map(e => barisKeluar(e)).join(""))
+              '-'+rp(h.expenses), "merah", h.expense_list.map(e => barisKeluar(e, {ringkas:true})).join(""))
           : '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="hijau">'+rp(h.profit)+'</b></div>'
       +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
@@ -3448,7 +3466,7 @@ function kartuBuku(g){
   // & hapus untuk owner. Ini satu-satunya jalan membetulkan pengeluaran
   // bertanggal lampau: Rekap cuma melayani hari ini.
   const isiKeluar = g.keluar.length
-    ? seksiBuku("Pengeluaran", g.keluar.length, '-'+rp(kel)) + g.keluar.map(barisKeluar).join("") : "";
+    ? seksiBuku("Pengeluaran", g.keluar.length, '-'+rp(kel)) + g.keluar.map(e => barisKeluar(e, {ringkas:true})).join("") : "";
 
   const kunci = "buku-"+g.kunci;
   // Kepala kartu cukup nama buku & nominalnya (permintaan owner 03/10);
