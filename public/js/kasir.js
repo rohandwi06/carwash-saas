@@ -3246,6 +3246,7 @@ async function renderBuku(){
       onClear: tutupRange,
     });
     tandaiRentang("kalGrid");
+    pasangTombolSusulan();
     const s = kal.summary;
     $("totalBulan").innerHTML =
       '<div class="cat-baris"><span>Hari beroperasi</span><b>'+s.operating_days+' hari &middot; '+s.vehicles+' kendaraan</b></div>'
@@ -3315,6 +3316,242 @@ async function renderBuku(){
     renderBukuPerBuku();
   }catch(e){ gagal(e); }
 }
+/* ---------- PEMBUKUAN: ISI CUCIAN TANGGAL LAMPAU (khusus owner) ----------
+   Untuk menyalin catatan lama — cucian yang baru memasang aplikasi, atau
+   sehari yang terlewat dicatat. Satu jendela untuk satu tanggal, tiap baris
+   satu cucian, disimpan sekali (semua atau tidak sama sekali).
+
+   Aturannya di server (TransactionService::createBackdated): hanya tanggal
+   yang sudah lewat, tidak masuk buku kas mana pun (tampil di "Tanpa buku"),
+   tanpa add-on & F&B, harga dan upah memakai katalog saat diisi. Pekerja
+   dipilih sekali untuk semua baris; kalau regunya berbeda, simpan dulu lalu
+   isi lagi dengan pekerja lain. */
+let susulan = null;   // {tgl, pekerja:Set<id>, semuaPekerja:[], katalog:[], rows:[]}
+
+/** Tombol di bawah kalender Pembukuan — dibuat sekali, hanya untuk owner. */
+function pasangTombolSusulan(){
+  if(ROLE !== "owner" || $("btnSusulan")) return;
+  const info = $("kalInfo"); if(!info) return;
+  const b = document.createElement("button");
+  b.id = "btnSusulan";
+  b.className = "btn-cetak-ulang";
+  b.innerHTML = "&#10133; Tambah cucian tanggal lampau";
+  b.onclick = () => bukaSusulan();
+  info.insertAdjacentElement("afterend", b);
+}
+
+function kemarinYmd(){
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+/** Baris baru meniru jenis, layanan, dan cara bayar baris sebelumnya — catatan
+    sehari biasanya didominasi satu jenis kendaraan. */
+function barisSusulanBaru(){
+  const akhir = susulan.rows[susulan.rows.length - 1];
+  const kat = akhir ? akhir.kat : Object.keys(CFG.categories)[0];
+  return {nama:"", plat:"", kat, svc: akhir ? akhir.svc : layananAwalSusulan(kat),
+          bayar: akhir ? akhir.bayar : "cash", tip:"", jam:""};
+}
+
+function layananAwalSusulan(kat){
+  const tersedia = Object.keys((CFG.categories[kat] || {}).prices || {});
+  return tersedia.includes("reguler") ? "reguler" : (tersedia[0] || "reguler");
+}
+
+function hargaSusulan(r){
+  return ((CFG.categories[r.kat] || {}).prices || {})[r.svc] || 0;
+}
+
+async function bukaSusulan(){
+  try{
+    if(!CFG) CFG = await api("/config");
+    const [pekerja, katalog] = await Promise.all([api("/workers"), api("/vehicles")]);
+    // Tanggal yang sedang dibuka di Pembukuan dipakai bila sudah lewat;
+    // selain itu kemarin.
+    const tgl = (tglPilih && tglPilih < hariIni()) ? tglPilih : kemarinYmd();
+    susulan = {tgl, pekerja:new Set(), semuaPekerja:pekerja, katalog:katalog || [], rows:[]};
+    susulan.rows.push(barisSusulanBaru());
+
+    let el = $("susulanOverlay");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "susulanOverlay";
+      el.className = "ai-overlay";
+      // Sengaja TIDAK menutup saat latar diketuk: satu ketukan meleset akan
+      // membuang puluhan baris yang sudah diketik.
+      el.innerHTML = '<div class="ai-modal">'
+        + '<div class="ai-judul"><span>&#10133; Cucian tanggal lampau</span>'
+        +   '<button class="ai-tutup" onclick="tutupSusulan()">&#10005;</button></div>'
+        + '<div id="susulanIsi"></div></div>';
+      document.body.insertBefore(el, document.body.firstChild);
+    }
+    el.classList.add("buka");
+    gambarSusulan();
+  }catch(e){ gagal(e); }
+}
+
+async function tutupSusulan(){
+  const terisi = susulan && susulan.rows.some(r => r.nama.trim() !== "");
+  if(terisi){
+    const t = await Swal.fire({icon:"warning", title:"Buang isian?",
+      text:"Baris yang sudah diketik belum disimpan.",
+      showCancelButton:true, confirmButtonText:"Ya, buang", cancelButtonText:"Lanjut mengisi",
+      confirmButtonColor:"#C0392B"});
+    if(!t.isConfirmed) return;
+  }
+  susulan = null;
+  $("susulanOverlay").classList.remove("buka");
+}
+
+function gambarSusulan(){
+  const s = susulan; if(!s) return;
+  const kat = Object.keys(CFG.categories);
+  $("susulanIsi").innerHTML =
+      '<div class="field" style="margin-bottom:10px"><label for="susulanTgl">Tanggal</label>'
+    +   '<input id="susulanTgl" type="date" max="'+kemarinYmd()+'" value="'+s.tgl+'" style="text-transform:none"'
+    +   ' onchange="susulan.tgl=this.value"></div>'
+    + '<div class="sec-label">Pekerja hari itu <span class="waktu">berlaku untuk semua baris</span></div>'
+    + '<div class="susulan-pekerja">'
+    +   (s.semuaPekerja.length
+          ? s.semuaPekerja.map(p => '<button class="btn-hadir'+(s.pekerja.has(p.id) ? ' aktif' : '')+'"'
+              + ' onclick="pilihPekerjaSusulan('+p.id+')">'+esc(p.name)+'</button>').join("")
+          : '<span class="waktu">Belum ada pekerja &mdash; upah tidak tercatat.</span>')
+    + '</div>'
+    + '<datalist id="susulanKatalog">'+s.katalog.map(v => '<option value="'+esc(v.name)+'">').join("")+'</datalist>'
+    + s.rows.map((r, i) =>
+        '<div class="susulan-baris">'
+        + '<div class="susulan-kepala"><span>Cucian '+(i+1)+' &middot; <span id="susulanHarga'+i+'">'+rp(hargaSusulan(r))+'</span></span>'
+        +   (s.rows.length > 1 ? '<button class="btn-hapus-pk" title="Hapus baris" onclick="hapusBarisSusulan('+i+')">&#10005;</button>' : '')
+        + '</div>'
+        + '<div class="susulan-grid">'
+        +   '<input class="lebar" placeholder="Kendaraan (mis. Avanza)" list="susulanKatalog" value="'+esc(r.nama)+'"'
+        +     ' oninput="susulan.rows['+i+'].nama=this.value" onchange="cocokkanKatalogSusulan('+i+')">'
+        +   '<input placeholder="Plat (boleh kosong)" value="'+esc(r.plat)+'" style="text-transform:uppercase"'
+        +     ' oninput="susulan.rows['+i+'].plat=this.value">'
+        +   '<input type="time" title="Jam (boleh kosong)" value="'+esc(r.jam)+'"'
+        +     ' oninput="susulan.rows['+i+'].jam=this.value">'
+        +   '<select onchange="gantiJenisSusulan('+i+',this.value)">'
+        +     kat.map(k => '<option value="'+k+'"'+(k===r.kat ? ' selected' : '')+'>'+esc(labelKat(k))+'</option>').join("")
+        +   '</select>'
+        +   '<select onchange="susulan.rows['+i+'].svc=this.value;segarkanHargaSusulan()">'
+        +     Object.keys((CFG.categories[r.kat] || {}).prices || {}).map(v =>
+                '<option value="'+v+'"'+(v===r.svc ? ' selected' : '')+'>'+esc(labelSvc(v))+'</option>').join("")
+        +   '</select>'
+        +   '<div class="susulan-bayar">'
+        +     '<button class="'+(r.bayar==="cash" ? 'aktif' : '')+'" onclick="bayarSusulan('+i+',\'cash\')">Cash</button>'
+        +     '<button class="'+(r.bayar==="tf" ? 'aktif' : '')+'" onclick="bayarSusulan('+i+',\'tf\')">TF</button>'
+        +   '</div>'
+        +   '<input type="number" inputmode="numeric" min="0" placeholder="Tip (Rp)" value="'+esc(r.tip)+'"'
+        +     ' oninput="susulan.rows['+i+'].tip=this.value;segarkanHargaSusulan()">'
+        + '</div></div>').join("")
+    + '<button class="btn-cetak-ulang" onclick="tambahBarisSusulan()">&#10133; Tambah baris</button>'
+    + '<div class="susulan-kaki">'
+    +   '<div class="cat-baris tebal"><span id="susulanJumlah"></span><b id="susulanTotal"></b></div>'
+    +   '<button class="btn-catat" style="background:var(--go);width:100%;margin-top:8px" onclick="simpanSusulan()">&#10003; Simpan semua</button>'
+    + '</div>';
+  segarkanHargaSusulan();
+}
+
+/* Harga per baris + jumlah di kaki — tanpa menggambar ulang formulirnya,
+   supaya kotak yang sedang diketik tidak kehilangan kursor. */
+function segarkanHargaSusulan(){
+  const s = susulan; if(!s) return;
+  let total = 0, tip = 0;
+  s.rows.forEach((r, i) => {
+    const h = hargaSusulan(r); total += h; tip += Math.max(0, parseInt(r.tip, 10) || 0);
+    const el = $("susulanHarga"+i); if(el) el.textContent = rp(h);
+  });
+  $("susulanJumlah").innerHTML = s.rows.length+' cucian'+(tip ? ' <span class="waktu">+ tip '+rp(tip)+'</span>' : '');
+  $("susulanTotal").textContent = rp(total);
+}
+
+function pilihPekerjaSusulan(id){
+  if(susulan.pekerja.has(id)) susulan.pekerja.delete(id); else susulan.pekerja.add(id);
+  gambarSusulan();
+}
+function bayarSusulan(i, m){ susulan.rows[i].bayar = m; gambarSusulan(); }
+function gantiJenisSusulan(i, kat){
+  const r = susulan.rows[i];
+  r.kat = kat;
+  // Layanan lama belum tentu dijual untuk jenis kendaraan yang baru.
+  if(!Object.keys((CFG.categories[kat] || {}).prices || {}).includes(r.svc)) r.svc = layananAwalSusulan(kat);
+  gambarSusulan();
+}
+/* Nama yang cocok dengan katalog kendaraan langsung menyetel jenisnya —
+   owner cukup mengetik "Avanza" tanpa memilih "Mobil" lagi. */
+function cocokkanKatalogSusulan(i){
+  const r = susulan.rows[i];
+  const nama = r.nama.trim().toLowerCase();
+  if(!nama) return;
+  const v = susulan.katalog.find(x => (x.name||"").toLowerCase() === nama);
+  // Di luar katalog: nama yang sama dengan label jenisnya ("Mobil Kecil"),
+  // atau diawali "motor" (catatan tangan sering cuma menulis "Motor Beat").
+  const kat = v ? v.category
+    : Object.keys(CFG.categories).find(k =>
+        labelKat(k).toLowerCase() === nama || (k === "motor" && nama.startsWith("motor")));
+  if(kat && CFG.categories[kat] && kat !== r.kat) gantiJenisSusulan(i, kat);
+}
+function tambahBarisSusulan(){
+  susulan.rows.push(barisSusulanBaru());
+  gambarSusulan();
+  const baris = document.querySelectorAll("#susulanIsi .susulan-baris");
+  const baru = baris[baris.length - 1];
+  if(baru){ baru.scrollIntoView({block:"center"}); baru.querySelector("input").focus(); }
+}
+function hapusBarisSusulan(i){
+  susulan.rows.splice(i, 1);
+  gambarSusulan();
+}
+
+async function simpanSusulan(){
+  const s = susulan;
+  // Baris yang nama kendaraannya kosong dianggap belum diisi dan dilewati.
+  const rows = s.rows.filter(r => r.nama.trim() !== "");
+  if(!s.tgl || s.tgl >= hariIni()){
+    Swal.fire({icon:"warning", title:"Tanggal belum benar", text:"Pilih tanggal sebelum hari ini.", confirmButtonColor:"#1B9E62"});
+    return;
+  }
+  if(rows.length === 0){
+    Swal.fire({icon:"warning", title:"Belum ada cucian", text:"Isi nama kendaraan minimal di satu baris.", confirmButtonColor:"#1B9E62"});
+    return;
+  }
+  const total = rows.reduce((t, r) => t + hargaSusulan(r), 0);
+  const tanya = await Swal.fire({
+    icon:"question", title:"Simpan "+rows.length+" cucian?",
+    html: "<b>"+fmtTgl(s.tgl)+"</b> &middot; "+rp(total)
+      + "<br>Pekerja: "+(s.pekerja.size
+          ? esc(s.semuaPekerja.filter(p => s.pekerja.has(p.id)).map(p => p.name).join(", "))
+          : "<b>tidak ada</b> (upah tidak tercatat)")
+      + "<br><br>Tidak masuk buku kas mana pun &mdash; tampil di \"Tanpa buku\".",
+    showCancelButton:true, confirmButtonText:"Ya, simpan", cancelButtonText:"Batal", confirmButtonColor:"#1B9E62",
+  });
+  if(!tanya.isConfirmed) return;
+  try{
+    await api("/transactions/backdated", {method:"POST", body:{
+      date: s.tgl,
+      worker_ids: [...s.pekerja],
+      rows: rows.map(r => {
+        const b = {vehicle_name: r.nama.trim(), category: r.kat, service: r.svc, payment_method: r.bayar,
+                   plate: r.plat.trim() ? r.plat.trim().toUpperCase() : null,
+                   tip: Math.max(0, parseInt(r.tip, 10) || 0)};
+        if(r.jam) b.time = r.jam;
+        return b;
+      }),
+    }});
+    const tgl = s.tgl;
+    susulan = null;
+    $("susulanOverlay").classList.remove("buka");
+    // Langsung buka tanggal yang baru diisi, di bulannya, supaya hasilnya terlihat.
+    const [th, bl] = tgl.split("-").map(Number);
+    kalTahun = th; kalBulan = bl - 1; tglPilih = tgl;
+    await renderBuku();
+    if($("detailHari")) $("detailHari").scrollIntoView({behavior:"smooth", block:"start"});
+    Swal.fire({toast:true, position:"top-end", icon:"success",
+      title: rows.length+" cucian tersimpan", text: fmtTgl(tgl), showConfirmButton:false, timer:2200});
+  }catch(e){ gagal(e); }
+}
+
 /* ---------- PEMBUKUAN: CASH vs TF DI RINGKASAN SEHARI ----------
    Dihitung di sini dari transaksi & penjualan F&B tanggal itu yang SAH —
    himpunan yang sama dengan yang dijumlah server (Transaction::valid,

@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Services\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class TransactionController extends Controller
 {
@@ -34,6 +35,37 @@ class TransactionController extends Controller
         );
 
         return response()->json(['data' => $transaction], 201);
+    }
+
+    /**
+     * POST /api/transactions/backdated {date, worker_ids?, rows:[...]} — owner saja.
+     * Cucian tanggal lampau, banyak baris sekaligus. Aturannya di
+     * TransactionService::createBackdated().
+     */
+    public function storeBackdated(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'date'                  => ['required', 'date_format:Y-m-d', 'before:today'],
+            'worker_ids'            => ['sometimes', 'array'],
+            'worker_ids.*'          => ['integer', 'exists:workers,id'],
+            'rows'                  => ['required', 'array', 'min:1', 'max:100'],
+            'rows.*.vehicle_name'   => ['required', 'string', 'max:100'],
+            'rows.*.category'       => ['required', Rule::exists('wash_categories', 'slug')],
+            'rows.*.service'        => ['sometimes', Rule::exists('wash_services', 'slug')],
+            'rows.*.payment_method' => ['required', Rule::in(['cash', 'tf'])],
+            'rows.*.plate'          => ['nullable', 'string', 'max:20'],
+            'rows.*.tip'            => ['sometimes', 'integer', 'min:0', 'max:1000000'],
+            'rows.*.time'           => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $trx = $this->service->createBackdated(
+            $data['date'],
+            $data['rows'],
+            $data['worker_ids'] ?? [],
+            $request->attributes->get('auth_name'),
+        );
+
+        return response()->json(['data' => $trx], 201);
     }
 
     /**

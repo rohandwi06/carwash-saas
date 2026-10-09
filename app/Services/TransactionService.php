@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\Transaction;
 use App\Models\TransactionDraft;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use RuntimeException;
 
 /**
@@ -183,6 +185,87 @@ class TransactionService
      * dipakai untuk mengurutkan riwayat & laporan CSV, dan supaya resi lama
      * tidak kehilangan artinya.
      */
+    /**
+     * Cucian TANGGAL LAMPAU, diisi owner dari Pembukuan — banyak baris
+     * sekaligus. Dipakai saat cucian baru memasang aplikasi dan menyalin
+     * catatan buku tulisnya, atau saat sehari penuh terlewat dicatat.
+     *
+     * Bedanya dengan create():
+     *  - tanggalnya dipilih, bukan hari ini, dan HARUS sudah lewat — cucian
+     *    hari ini dicatat lewat layar kasir supaya masuk buku kas yang benar;
+     *  - TIDAK masuk buku kas mana pun (book_id null), sama seperti
+     *    pengeluaran bertanggal lampau (ExpenseController::store): memanggil
+     *    CashBookService::current() untuk tanggal lampau akan membuka kembali
+     *    buku hari yang sudah ditutup & disetor. Di Pembukuan barisnya tampil
+     *    di kelompok "Tanpa buku"; rekap harian, upah, dan laba tetap
+     *    menghitungnya karena semuanya berdasarkan tanggal;
+     *  - tanpa add-on dan tanpa F&B (keputusan owner 2026-10-09: cucian saja).
+     *
+     * Harga & upah memakai katalog dan cara hitung yang berlaku SAAT DIISI —
+     * aplikasi tidak menyimpan riwayat harga, jadi tidak ada angka lain yang
+     * bisa dipakai. "Dicatat oleh" diberi tanda susulan + tanggal pengisian,
+     * supaya terlihat bahwa baris itu bukan dicatat kasir pada harinya.
+     *
+     * Semua baris atau tidak sama sekali: satu baris yang salah membatalkan
+     * seluruhnya, supaya owner tidak perlu menebak mana yang sudah masuk.
+     *
+     * @param  array<int,array{vehicle_name:string,category:string,service?:string,payment_method:string,plate?:?string,tip?:int,time?:?string}>  $rows
+     * @param  array<int>  $workerIds  pekerja hari itu — berlaku untuk semua baris
+     * @return array<int,Transaction>
+     */
+    public function createBackdated(string $date, array $rows, array $workerIds = [], ?string $by = null): array
+    {
+        if ($date >= now()->toDateString()) {
+            throw new InvalidArgumentException('Tanggal harus sebelum hari ini. Cucian hari ini dicatat lewat layar kasir.');
+        }
+
+        return DB::transaction(function () use ($date, $rows, $workerIds, $by) {
+            $antrian = $this->nextQueueNo($date);
+            $pencatat = trim(($by ?? 'Owner').' (susulan '.now()->format('d/m').')');
+            $hasil = [];
+
+            foreach (array_values($rows) as $i => $row) {
+                $layanan = $row['service'] ?? 'reguler';
+                try {
+                    $total = $this->pricing->total($row['category'], $layanan);
+                } catch (InvalidArgumentException $e) {
+                    throw new InvalidArgumentException('Baris '.($i + 1).': '.$e->getMessage());
+                }
+
+                // Jam boleh kosong (catatan lama jarang punya jam). Tanpa jam,
+                // baris diberi 00:00 + urutannya dalam detik supaya urutan
+                // pengisian tetap terjaga saat diurut menurut waktu.
+                $waktu = ! empty($row['time'])
+                    ? Carbon::createFromFormat('Y-m-d H:i', $date.' '.$row['time'])->addSeconds($i)
+                    : Carbon::createFromFormat('Y-m-d H:i:s', $date.' 00:00:00')->addSeconds($antrian + $i);
+
+                $trx = new Transaction([
+                    'queue_no'       => $antrian + $i,
+                    'vehicle_name'   => $row['vehicle_name'],
+                    'category'       => $row['category'],
+                    'service'        => $layanan,
+                    'payment_method' => $row['payment_method'],
+                    'plate'          => $row['plate'] ?? null,
+                    'tip'            => $row['tip'] ?? 0,
+                    'total'          => $total,
+                    'date'           => $date,
+                    'book_id'        => null,
+                    'created_by'     => $pencatat,
+                ]);
+                // created_at diisi sendiri: Eloquent hanya mengisinya otomatis
+                // bila belum diubah, jadi nilai ini yang tersimpan.
+                $trx->created_at = $waktu;
+                $trx->save();
+
+                $this->wages->attachWorkers($trx, $workerIds);
+
+                $hasil[] = $trx->load('workers', 'addons', 'fnbSales.items');
+            }
+
+            return $hasil;
+        });
+    }
+
     public function nextQueueNo(string $date): int
     {
         return (int) Transaction::whereDate('date', $date)->max('queue_no') + 1;

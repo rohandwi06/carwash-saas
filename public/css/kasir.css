@@ -690,6 +690,23 @@
   .rincian-bayar .cat-baris b{font-weight:800;white-space:nowrap}   /* "Rp 5.000" tidak patah di HP */
   .baris-buka.buka .trx-panah{display:inline-block;transform:rotate(180deg)}
   .baris-buka > b{white-space:nowrap}   /* nominal & panah tidak turun baris */
+  /* Pembukuan: isi cucian tanggal lampau (banyak baris). Tiap baris satu
+     kartu dua kolom — tabel enam kolom tidak muat di lebar HP. */
+  .susulan-baris{padding:10px 0 12px;border-bottom:1.5px solid var(--line)}
+  .susulan-kepala{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    font-size:13px;font-weight:900;color:var(--ink2);margin-bottom:6px}
+  .susulan-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .susulan-grid .lebar{grid-column:1 / -1}
+  .susulan-grid input,.susulan-grid select{width:100%;min-width:0;font-size:15px;font-weight:700;
+    padding:10px 10px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  .susulan-grid input:focus,.susulan-grid select:focus{outline:none;border-color:var(--water)}
+  .susulan-bayar{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .susulan-bayar button{padding:10px 6px;border:2px solid var(--line);border-radius:10px;
+    background:var(--card);font-size:14px;font-weight:900;color:var(--ink2)}
+  .susulan-bayar button.aktif{border-color:var(--go);background:rgba(27,158,98,.1);color:var(--go-dk)}
+  .susulan-pekerja{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+  .susulan-kaki{position:sticky;bottom:-20px;background:var(--mist);padding:10px 0 4px;
+    border-top:2px solid var(--line)}
   /* Judul seksi per jenis kendaraan di dalam dropdown Cash/TF — jumlah &
      rupiahnya dipakai mencocokkan uang di laci tanpa menjumlah baris. */
   .bayar-seksi{display:flex;justify-content:space-between;gap:10px;
