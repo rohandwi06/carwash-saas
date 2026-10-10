@@ -50,7 +50,8 @@
         <div class="sec-label">Pembayaran</div>
         <div class="bayar-grid">
           <button id="btnCash" class="btn-bayar aktif" onclick="setBayar('cash')">&#128181; Cash</button>
-          <button id="btnTf" class="btn-bayar tf" onclick="setBayar('tf')">&#128241; Transfer</button>
+          <button id="btnTf" class="btn-bayar tf" onclick="setBayar('tf')">&#127974; Transfer</button>
+          <button id="btnQris" class="btn-bayar qris" onclick="setBayar('qris')">&#128241; QRIS</button>
         </div>
       </div>
 

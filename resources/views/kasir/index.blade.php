@@ -59,6 +59,7 @@
 
   <!-- ============ PILIH F&B (dari layar konfirmasi) ============ -->
   @include('kasir.partials.modal-fnb')
+  @include('kasir.partials.modal-qris')
 </div>
 
 {{-- Sidebar di LUAR .app: waktu dibuka, .app yang digeser ke kanan.

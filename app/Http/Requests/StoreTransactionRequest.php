@@ -18,7 +18,7 @@ class StoreTransactionRequest extends FormRequest
             'vehicle_name'   => ['required', 'string', 'max:100'],
             'category'       => ['required', Rule::exists('wash_categories', 'slug')],
             'service'        => ['sometimes', Rule::exists('wash_services', 'slug')],
-            'payment_method' => ['required', Rule::in(['cash', 'tf'])],
+            'payment_method' => ['required', Rule::in(\App\Models\Transaction::CARA_BAYAR)],
             'plate'          => ['nullable', 'string', 'max:20'],
             'tip'            => ['sometimes', 'integer', 'min:0', 'max:1000000'],
             'worker_ids'     => ['sometimes', 'array'],

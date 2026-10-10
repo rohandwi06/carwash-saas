@@ -38,6 +38,7 @@ class BookkeepingService
 
         $total     = (int) $trx->sum('total');
         $tf        = (int) $trx->where('payment_method', 'tf')->sum('total');
+        $qris      = (int) $trx->where('payment_method', 'qris')->sum('total');
         $motor     = WashCategory::where('shape', WashCategory::BENTUK_MOTOR)->pluck('slug')->all();
         $cash      = $trx->where('payment_method', 'cash');
         $cashMotor = (int) $cash->whereIn('category', $motor)->sum('total');
@@ -48,6 +49,7 @@ class BookkeepingService
         $fnbTotal = (int) $fnb->sum('total');
         $fnbCash  = (int) $fnb->where('payment_method', 'cash')->sum('total');
         $fnbTf    = (int) $fnb->where('payment_method', 'tf')->sum('total');
+        $fnbQris  = (int) $fnb->where('payment_method', 'qris')->sum('total');
 
         // Tip cuci + tip F&B jadi satu baris "Tip". Keduanya di luar omzet
         // masing-masing dan sama-sama masuk laba — lihat migrasi
@@ -75,11 +77,13 @@ class BookkeepingService
             'total'         => $total,
             'tip'           => $tip,
             'tf'            => $tf,
+            'qris'          => $qris,
             'cash_motor'    => $cashMotor,
             'cash_mobil'    => $cashMobil,
             'fnb_total'     => $fnbTotal,
             'fnb_cash'      => $fnbCash,
             'fnb_tf'        => $fnbTf,
+            'fnb_qris'      => $fnbQris,
             'cash_total'    => $cashMotor + $cashMobil + $fnbCash,
             'wages'         => $wages,
             'expenses'      => $expenseTotal,
@@ -124,10 +128,11 @@ class BookkeepingService
             ? PHP_INT_MAX
             : $i;
 
-        // cash dulu, baru tf — urutan yang sama dengan buku kas fisik. Cara
-        // bayar lain (kalau kelak ada) menyusul di belakang, bukan hilang.
+        // cash dulu, lalu tf, lalu qris — urutan yang sama dengan buku kas
+        // fisik. Cara bayar lain (kalau kelak ada) menyusul di belakang,
+        // bukan hilang.
         $metode = $trx->pluck('payment_method')->unique()
-            ->sortBy(fn ($m) => ['cash' => 0, 'tf' => 1][$m] ?? 2)
+            ->sortBy(fn ($m) => ['cash' => 0, 'tf' => 1, 'qris' => 2][$m] ?? 3)
             ->values();
 
         return $metode->map(function (string $m) use ($trx, $posisi) {

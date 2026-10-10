@@ -146,6 +146,7 @@ class ReportController extends Controller
             fputcsv($out, ['Total', $recap['total']], ';');
             fputcsv($out, ['Tip', $recap['tip'] ?: 'kosong'], ';');
             fputcsv($out, ['TF', $recap['tf'] ?: 'kosong'], ';');
+            fputcsv($out, ['QRIS', $recap['qris'] ?: 'kosong'], ';');
             fputcsv($out, ['Cash Motor', $recap['cash_motor'] ?: 'kosong'], ';');
             fputcsv($out, ['Cash Mobil', $recap['cash_mobil'] ?: 'kosong'], ';');
             fputcsv($out, ['F&B', $recap['fnb_total'] ?: 'kosong'], ';');

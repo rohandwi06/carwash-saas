@@ -2,7 +2,7 @@
     --ink:#141414; --ink2:#57503E; --mist:#F6F5F0; --card:#FFFFFF;
     --water:#E5A800; --water-dk:#8F6B00; --aqua:#FFD34D;
     --tag:#FFC229; --tag-ink:#4A3400; --go:#1B9E62; --go-dk:#157A4C;
-    --line:#E5E0D2; --danger:#C0442B;
+    --line:#E5E0D2; --danger:#C0442B; --qris:#2B6CB0;
     --dr-w:280px; /* lebar sidebar — dipakai drawer & jarak geser isi layar */
   }
   @media (max-width:400px){ :root{ --dr-w:78vw } }
@@ -106,11 +106,13 @@
   .radio{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);flex:none}
   .aktif .radio{border-color:var(--water);background:radial-gradient(circle,var(--water) 45%,transparent 50%)}
 
-  .bayar-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .bayar-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .btn-bayar{background:var(--card);border:2.5px solid var(--line);border-radius:14px;
-    padding:16px;font-size:20px;font-weight:900;text-align:center}
+    padding:16px 4px;font-size:20px;font-size:clamp(13px,3.9vw,20px);font-weight:900;text-align:center;
+    white-space:nowrap}
   .btn-bayar.aktif{border-color:var(--go);background:rgba(27,158,98,.08);color:var(--go-dk)}
   .btn-bayar.tf.aktif{border-color:var(--water);background:rgba(229,168,0,.08);color:var(--water-dk)}
+  .btn-bayar.qris.aktif{border-color:var(--qris);background:rgba(43,108,176,.08);color:var(--qris)}
 
   .baris-input{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .field label{display:block;font-size:12.5px;font-weight:900;letter-spacing:1px;
@@ -159,9 +161,12 @@
   .merah{color:var(--danger);font-weight:800}
   .hijau{color:var(--go-dk);font-weight:800}
   .biru-t{color:var(--water-dk);font-weight:800}
+  .qris-t{color:var(--qris);font-weight:800}
   .waktu{color:var(--ink2);font-size:13px;font-weight:600;white-space:nowrap}
   .chip-tf{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;
     background:rgba(229,168,0,.12);color:var(--water-dk)}
+  .chip-qris{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;
+    background:rgba(43,108,176,.12);color:var(--qris)}
   .chip-cash{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;
     background:rgba(27,158,98,.12);color:var(--go-dk)}
   /* dipakai hanya untuk transaksi lama dari fitur cuci gratis yang sudah dihapus */
@@ -193,6 +198,12 @@
      kasir) tetap dua kolom. */
   @media (max-width:480px){ .stat-grid{grid-template-columns:1fr} }
   .stat.masuk .s-nilai{color:var(--water-dk)}
+  /* Kotak Omzet yang bisa dibuka jadi Cash / TF / QRIS. Saat terbuka kotaknya
+     membentang dua kolom supaya label dan rupiahnya muat sebaris. */
+  .stat-buka{cursor:pointer}
+  .stat-buka.buka{grid-column:1/-1}
+  .stat-buka.buka .trx-panah{transform:rotate(180deg)}
+  .rincian-omzet{margin-top:8px;padding-top:6px;border-top:1.5px dashed var(--line)}
   .stat.laba{grid-column:1/-1;border-color:var(--go);background:rgba(27,158,98,.06)}
   .stat.laba .s-nilai{color:var(--go)}
 
@@ -756,7 +767,7 @@
   .susulan-grid input,.susulan-grid select{width:100%;min-width:0;font-size:15px;font-weight:700;
     padding:10px 10px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
   .susulan-grid input:focus,.susulan-grid select:focus{outline:none;border-color:var(--water)}
-  .susulan-bayar{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .susulan-bayar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
   .susulan-bayar button{padding:10px 6px;border:2px solid var(--line);border-radius:10px;
     background:var(--card);font-size:14px;font-weight:900;color:var(--ink2)}
   .susulan-bayar button.aktif{border-color:var(--go);background:rgba(27,158,98,.1);color:var(--go-dk)}
@@ -775,7 +786,7 @@
   .rincian-bayar .trx-item .trx-head{padding:8px 0}
   /* Di dalam dropdown Cash semua baris cash (dan TF semuanya TF) — chip cara
      bayarnya cuma memakan tempat dan mematahkan baris jadi dua. */
-  .rincian-bayar .chip-cash,.rincian-bayar .chip-tf{display:none}
+  .rincian-bayar .chip-cash,.rincian-bayar .chip-tf,.rincian-bayar .chip-qris{display:none}
   .rincian-bayar .trx-head > span:last-child{white-space:nowrap}   /* harga, ✕, ▾ satu baris */
 
   .baris-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}

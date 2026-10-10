@@ -28,7 +28,7 @@ class UpdateTransactionRequest extends FormRequest
             'vehicle_name'   => ['sometimes', 'string', 'max:100'],
             'category'       => ['sometimes', Rule::exists('wash_categories', 'slug')],
             'service'        => ['sometimes', Rule::exists('wash_services', 'slug')],
-            'payment_method' => ['sometimes', Rule::in(['cash', 'tf'])],
+            'payment_method' => ['sometimes', Rule::in(\App\Models\Transaction::CARA_BAYAR)],
             'plate'          => ['sometimes', 'nullable', 'string', 'max:20'],
             'tip'            => ['sometimes', 'integer', 'min:0', 'max:1000000'],
             'worker_ids'     => ['sometimes', 'array'],

@@ -250,6 +250,20 @@ let CFG = null;          // {categories, services, wage_rates}
 let pekerja = [];        // dari /api/workers
 let pilihan = null;      // {nama, kat, manual} - manual: jenis dipilih langsung, nama diketik kasir
 let layananAktif = "reguler";
+/* ---------- CARA BAYAR ----------
+   Tiga cara bayar: cash (masuk laci), tf (transfer bank), qris. Label dan
+   warnanya diambil dari sini supaya semua layar menyebutnya sama. Kode yang
+   tidak dikenal diperlakukan sebagai cash, seperti sebelum QRIS ada. */
+const BAYAR = {
+  cash: {pendek:"Cash", panjang:"Cash",     chip:"CASH", kelas:"",       kelasChip:"chip-cash"},
+  tf:   {pendek:"TF",   panjang:"Transfer", chip:"TF",   kelas:"biru-t", kelasChip:"chip-tf"},
+  qris: {pendek:"QRIS", panjang:"QRIS",     chip:"QRIS", kelas:"qris-t", kelasChip:"chip-qris"},
+};
+const URUTAN_BAYAR = Object.keys(BAYAR);
+function kodeBayar(m){ return BAYAR[m] ? m : "cash"; }
+function infoBayar(m){ return BAYAR[kodeBayar(m)]; }
+function chipBayar(m){ const b = infoBayar(m); return '<span class="'+b.kelasChip+'">'+b.chip+'</span>'; }
+
 let metode = "cash";
 let pekerjaPilih = new Set(); // worker IDs
 let addonPilih = new Set();   // addon IDs
@@ -718,6 +732,7 @@ function renderConfirm(){
 
   $("btnCash").classList.toggle("aktif", metode==="cash");
   $("btnTf").classList.toggle("aktif", metode==="tf");
+  $("btnQris").classList.toggle("aktif", metode==="qris");
 
   $("totalBayar").textContent = rp(hitungTotalPreview());
 }
@@ -851,7 +866,10 @@ function toggleAddon(id){
   renderConfirm();
 }
 function pilihLayanan(id){ layananAktif=id; renderConfirm(); }
-function setBayar(m){ metode=m; renderConfirm(); }
+function setBayar(m){
+  metode=m; renderConfirm();
+  if(m==="qris") bukaQris(hitungTotalPreview()); // pelanggan langsung bisa scan
+}
 function togglePk(id){
   if(pekerjaPilih.has(id)) pekerjaPilih.delete(id); else pekerjaPilih.add(id);
   renderConfirm();
@@ -882,7 +900,7 @@ async function konfirmasi(){
     const totalSemua = totalTrx(trx);
     $("doneRingkas").innerHTML =
       esc(trx.vehicle_name)+" &middot; "+esc(trx.plate || "plat kosong")+"<br>"
-      + (trx.payment_method==="cash"?"Cash":"Transfer")+" &mdash; <b>"+rp(totalSemua)+"</b>"
+      + infoBayar(trx.payment_method).panjang+" &mdash; <b>"+rp(totalSemua)+"</b>"
       + (trx.tip? " + tip "+rp(trx.tip) : "")
       + (namaAddon? "<br><span class='waktu'>+ "+namaAddon+"</span>" : "")
       + (itemFnb(trx).length? "<br><span class='waktu'>&#127860; "+itemFnb(trx).map(i=>esc(i.product_name)+" x"+i.qty).join(", ")+"</span>" : "");
@@ -996,7 +1014,7 @@ function isiResi(d, salinan){
     // tidak bisa tahu yang dibayar itu total saja atau total + tip.
     +(d.tip? barisResi("Subtotal", rp(d.belanja)) + barisResi("Tip", rp(d.tip)) : '')
     +barisResi("TOTAL", rp(d.belanja + (d.tip||0)), "r-besar")
-    +barisResi("Bayar", d.bayar==="cash" ? "CASH" : "TRANSFER")
+    +barisResi("Bayar", infoBayar(d.bayar).panjang.toUpperCase())
     +(d.kasir? barisResi("Kasir", esc(d.kasir)) : '')
     +GARIS_RESI
     +(salinan
@@ -1865,8 +1883,8 @@ async function hapusPenyesuaian(id){
  * berubah; yang sedang dibuka tetap terbuka saat Rekap dimuat ulang.
  */
 function barisBayar(p, trx){
-  const label = {cash:"Cash", tf:"TF"}[p.method] || p.method.toUpperCase();
-  const kelas = p.method === "tf" ? "biru-t" : "";
+  const label = BAYAR[p.method] ? BAYAR[p.method].pendek : p.method.toUpperCase();
+  const kelas = BAYAR[p.method] ? BAYAR[p.method].kelas : "";
   // Isi dropdown cukup ringkasan per jenis kendaraan (urutan katalog — p.rows
   // sudah diurut server) lalu satu tombol; daftar transaksinya dibuka di
   // jendela detail (permintaan owner 07/10), sama seperti kartu buku di
@@ -2208,8 +2226,8 @@ async function renderRekap(){
     });
     perJenis.sort((a,b) => urutanKat.indexOf(a.category) - urutanKat.indexOf(b.category));
 
-    // Tip dibuka: dipisah Cash dan TF, mengikuti cara bayar transaksinya.
-    const tipBayar = m => tipRows.filter(t => (t.bayar==="tf" ? "tf" : "cash") === m);
+    // Tip dibuka: dipisah per cara bayar, mengikuti cara bayar transaksinya.
+    const tipBayar = m => tipRows.filter(t => kodeBayar(t.bayar) === m);
     const barisTipBayar = (nama, m, kelas) => {
       const rows = tipBayar(m);
       const jml = rows.reduce((t,x) => t + x.tip, 0);
@@ -2225,7 +2243,7 @@ async function renderRekap(){
           : '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>')
       +(h.tip
           ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "",
-              barisTipBayar("Cash", "cash", "") + barisTipBayar("TF", "tf", "biru-t")
+              URUTAN_BAYAR.map(m => barisTipBayar(BAYAR[m].pendek, m, BAYAR[m].kelas)).join("")
               + tombolDetailRekap("tip", "Detail tip", tipRows.length+"x"))
           : '<div class="cat-baris"><span>Tip</span><b>kosong</b></div>')
       + (bayar.length
@@ -2238,6 +2256,7 @@ async function renderRekap(){
       '<div class="cat-baris"><span>Total F&amp;B</span><b>'+rp(h.fnb_total)+'</b></div>'
       +barisFnbBayar("cash", "Cash", h.fnb_cash, "", fnb)
       +barisFnbBayar("tf", "TF", h.fnb_tf, "biru-t", fnb)
+      +barisFnbBayar("qris", "QRIS", h.fnb_qris || 0, "qris-t", fnb)
       +'<div class="cat-baris tebal"><span>Laba F&amp;B</span><b class="hijau">'+rp(h.fnb_total)+'</b></div>';
 
     renderRekapBuku(h.books || []);
@@ -2263,6 +2282,7 @@ async function renderRekap(){
       + barisTitipanRekap(h);
 
     $("statMasuk").textContent = rp(omzetHari(h));
+    gambarOmzetRekap(h, tipRows);
     $("statTrx").textContent = h.vehicles + " kendaraan";
     $("statLaba").textContent = rp(h.profit);
     renderApproval();
@@ -2319,6 +2339,35 @@ function omzetHari(h){
   return uangMasukHari(h)
     - ((h.expenses||0) - (h.consignor_payout||0))
     - (h.consignor_share||0);
+}
+
+/* Kotak Omzet di Rekap bisa dibuka: omzet dipecah per cara bayar (permintaan
+   owner 10/10). Tiap baris = cucian + F&B + tip yang dibayar dengan cara itu.
+
+   Pengeluaran dan hak penitip dipotong dari CASH — uangnya memang keluar dari
+   laci — jadi jumlah semua baris selalu sama dengan angka Omzet di atasnya.
+   Karena itu baris Cash bisa minus di hari yang pengeluarannya lebih besar
+   dari uang cash yang masuk. */
+let omzetBuka = false;
+function gambarOmzetRekap(h, tipRows){
+  const masuk = {};
+  URUTAN_BAYAR.forEach(m => { masuk[m] = h["fnb_"+m] || 0; });
+  (h.by_payment||[]).forEach(p => { masuk[kodeBayar(p.method)] += p.total; });
+  tipRows.forEach(t => { masuk[kodeBayar(t.bayar)] += t.tip; });
+  const potong = uangMasukHari(h) - omzetHari(h);
+  masuk.cash -= potong;
+
+  $("rincianOmzet").innerHTML = URUTAN_BAYAR.map(m =>
+      '<div class="cat-baris"><span>'+BAYAR[m].pendek+'</span>'
+      + '<b class="'+(masuk[m] < 0 ? "merah" : BAYAR[m].kelas)+'">'+rp(masuk[m])+'</b></div>').join("")
+    + (potong > 0 ? '<div class="waktu" style="white-space:normal">Cash sudah dikurangi pengeluaran '+rp(potong)+'.</div>' : '');
+  $("rincianOmzet").classList.toggle("hidden", !omzetBuka);
+  $("statOmzet").classList.toggle("buka", omzetBuka);
+}
+function bukaTutupOmzet(){
+  omzetBuka = !omzetBuka;
+  $("rincianOmzet").classList.toggle("hidden", !omzetBuka);
+  $("statOmzet").classList.toggle("buka", omzetBuka);
 }
 
 function unduhCSV(){ window.location = API+"/reports/daily/csv?date="+hariIni()+"&token="+encodeURIComponent(TOKEN); }
@@ -2962,7 +3011,7 @@ function trxHTML(r, opsi){
   const kepala = '<div class="cat-baris trx-head'+(batal?' trx-batal':'')+'" onclick="toggleTrx(this)"><span>'
     +'<span class="waktu">'+jam(r.created_at)+'</span> &middot; '+esc(r.vehicle_name)
     +(ringkas ? '' : ' &middot; '+esc(r.plate||"plat kosong")+' '
-      +'<span class="'+(r.payment_method==="tf"?"chip-tf":"chip-cash")+'">'+(r.payment_method==="tf"?"TF":"CASH")+'</span>'
+      +chipBayar(r.payment_method)
       /* chip BONUS hanya untuk catatan lama — fiturnya sendiri sudah dihapus */
       +(r.is_bonus?' <span class="chip-bonus">GRATIS</span>':''))
     +(batal?' <span class="chip-batal">BATAL</span>':'')
@@ -2988,7 +3037,7 @@ function trxHTML(r, opsi){
     ...(ringkas ? [["Plat", esc(r.plate||"plat kosong")]] : []),
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
     ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
-    ["Pembayaran", r.payment_method==="tf" ? "Transfer" : "Cash"],
+    ["Pembayaran", infoBayar(r.payment_method).panjang],
     ["Tip", r.tip? rp(r.tip) : "&mdash;"],
     ["Pekerja", pk || "&mdash;"],
     ["Dicatat oleh", r.created_by? "&#128100; "+esc(r.created_by) : "&mdash;"],
@@ -3125,6 +3174,7 @@ async function editTrx(id){
       + '<select id="swTrxBayar" class="sw-select">'
       +   '<option value="cash"'+(r.payment_method==="cash"?' selected':'')+'>Cash</option>'
       +   '<option value="tf"'+(r.payment_method==="tf"?' selected':'')+'>Transfer</option>'
+      +   '<option value="qris"'+(r.payment_method==="qris"?' selected':'')+'>QRIS</option>'
       + '</select>'
       + '<div class="sw-field-label">Tip</div>'
       + '<input id="swTrxTip" type="number" class="swal2-input" inputmode="numeric" min="0" value="'+(r.tip||0)+'">'
@@ -3561,6 +3611,7 @@ function gambarSusulan(){
         +   '<div class="susulan-bayar">'
         +     '<button class="'+(r.bayar==="cash" ? 'aktif' : '')+'" onclick="bayarSusulan('+i+',\'cash\')">Cash</button>'
         +     '<button class="'+(r.bayar==="tf" ? 'aktif' : '')+'" onclick="bayarSusulan('+i+',\'tf\')">TF</button>'
+        +     '<button class="'+(r.bayar==="qris" ? 'aktif' : '')+'" onclick="bayarSusulan('+i+',\'qris\')">QRIS</button>'
         +   '</div>'
         +   '<input type="number" inputmode="numeric" min="0" placeholder="Tip (Rp)" value="'+esc(r.tip)+'"'
         +     ' oninput="susulan.rows['+i+'].tip=this.value;segarkanHargaSusulan()">'
@@ -3581,6 +3632,7 @@ function gambarSusulan(){
         + '<div class="susulan-bayar">'
         +   '<button class="'+(f.bayar==="cash" ? 'aktif' : '')+'" onclick="bayarFnbSusulan('+i+',\'cash\')">Cash</button>'
         +   '<button class="'+(f.bayar==="tf" ? 'aktif' : '')+'" onclick="bayarFnbSusulan('+i+',\'tf\')">TF</button>'
+        +   '<button class="'+(f.bayar==="qris" ? 'aktif' : '')+'" onclick="bayarFnbSusulan('+i+',\'qris\')">QRIS</button>'
         + '</div>'
         + '<button class="btn-hapus-pk lebar" style="justify-self:end" title="Hapus baris" onclick="hapusFnbSusulan('+i+')">&#10005; hapus</button>'
         + '</div></div>').join("")
@@ -3792,10 +3844,10 @@ async function simpanSusulan(){
    "Motor" = semua jenis berbentuk motor, "Mobil" = sisanya — sama dengan
    cash_motor / cash_mobil di server. */
 function pisahBayarHari(trx, fnb){
-  const kosong = () => ({cash:{n:0, rp:0}, tf:{n:0, rp:0}});
+  const kosong = () => ({cash:{n:0, rp:0}, tf:{n:0, rp:0}, qris:{n:0, rp:0}});
   const hasil = {tip: kosong(), motor: kosong(), mobil: kosong()};
   const tambah = (ember, metode, nominal) => {
-    const e = ember[metode === "tf" ? "tf" : "cash"];
+    const e = ember[kodeBayar(metode)];
     e.n++; e.rp += nominal;
   };
   trx.filter(r => !r.voided_at).forEach(r => {
@@ -3810,17 +3862,18 @@ function pisahBayarHari(trx, fnb){
   return hasil;
 }
 
-/** Satu baris ringkasan yang dibuka jadi dua: Cash dan TF, dengan jumlah transaksinya. */
+/** Satu baris ringkasan yang dibuka per cara bayar (Cash, TF, QRIS), dengan jumlah transaksinya. */
 function barisPisahBayar(kunci, label, d){
-  const total = d.cash.rp + d.tf.rp;
-  if(!total && !d.cash.n && !d.tf.n){
+  const total = URUTAN_BAYAR.reduce((t,m) => t + d[m].rp, 0);
+  const kali  = URUTAN_BAYAR.reduce((t,m) => t + d[m].n, 0);
+  if(!total && !kali){
     return '<div class="cat-baris"><span>'+label+'</span><b>kosong</b></div>';
   }
   const baris = (nama, e, kelas) =>
     '<div class="cat-baris"><span>'+nama+' <span class="waktu">'+e.n+'x</span></span>'
     + '<b class="'+kelas+'">'+(e.rp ? rp(e.rp) : "kosong")+'</b></div>';
-  return barisBuka(kunci, label+' <span class="waktu">'+(d.cash.n + d.tf.n)+'x</span>', rp(total), "",
-    baris("Cash", d.cash, "") + baris("TF", d.tf, "biru-t"));
+  return barisBuka(kunci, label+' <span class="waktu">'+kali+'x</span>', rp(total), "",
+    URUTAN_BAYAR.map(m => baris(BAYAR[m].pendek, d[m], BAYAR[m].kelas)).join(""));
 }
 
 /* ---------- PEMBUKUAN: RINCIAN PER BUKU ----------
@@ -4032,7 +4085,7 @@ function bukaDetailBuku(kunci){
   });
 }
 
-/** Rekap Hari Ini: jenis = cuci | cash | tf | tip | fnb-cash | fnb-tf (kunci dropdown-nya). */
+/** Rekap Hari Ini: jenis = cuci | tip | <cara bayar> | fnb-<cara bayar> (kunci dropdown-nya). */
 function bukaDetailRekap(jenis){
   bukaJendelaDetail(() => {
     const d = {sub: fmtTgl(hariIni()), opsi: {batal:true, ringkas:true}};
@@ -4040,9 +4093,9 @@ function bukaDetailRekap(jenis){
     if(jenis === "tip")       return {...d, judul:"Tip", tip: rekapHari.tip};
     if(jenis.startsWith("fnb-")){
       const m = jenis.slice(4);
-      return {...d, judul:"F&B "+(m==="tf" ? "TF" : "Cash"), fnb: rekapHari.fnb.filter(sl => sl.payment_method === m)};
+      return {...d, judul:"F&B "+infoBayar(m).pendek, fnb: rekapHari.fnb.filter(sl => sl.payment_method === m)};
     }
-    return {...d, judul: jenis==="tf" ? "TF" : "Cash", trx: rekapHari.trx.filter(r => r.payment_method === jenis)};
+    return {...d, judul: infoBayar(jenis).pendek, trx: rekapHari.trx.filter(r => r.payment_method === jenis)};
   });
 }
 
@@ -4062,7 +4115,7 @@ function barisTipRingkas(t){
     ["Plat", platMobil(t.mobil)],
     ["Tip dari", t.asal==="cuci" ? "Cucian" : "Makanan/minuman"],
     // Tip ikut cara bayar transaksinya — dipakai mencocokkan uang laci vs transfer.
-    ["Pembayaran", t.bayar==="tf" ? "Transfer" : "Cash"],
+    ["Pembayaran", infoBayar(t.bayar).panjang],
   ]);
 }
 
@@ -4588,15 +4641,16 @@ function setBayarFnb(m){
   bayarFnb=m;
   $("fnbCash").classList.toggle("aktif", m==="cash");
   $("fnbTf").classList.toggle("aktif", m==="tf");
-  if(m==="tf") bukaQris(); // pelanggan langsung bisa scan
+  $("fnbQris").classList.toggle("aktif", m==="qris");
+  if(m==="qris") bukaQris(totalKeranjang()); // pelanggan langsung bisa scan
 }
 function totalKeranjang(){
   return Object.entries(keranjang).reduce((t,[id,qty])=>{
     const p = produk.find(x=>x.id==id); return t + (p? p.price*qty : 0);
   },0);
 }
-function bukaQris(){
-  $("qrisTotal").textContent = "Total: "+rp(totalKeranjang());
+function bukaQris(total){
+  $("qrisTotal").textContent = "Total: "+rp(total);
   $("qrisOverlay").classList.add("buka");
 }
 function tutupQris(){ $("qrisOverlay").classList.remove("buka"); }
@@ -4648,7 +4702,7 @@ async function simpanFnb(){
     // butuh resi tidak bertambah satu ketukan.
     Swal.fire({icon:"success", title:"Penjualan tersimpan",
       text:"Total "+rp(sale.total)+(sale.tip? " + tip "+rp(sale.tip) : "")
-           +" ("+(sale.payment_method==="tf"?"Transfer":"Cash")+") · "+nomorNota("F", sale.id),
+           +" ("+infoBayar(sale.payment_method).panjang+") · "+nomorNota("F", sale.id),
       timer:5000, timerProgressBar:true,
       showConfirmButton:true, confirmButtonText:"&#129534; Lihat Resi", confirmButtonColor:"#1B9E62",
       showCancelButton:true, cancelButtonText:"Tutup",
@@ -4670,7 +4724,7 @@ function barisRiwayatFnb(sl){
   return '<div class="cat-baris'+(batal||indukBatal?' trx-batal':'')+'"><span>'
     + '<span class="waktu">'+jam(sl.created_at)+'</span> &middot; '
     + sl.items.map(i=>esc(i.product_name)+' x'+i.qty).join(", ")
-    + ' <span class="'+(sl.payment_method==="tf"?"chip-tf":"chip-cash")+'">'+(sl.payment_method==="tf"?"TF":"CASH")+'</span>'
+    + ' '+chipBayar(sl.payment_method)
     // Penanda bahwa pesanan ini menempel pada sebuah cucian — supaya kasir
     // tahu sebelum menekan tombol batal, bukan baru diberi tahu setelahnya.
     + (sl.transaction? ' <span class="chip-nempel" title="Menempel pada cucian">&#128663; '

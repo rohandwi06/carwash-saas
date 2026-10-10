@@ -9,6 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Transaction extends Model
 {
+    /**
+     * Cara bayar yang dikenal — dipakai cucian DAN penjualan F&B.
+     * Hanya 'cash' yang uangnya masuk laci (dan ikut setoran buku kas);
+     * 'tf' dan 'qris' sama-sama masuk rekening, tapi dilaporkan terpisah.
+     */
+    public const CARA_BAYAR = ['cash', 'tf', 'qris'];
+
     // 'is_bonus' sengaja TIDAK di sini: fitur cuci gratis sudah dihapus,
     // jadi kolomnya tidak boleh diisi lagi — hanya dibaca untuk riwayat lama.
     protected $fillable = [

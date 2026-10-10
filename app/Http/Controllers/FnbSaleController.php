@@ -91,7 +91,7 @@ class FnbSaleController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'payment_method'     => ['required', Rule::in(['cash', 'tf'])],
+            'payment_method'     => ['required', Rule::in(\App\Models\Transaction::CARA_BAYAR)],
             'items'              => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.qty'        => ['required', 'integer', 'min:1', 'max:100'],

@@ -50,7 +50,13 @@
         <div class="stat-grid">
           {{-- "Omzet" bukan "Pendapatan": angkanya sudah dikurangi
                pengeluaran, jadi bukan lagi sekadar uang yang masuk. --}}
-          <div class="stat masuk"><div class="s-label">Omzet</div><div class="s-nilai" id="statMasuk">Rp 0</div></div>
+          {{-- Bisa dibuka: omzet dipecah Cash / TF / QRIS (gambarOmzetRekap
+               di kasir.js). --}}
+          <div class="stat masuk stat-buka" id="statOmzet" onclick="bukaTutupOmzet()">
+            <div class="s-label">Omzet <span class="trx-panah">&#9662;</span></div>
+            <div class="s-nilai" id="statMasuk">Rp 0</div>
+            <div class="rincian-omzet hidden" id="rincianOmzet"></div>
+          </div>
           <div class="stat"><div class="s-label">Transaksi</div><div class="s-nilai" id="statTrx">0</div></div>
           <div class="stat laba"><div class="s-label">Laba Bersih</div><div class="s-nilai" id="statLaba">Rp 0</div></div>
         </div>
