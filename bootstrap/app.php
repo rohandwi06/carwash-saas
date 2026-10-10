@@ -40,6 +40,15 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;   // null = serahkan kembali ke penanganan bawaan Laravel
             }
 
+            // Galat database (QueryException, gagal konek) juga turunan
+            // \RuntimeException, dan pesannya memuat SQL, nama tabel, host, serta
+            // user database. /api/login bisa dipanggil siapa saja, jadi tanpa
+            // saringan ini isi pesan itu terbaca dari luar tanpa login. Diserahkan
+            // ke Laravel: dibalas 500 "Server Error", rinciannya masuk log.
+            if ($e instanceof \PDOException) {
+                return null;
+            }
+
             if ($request->is('api/*')) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
