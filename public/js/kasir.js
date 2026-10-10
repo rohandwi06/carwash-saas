@@ -3437,10 +3437,23 @@ function hargaSusulan(r){
   return ((CFG.categories[r.kat] || {}).prices || {})[r.svc] || 0;
 }
 
+/* Seluruh katalog kendaraan untuk pengenalan nama -> jenis. /vehicles
+   berhalaman (untuk layar Pengaturan), jadi halaman-halamannya dikumpulkan
+   di sini; tanpa ini hanya 20 mobil pertama yang dikenali. */
+async function katalogKendaraanSemua(){
+  const semua = [];
+  for(let hal = 1; hal <= 50; hal++){
+    const r = await api("/vehicles?per_page=100&page="+hal, {penuh:true});
+    semua.push(...(r.data || []));
+    if(!r.meta || !r.meta.last_page || hal >= r.meta.last_page) break;
+  }
+  return semua;
+}
+
 async function bukaSusulan(){
   try{
     if(!CFG) CFG = await api("/config");
-    const [pekerja, katalog, menu] = await Promise.all([api("/workers"), api("/vehicles"), api("/products?active=1")]);
+    const [pekerja, katalog, menu] = await Promise.all([api("/workers"), katalogKendaraanSemua(), api("/products?active=1")]);
     // Tanggal yang sedang dibuka di Pembukuan dipakai bila sudah lewat;
     // selain itu kemarin.
     const tgl = (tglPilih && tglPilih < hariIni()) ? tglPilih : kemarinYmd();
