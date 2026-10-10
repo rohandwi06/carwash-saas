@@ -244,9 +244,6 @@ function bentukKat(kat){
   const s = CFG && CFG.categories[kat] ? CFG.categories[kat].shape : null;
   return BENTUK_ADA.includes(s) ? s : "hatch";
 }
-function contohKat(kat){
-  return (CFG && CFG.categories[kat] && CFG.categories[kat].examples) || "";
-}
 
 /* ---------- STATE (cache dari server) ---------- */
 let CFG = null;          // {categories, services, wage_rates}
@@ -563,7 +560,6 @@ function renderGrid(){
     '<button class="btn-ukuran'+(adalahMotor(key)?" motor":"")+'" onclick="pilihManual(\''+key+'\')">'
     + siluetSVG(bentukKat(key),110)
     + '<div class="bu-label">'+esc(kt.label)+'</div>'
-    + '<div class="bu-contoh">'+esc(contohKat(key))+'</div>'
     + '<div class="tag bu-harga">'+rp(kt.price)+'</div>'
     + '</button>'
   ).join("");
