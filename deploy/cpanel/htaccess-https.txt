@@ -1,0 +1,15 @@
+# --- Alihkan http ke https -------------------------------------------
+# Tempel blok ini di BARIS PALING ATAS .htaccess folder publik situs,
+# sebelum "<IfModule mod_rewrite.c>". Jangan menimpa berkasnya: baris
+# lain di dalamnya (termasuk yang ditulis cPanel untuk versi PHP) harus
+# tetap ada.
+#
+# .env menyetel SESSION_SECURE_COOKIE=true, jadi lewat http polos cookie
+# login tidak pernah tersimpan dan login selalu gagal.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+# ---------------------------------------------------------------------
