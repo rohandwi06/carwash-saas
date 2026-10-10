@@ -239,7 +239,7 @@ async function konfirmasiHapus(){
 /* ---------- Presentasi kategori ----------
    Bentuk siluet & contoh kendaraan datang dari database (diatur owner di
    Pengaturan), bukan lagi daftar tetap di sini. */
-const BENTUK_ADA = ["moto","hatch","mpv","van"];
+const BENTUK_ADA = ["moto","hatch","mpv","van","pickup"];
 function bentukKat(kat){
   const s = CFG && CFG.categories[kat] ? CFG.categories[kat].shape : null;
   return BENTUK_ADA.includes(s) ? s : "hatch";
@@ -268,6 +268,9 @@ function siluetSVG(shape,size){
     hatch:"M8 44 L12 34 Q14 30 20 29 L30 27 Q40 18 52 18 L66 18 Q76 18 82 26 L88 30 Q94 32 95 38 L96 44 Q96 48 92 48 L86 48 A8 8 0 0 1 70 48 L36 48 A8 8 0 0 1 20 48 L12 48 Q8 48 8 44 Z",
     mpv:"M6 44 L9 34 Q11 29 17 28 L26 26 Q34 15 48 14 L74 14 Q84 14 90 24 L94 30 Q99 33 100 39 L100 44 Q100 48 96 48 L88 48 A8 8 0 0 1 72 48 L36 48 A8 8 0 0 1 20 48 L10 48 Q6 48 6 44 Z",
     van:"M5 44 L6 20 Q6 12 14 12 L88 12 Q95 12 98 20 L102 32 L103 44 Q103 48 99 48 L91 48 A9 9 0 0 1 73 48 L35 48 A9 9 0 0 1 17 48 L9 48 Q5 48 5 44 Z",
+    // Pickup: bak rendah di belakang (kiri), kabin pendek di depan (kanan) —
+    // menghadap ke arah yang sama dengan siluet lain.
+    pickup:"M5 44 L5 31 Q5 28 8 28 L50 28 L50 18 Q50 14 54 14 L72 14 Q78 14 82 20 L88 28 L96 30 Q101 32 102 38 L102 44 Q102 48 98 48 L89 48 A8 8 0 0 1 73 48 L36 48 A8 8 0 0 1 20 48 L9 48 Q5 48 5 44 Z",
   };
   if(shape==="moto"){
     return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 108 54" aria-hidden="true">'
@@ -283,6 +286,8 @@ function siluetSVG(shape,size){
     hatch:'<path d="M34 28 Q42 21 52 21 L64 21 Q72 21 77 27 L34 28 Z"/>',
     mpv:'<rect x="36" y="18" width="16" height="9" rx="2"/><rect x="56" y="18" width="16" height="9" rx="2"/><path d="M76 18 L84 18 Q88 20 90 26 L76 27 Z"/>',
     van:'<rect x="14" y="17" width="16" height="11" rx="2"/><rect x="34" y="17" width="16" height="11" rx="2"/><rect x="54" y="17" width="16" height="11" rx="2"/><path d="M74 17 L88 17 Q92 20 94 28 L74 28 Z"/>',
+    // Satu jendela kabin + garis di sisi bak, supaya tidak terbaca sebagai sedan.
+    pickup:'<path d="M55 18 L70 18 Q75 18 78 22 L82 27 L55 27 Z"/><rect x="9" y="33" width="37" height="3" rx="1.5"/>',
   };
   const roda2x = shape==="hatch"?78:81;
   return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 108 54" aria-hidden="true">'
@@ -5050,7 +5055,7 @@ async function daftarUbah(kunci){
 const OPSI_STATUS = {kunci:"is_active", label:"Status", boolean:true, opsi:[["1","Aktif"],["0","Nonaktif"]]};
 
 /* ---------- PENGATURAN: KATALOG CUCI (owner) ---------- */
-const NAMA_BENTUK = {moto:"Motor", hatch:"Mobil kecil", mpv:"Mobil sedang", van:"Mobil besar / van"};
+const NAMA_BENTUK = {moto:"Motor", hatch:"Mobil kecil", mpv:"Mobil sedang", van:"Mobil besar / van", pickup:"Pickup"};
 
 /* Jenis kendaraan beroda dua ditandai lewat BENTUKNYA, bukan slug "motor":
    tiap cucian menamai jenis kendaraannya sendiri. Sama dengan aturan kolom

@@ -10,7 +10,7 @@ class WashCategory extends Model
     protected $fillable = ['slug', 'label', 'shape', 'examples', 'sort_order'];
 
     /** Bentuk siluet di layar kasir. 'moto' juga menentukan kolom Cash Motor. */
-    public const BENTUK = ['moto', 'hatch', 'mpv', 'van'];
+    public const BENTUK = ['moto', 'hatch', 'mpv', 'van', 'pickup'];
 
     public const BENTUK_MOTOR = 'moto';
 
