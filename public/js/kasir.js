@@ -866,10 +866,7 @@ function toggleAddon(id){
   renderConfirm();
 }
 function pilihLayanan(id){ layananAktif=id; renderConfirm(); }
-function setBayar(m){
-  metode=m; renderConfirm();
-  if(m==="qris") bukaQris(hitungTotalPreview()); // pelanggan langsung bisa scan
-}
+function setBayar(m){ metode=m; renderConfirm(); }
 function togglePk(id){
   if(pekerjaPilih.has(id)) pekerjaPilih.delete(id); else pekerjaPilih.add(id);
   renderConfirm();
@@ -4642,18 +4639,12 @@ function setBayarFnb(m){
   $("fnbCash").classList.toggle("aktif", m==="cash");
   $("fnbTf").classList.toggle("aktif", m==="tf");
   $("fnbQris").classList.toggle("aktif", m==="qris");
-  if(m==="qris") bukaQris(totalKeranjang()); // pelanggan langsung bisa scan
 }
 function totalKeranjang(){
   return Object.entries(keranjang).reduce((t,[id,qty])=>{
     const p = produk.find(x=>x.id==id); return t + (p? p.price*qty : 0);
   },0);
 }
-function bukaQris(total){
-  $("qrisTotal").textContent = "Total: "+rp(total);
-  $("qrisOverlay").classList.add("buka");
-}
-function tutupQris(){ $("qrisOverlay").classList.remove("buka"); }
 /* Pilihan "Untuk mobil" di Jual F&B: cucian hari ini yang masih sah, terbaru
    di atas, plus "Bukan pelanggan cuci". Pilihan yang sedang terpilih
    dipertahankan saat daftar dimuat ulang (mis. sesudah simpan draft). */
