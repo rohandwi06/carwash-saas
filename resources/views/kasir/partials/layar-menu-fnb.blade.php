@@ -22,6 +22,9 @@
         <div class="set-grup" data-grup="kendaraan">
           <div class="cat-blok">
             <h3>&#128663; Jenis kendaraan</h3>
+            {{-- Pilih beberapa jenis sekaligus (atau semua) lalu ubah/hapus
+                 bersamaan. Isinya digambar gambarPilihKategori() di kasir.js. --}}
+            <div class="kat-pilih-bar" id="katPilihBar"></div>
             <div id="daftarKategori"></div>
             <button class="btn-catat" style="background:var(--go);width:100%;margin-top:10px"
                     onclick="editKategori(null)">&#10133; Tambah Jenis Kendaraan</button>
@@ -54,6 +57,9 @@
               <input id="cariKendaraan" placeholder="Cari mobil di daftar&hellip;" autocomplete="off"
                      oninput="jadwalCariKendaraan()" aria-label="Cari mobil di katalog">
             </div>
+            {{-- Tahan satu mobil untuk memilih banyak sekaligus (lihat
+                 gambarPilihKendaraan() di kasir.js). --}}
+            <div class="kat-pilih-bar" id="kdPilihBar"></div>
             <div id="daftarKendaraan"></div>
           </div>
 

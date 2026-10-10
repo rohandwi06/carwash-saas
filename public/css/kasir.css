@@ -90,6 +90,9 @@
   .konfirm-kartu{background:var(--card);border:2.5px solid var(--line);border-radius:20px;
     padding:20px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
   .kk-nama{font-size:24px;font-weight:900}
+  /* Kolom nama kendaraan di kartu konfirmasi (pilih jenis tanpa mencari). */
+  .kk-isi-nama{width:100%;max-width:420px;margin-top:8px;text-align:left}
+  .field.kk-isi-nama input{text-transform:none}
   .kk-kat{font-size:14px;font-weight:800;color:var(--water-dk);background:rgba(229,168,0,.1);
     padding:4px 14px;border-radius:99px}
 
@@ -490,6 +493,53 @@
   /* ---- Pengaturan: daftar jenis kendaraan ---- */
   .kat-baris{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
   .kat-baris:last-child{border-bottom:none}
+  /* Pegangan geser urutan. touch-action:none supaya jari yang menyeret
+     pegangan ini tidak malah menggulung halaman. */
+  .kat-geser{flex:0 0 auto;font-size:20px;line-height:1;color:var(--ink2);padding:10px 4px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+  .kat-baris.digeser{background:var(--bg);box-shadow:0 4px 14px rgba(0,0,0,.18);border-radius:10px;position:relative;z-index:1}
+  .kat-baris.digeser .kat-geser{cursor:grabbing}
+  /* Pilih banyak jenis kendaraan: kotak centang per baris + baris "Pilih semua". */
+  .kat-cek{flex:0 0 auto;width:20px;height:20px;accent-color:var(--go);cursor:pointer}
+  .kat-baris.terpilih{background:rgba(27,158,98,.08)}
+  .kat-pilih-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:4px 0 10px;border-bottom:1px solid var(--line);min-height:40px}
+  .kat-pilih-bar:empty{display:none}
+  /* Baris ditahan untuk masuk mode pilih: teksnya jangan ikut terblok dan
+     menu tahan bawaan HP jangan muncul. */
+  /* ---- Baris ringkas: semua daftar di Pengaturan ----
+     Yang tampil hanya nama (+ tanda kecil). Ketuk kepalanya untuk membuka
+     detail dan tombol Ubah/Hapus; tahan untuk masuk mode pilih banyak. */
+  .rk-baris{border-bottom:1px solid var(--line)}
+  .rk-baris:last-child{border-bottom:none}
+  .rk-kepala{display:flex;align-items:center;gap:10px;padding:12px 2px;min-height:44px;cursor:pointer;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  .rk-nama{flex:1;min-width:0;font-size:16px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}
+  .rk-panah{flex:0 0 auto;font-size:14px;color:var(--ink2);transition:transform .15s}
+  .rk-baris.terbuka .rk-panah{transform:rotate(180deg)}
+  .rk-isi{display:none;padding:0 2px 14px}
+  .rk-baris.terbuka .rk-isi{display:block}
+  .rk-isi .item-bawah{margin-top:8px}
+  .rk-detail{font-size:13px;font-weight:600;color:var(--ink2);margin-top:2px}
+  .rk-detail b{color:var(--ink)}
+  .rk-aksi{display:flex;gap:8px;margin-top:12px}
+  .rk-btn{flex:1;font-size:14px;font-weight:900;padding:10px 12px;border-radius:10px;border:2px solid var(--line);
+    background:var(--card);color:var(--ink);cursor:pointer}
+  .rk-btn.bahaya{color:var(--danger);border-color:var(--danger)}
+  .rk-baris.terpilih{background:rgba(27,158,98,.08)}
+  .rk-baris.digeser{background:var(--bg);box-shadow:0 4px 14px rgba(0,0,0,.18);border-radius:10px;position:relative;z-index:1}
+  .rk-baris.digeser .kat-geser{cursor:grabbing}
+  .rk-baris.perlu-cek, .rk-baris.punya-utang{background:#FFF6E0;border-left:4px solid var(--danger);padding-left:8px;border-radius:8px}
+  .rk-baris.perlu-cek .tag-ai{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .rk-baris.titipan{background:#FBFAFF}
+  .rk-baris.titipan .tag-titip{background:#EDE7FF;color:#5B3FB0;border-color:#D6C9FF}
+  .rk-baris.berjalan{background:rgba(27,158,98,.06);border-radius:10px}
+  /* "Pilih semua 212 mobil": tawaran memperluas pilihan dari satu halaman
+     ke seluruh katalog. Barisnya sendiri di bawah tombol aksi. */
+  .kat-pilih-lintas{flex-basis:100%;text-align:left;font-size:13.5px;font-weight:800;color:var(--water-dk);background:none;border:none;padding:4px 0;cursor:pointer;text-decoration:underline}
+  .kat-pilih-bar .kat-pilih-petunjuk.penuh{flex-basis:100%}
+  .kat-pilih-petunjuk{font-size:12.5px;font-weight:600;color:var(--ink2)}
+  .kat-pilih-semua{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;cursor:pointer;margin-right:auto}
+  .kat-pilih-aksi{font-size:14px;font-weight:900;padding:8px 14px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+  .kat-pilih-aksi.bahaya{color:var(--danger);border-color:var(--danger)}
   .kat-info{flex:1;min-width:0}
   .kat-nama{font-size:16px;font-weight:900}
   .kat-detail{font-size:12.5px;font-weight:600;color:var(--ink2);margin-top:2px}
@@ -535,6 +585,9 @@
   @media (max-width:480px){
     .sw-layanan{flex-wrap:wrap;row-gap:4px}
     .sw-layanan .sw-label{flex:1 1 calc(100% - 30px)}
+    /* Tanpa kotak centang (ubah banyak jenis): nama layanan mengisi satu baris
+       penuh, kalau tidak Harga & Upah terjepit di sisa 30px di sebelahnya. */
+    .sw-layanan.tanpa-cek .sw-label{flex-basis:100%}
     .sw-layanan .mini-field{flex:1 1 0;min-width:0}
     .sw-layanan .sw-harga, .sw-layanan .sw-upah{width:100%}
   }

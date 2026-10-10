@@ -5,6 +5,14 @@
         <div id="konfirmSiluet"></div>
         <div class="kk-nama" id="konfirmNama"></div>
         <div class="kk-kat" id="konfirmKat"></div>
+        {{-- Kasir menekan tombol jenis (Motor, Mobil, ...) tanpa mencari nama:
+             di sini ia bisa mengetik kendaraannya. Boleh kosong - transaksi
+             lalu tercatat dengan nama jenisnya, seperti sebelum ada kolom ini. --}}
+        <div class="field kk-isi-nama hidden" id="blokNamaKendaraan">
+          <label for="inNamaKendaraan">Nama kendaraan</label>
+          <input id="inNamaKendaraan" placeholder="mis. Honda Vario (boleh kosong)" autocomplete="off"
+                 maxlength="100" oninput="isiNamaKendaraan(this.value)">
+        </div>
       </div>
 
       <div id="blokLayanan" style="margin-bottom:18px">

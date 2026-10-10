@@ -251,7 +251,7 @@ function contohKat(kat){
 /* ---------- STATE (cache dari server) ---------- */
 let CFG = null;          // {categories, services, wage_rates}
 let pekerja = [];        // dari /api/workers
-let pilihan = null;      // {nama, kat}
+let pilihan = null;      // {nama, kat, manual} - manual: jenis dipilih langsung, nama diketik kasir
 let layananAktif = "reguler";
 let metode = "cash";
 let pekerjaPilih = new Set(); // worker IDs
@@ -634,8 +634,16 @@ function pilihHasil(nama, kat){
 async function pilihManual(kat){
   const q = $("inputCari").value.trim();
   if(q){ api("/vehicles/failed-search",{method:"POST",body:{query:q}}).catch(()=>{}); }
-  pilihan = { nama:null, kat };
+  pilihan = { nama:null, kat, manual:true };
   resetConfirm(); renderConfirm(); tampilkan("layarConfirm");
+}
+/* Nama kendaraan yang diketik kasir setelah memilih jenis langsung. Kosong =
+   kembali ke nama jenisnya. Hanya mengganti judul kartu, tidak menggambar
+   ulang layar, supaya kursor tidak lompat saat mengetik. */
+function isiNamaKendaraan(v){
+  if(!pilihan) return;
+  pilihan.nama = v.trim() || null;
+  $("konfirmNama").textContent = pilihan.nama || CFG.categories[pilihan.kat].label;
 }
 /* Harga TOTAL satu kategori x layanan. Kalau tidak ada barisnya, berarti
    layanan itu memang tidak tersedia untuk kategori tsb. */
@@ -671,6 +679,10 @@ function renderConfirm(){
 
   $("konfirmSiluet").innerHTML = siluetSVG(bentukKat(pilihan.kat),170);
   $("konfirmNama").textContent = pilihan.nama || kt.label;
+  $("blokNamaKendaraan").classList.toggle("hidden", !pilihan.manual);
+  // Jangan menimpa isi kolom yang sedang diketik (layar ini digambar ulang
+  // tiap kali layanan/pekerja/add-on disentuh).
+  if(document.activeElement !== $("inNamaKendaraan")) $("inNamaKendaraan").value = pilihan.nama || "";
   $("konfirmKat").innerHTML = esc(kt.label)+" &middot; mulai "+rp(kt.price);
 
   // Cuma satu pilihan layanan? Tidak perlu ditampilkan (mis. motor).
@@ -1107,7 +1119,11 @@ async function simpanDraft(){
 function lanjutDraft(id){
   const d = drafts.find(x=>x.id===id);
   if(!d) return;
-  pilihan = { nama: d.vehicle_name, kat: d.category };
+  // Draft tidak mencatat asal namanya. Nama yang sama dengan nama jenisnya
+  // berarti kasir belum mengisinya - kolom nama dibuka lagi supaya bisa diisi.
+  const jenisDraft = CFG.categories[d.category];
+  const tanpaNama = !!jenisDraft && d.vehicle_name === jenisDraft.label;
+  pilihan = { nama: tanpaNama ? null : d.vehicle_name, kat: d.category, manual: tanpaNama };
   resetConfirm();
   draftAktif   = d.id;
   layananAktif = d.service || "reguler";
@@ -2740,27 +2756,39 @@ function gambarDaftarShift(){
   const list = s.shifts || [];
   const kini = s.current_shift;
 
+  const cari = id => ((SHIFT || {}).shifts || []).find(x => x.id===id) || {};
+  daftarRingkas("shift", {
+    wadah: "daftarShift", satuan: "shift", gambar: gambarDaftarShift,
+    ids: () => ((SHIFT || {}).shifts || []).map(x => x.id),
+    nama: id => cari(id).name || "",
+    ubahSatu: id => editShift(id),
+    // Tiap jawaban server membawa daftar shift terbaru.
+    hapusSatu: async id => { SHIFT = await api("/shifts/"+id, {method:"DELETE"}); },
+    sesudah: async () => { renderChipShift(); gambarDaftarShift(); },
+    ubahBanyak: {
+      kolom: [OPSI_STATUS],
+      simpan: async (id, body) => { SHIFT = await api("/shifts/"+id, {method:"PATCH", body}); },
+    },
+  });
   $("daftarShift").innerHTML = list.length===0
     ? '<div class="cat-kosong">Belum ada shift. Tambahkan minimal satu supaya penguncian punya jadwal.</div>'
     : list.map(x => {
         const berjalan = kini && x.id===kini.id;
-        return '<div class="shift-baris'+(berjalan?" berjalan":"")+'">'
-          + '<div class="shift-info">'
-          +   '<div class="shift-nama">'+esc(x.name)
-          +     (berjalan? ' <span class="shift-tag">sedang berjalan</span>' : '')+'</div>'
-          +   '<div class="shift-jam">'+esc(x.start_time)+' &ndash; '+esc(x.end_time)
-          +     (x.start_time >= x.end_time ? ' <span class="waktu">(lewat tengah malam)</span>' : '')+'</div>'
-          + '</div>'
-          // Tombol dikelompokkan supaya ketiganya ikut pindah baris bersama
-          // saat layar sempit, bukan tercecer sendiri-sendiri.
-          + '<span class="shift-aksi">'
+        return barisDaftar("shift", x.id,
+          esc(x.name)
+            + ' <span class="item-tag">'+esc(x.start_time)+' &ndash; '+esc(x.end_time)+'</span>'
+            + (berjalan? ' <span class="shift-tag">sedang berjalan</span>' : '')
+            + (x.is_active? '' : ' <span class="item-tag">nonaktif</span>'),
+          '<div class="rk-detail">'+esc(x.start_time)+' &ndash; '+esc(x.end_time)
+          +   (x.start_time >= x.end_time ? ' (lewat tengah malam)' : '')+'</div>'
+          + '<div class="item-bawah">'
           +   '<button class="btn-hadir'+(x.is_active?" aktif":"")+'" onclick="toggleShiftAktifBaris('+x.id+','+(x.is_active?0:1)+')">'
           +     (x.is_active? "&#10003; Aktif" : "Nonaktif")+'</button>'
-          +   '<button class="btn-edit-pk" title="Ubah" onclick="editShift('+x.id+')">&#9998;</button>'
-          +   '<button class="btn-hapus-pk" title="Hapus" onclick="hapusShift('+x.id+')">&#10005;</button>'
-          + '</span>'
-          + '</div>';
+          + '</div>'
+          + aksiRk('editShift('+x.id+')', 'hapusShift('+x.id+')'),
+          berjalan ? "berjalan" : "");
       }).join("");
+  pasangDaftar("shift");
 
   // Penguncian menyala tanpa shift aktif = kasir bisa terkunci selamanya.
   // Server sengaja memilih membuka; owner diberi tahu supaya sadar.
@@ -4856,6 +4884,175 @@ function setJenisFnb(j){
   $("jenisMakanan").classList.toggle("aktif", j==="makanan");
   $("jenisMinuman").classList.toggle("aktif", j==="minuman");
 }
+/* ---------- DAFTAR RINGKAS (semua daftar di Pengaturan) ----------
+   Tiap baris hanya menampilkan nama. Ketuk kepalanya untuk membuka detail
+   beserta tombol Ubah/Hapus; tahan (~setengah detik) untuk masuk mode pilih
+   banyak, lalu Ubah atau Hapus semuanya sekaligus.
+
+   Isi (.rk-isi) selalu ikut digambar dan hanya disembunyikan CSS, supaya
+   buka-tutup tidak menggambar ulang daftar. */
+function barisRk(p){
+  return '<div class="rk-baris'+(p.kelas? " "+p.kelas : "")+(p.terbuka?" terbuka":"")+(p.mode&&p.terpilih?" terpilih":"")+'" data-id="'+p.id+'">'
+    + '<div class="rk-kepala">'
+    +   (p.mode ? '<input type="checkbox" class="kat-cek" title="Pilih"'+(p.terpilih?" checked":"")+' onchange="'+p.cek+'">' : '')
+    +   (p.kiri || '')
+    +   '<span class="rk-nama">'+p.nama+'</span>'
+    +   '<span class="rk-panah">&#9662;</span>'
+    + '</div>'
+    + '<div class="rk-isi">'+p.isi+'</div>'
+    + '</div>';
+}
+function aksiRk(onEdit, onHapus, labelEdit){
+  return '<div class="rk-aksi">'
+    + (onEdit ? '<button class="rk-btn" onclick="'+onEdit+'">&#9998; '+(labelEdit || "Ubah")+'</button>' : '')
+    + (onHapus ? '<button class="rk-btn bahaya" onclick="'+onHapus+'">&#10005; Hapus</button>' : '')
+    + '</div>';
+}
+/** Buka/tutup dropdown satu baris tanpa menggambar ulang daftarnya. */
+function bukaRk(wadahId, terbuka, id){
+  terbuka.has(id) ? terbuka.delete(id) : terbuka.add(id);
+  const baris = $(wadahId).querySelector('.rk-baris[data-id="'+id+'"]');
+  if(baris) baris.classList.toggle("terbuka", terbuka.has(id));
+}
+const KECUALI_RK = ".kat-geser, button, select, input, .kat-cek, .rk-isi, .pager";
+
+/* Daftar yang cukup dengan perilaku baku (layanan, add-on, menu, penitip,
+   shift, akun kasir) didaftarkan di sini. o berisi:
+     wadah, satuan, gambar()  - id elemen, kata bendanya, penggambar ulang lokal
+     ids(), nama(id)          - id yang sedang tampil & namanya
+     ubahSatu(id)             - form ubah yang sudah ada
+     hapusSatu(id)            - panggilan hapus ke server (melempar bila ditolak)
+     sesudah()                - muat ulang setelah aksi massal
+     ubahBanyak {kolom, simpan(id, body)} - opsional: yang bisa disamakan */
+const DAFTAR = {};
+function daftarRingkas(kunci, o){
+  return DAFTAR[kunci] || (DAFTAR[kunci] = Object.assign({mode:false, terpilih:new Set(), terbuka:new Set()}, o));
+}
+function barisDaftar(kunci, id, nama, isi, kelas){
+  const d = DAFTAR[kunci];
+  return barisRk({id, kelas, nama, isi, mode:d.mode, terpilih:d.terpilih.has(id), terbuka:d.terbuka.has(id),
+    cek: "daftarPilih('"+kunci+"',"+id+",this.checked)"});
+}
+/** Dipanggil tiap kali daftarnya selesai digambar: baris pilih + pegangan tahan. */
+function pasangDaftar(kunci){
+  const d = DAFTAR[kunci], wadah = $(d.wadah);
+  if(!wadah) return;
+  const ada = new Set(d.ids());
+  [d.terpilih, d.terbuka].forEach(set => [...set].forEach(id => { if(!ada.has(id)) set.delete(id); }));
+
+  let bar = wadah.previousElementSibling;
+  if(!bar || bar.dataset.bar !== kunci){
+    bar = document.createElement("div");
+    bar.className = "kat-pilih-bar";
+    bar.dataset.bar = kunci;
+    wadah.parentNode.insertBefore(bar, wadah);
+  }
+  const n = d.terpilih.size, semua = ada.size;
+  if(!d.mode){
+    bar.innerHTML = semua ? '<span class="kat-pilih-petunjuk">Ketuk untuk detail &middot; tahan untuk memilih beberapa.</span>' : '';
+  }else{
+    bar.innerHTML =
+      '<label class="kat-pilih-semua"><input type="checkbox" class="kat-cek"'+(semua && n===semua?" checked":"")
+      +   ' onchange="daftarPilihSemua(\''+kunci+'\',this.checked)">'+(n ? n+" dipilih" : "Pilih semua")+'</label>'
+      // Lebih dari satu: Ubah hanya ada bila memang ada yang bisa disamakan.
+      + (n===1 || (n>1 && d.ubahBanyak) ? '<button class="kat-pilih-aksi" onclick="daftarUbah(\''+kunci+'\')">&#9998; Ubah</button>' : '')
+      + (n ? '<button class="kat-pilih-aksi bahaya" onclick="daftarHapus(\''+kunci+'\')">&#10005; Hapus</button>' : '')
+      + '<button class="kat-pilih-aksi" onclick="daftarBatal(\''+kunci+'\')">Batal</button>';
+    bar.querySelector(".kat-cek").indeterminate = n>0 && n<semua;
+  }
+  pasangTahanPilih(wadah, {
+    baris: ".rk-baris", kecuali: KECUALI_RK,
+    aktif: () => d.mode,
+    mulai: id => { d.mode = true; d.terpilih.add(id); d.gambar(); },
+    ketuk: id => daftarPilih(kunci, id, !d.terpilih.has(id)),
+    ketukBiasa: id => bukaRk(d.wadah, d.terbuka, id),
+  });
+}
+function daftarPilih(kunci, id, ya){
+  const d = DAFTAR[kunci];
+  ya ? d.terpilih.add(id) : d.terpilih.delete(id);
+  d.gambar();
+}
+function daftarPilihSemua(kunci, ya){
+  const d = DAFTAR[kunci];
+  d.terpilih.clear();
+  if(ya) d.ids().forEach(id => d.terpilih.add(id));
+  d.gambar();
+}
+function daftarBatal(kunci){
+  const d = DAFTAR[kunci];
+  d.mode = false; d.terpilih.clear();
+  d.gambar();
+}
+function laporMassal(berhasil, gagalList, satuan, kata){
+  if(gagalList.length){
+    Swal.fire({icon: berhasil ? "warning" : "error",
+      title: berhasil ? berhasil+" "+kata+", "+gagalList.length+" tidak bisa" : "Tidak bisa "+kata,
+      html: '<div style="text-align:left;font-size:14px">'+gagalList.join("<br><br>")+'</div>'});
+  }else{
+    Swal.fire({icon:"success", title:berhasil+" "+satuan+" "+kata, timer:1700, showConfirmButton:false});
+  }
+}
+/* Satu per satu ke server: tiap baris punya aturan tolaknya sendiri (masih
+   dipakai transaksi, utang belum lunas, ...) dan yang ditolak dilaporkan. */
+async function jalankanMassal(d, ids, kerja, kata){
+  const gagalList = [];
+  let berhasil = 0;
+  for(const id of ids){
+    const nama = d.nama(id);
+    try{ await kerja(id); berhasil++; }
+    catch(e){
+      if(e.message===ERR_LOGIN || e.message===ERR_SHIFT) return;
+      gagalList.push("<b>"+esc(nama)+"</b>: "+esc(e.message));
+    }
+  }
+  d.mode = false; d.terpilih.clear();
+  try{ await d.sesudah(); }catch(e){ gagal(e); }
+  laporMassal(berhasil, gagalList, d.satuan, kata);
+}
+async function daftarHapus(kunci){
+  const d = DAFTAR[kunci], ids = [...d.terpilih];
+  if(!ids.length) return;
+  const r = await Swal.fire({title:"Hapus "+ids.length+" "+d.satuan+"?", text: ids.map(d.nama).join(", "),
+    icon:"warning", showCancelButton:true, confirmButtonText:"Ya, hapus", cancelButtonText:"Batal", confirmButtonColor:"#d33"});
+  if(!r.isConfirmed) return;
+  await jalankanMassal(d, ids, d.hapusSatu, "dihapus");
+}
+/* Satu baris dipilih = form ubah biasa. Lebih dari satu: hanya kolom yang
+   masuk akal disamakan (harga, status, ...); yang dikosongkan tidak diubah. */
+async function daftarUbah(kunci){
+  const d = DAFTAR[kunci], ids = [...d.terpilih];
+  if(!ids.length) return;
+  if(ids.length===1) return d.ubahSatu(ids[0]);
+  const u = d.ubahBanyak;
+  if(!u) return;
+  const {value: body} = await Swal.fire({
+    title: "Ubah "+ids.length+" "+d.satuan,
+    html: '<div class="sw-judul" style="margin-top:0">'+ids.map(id => esc(d.nama(id))).join(", ")+'</div>'
+      + u.kolom.map((k, i) => '<div class="sw-field-label">'+k.label+'</div>'
+          + (k.opsi
+              ? '<select class="sw-select sw-massal" data-i="'+i+'"><option value="">(tidak diubah)</option>'
+                + k.opsi.map(([v, t]) => '<option value="'+v+'">'+t+'</option>').join("")+'</select>'
+              : '<input type="number" inputmode="numeric" class="swal2-input sw-massal" data-i="'+i+'" placeholder="tidak diubah">')
+        ).join(""),
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Simpan", cancelButtonText: "Batal", confirmButtonColor: "#1B9E62",
+    preConfirm: () => {
+      const b = {};
+      document.querySelectorAll(".sw-massal").forEach(el => {
+        const k = u.kolom[+el.dataset.i], v = el.value.trim();
+        if(v==="") return;
+        b[k.kunci] = k.opsi ? (k.boolean ? v==="1" : v) : Math.max(0, parseInt(v,10)||0);
+      });
+      return Object.keys(b).length ? b : Swal.showValidationMessage("Belum ada yang diubah");
+    },
+  });
+  if(!body) return;
+  await jalankanMassal(d, ids, id => u.simpan(id, body), "diubah");
+}
+const OPSI_STATUS = {kunci:"is_active", label:"Status", boolean:true, opsi:[["1","Aktif"],["0","Nonaktif"]]};
+
 /* ---------- PENGATURAN: KATALOG CUCI (owner) ---------- */
 const NAMA_BENTUK = {moto:"Motor", hatch:"Mobil kecil", mpv:"Mobil sedang", van:"Mobil besar / van"};
 
@@ -4864,6 +5061,8 @@ const NAMA_BENTUK = {moto:"Motor", hatch:"Mobil kecil", mpv:"Mobil sedang", van:
    Cash Motor di BookkeepingService. */
 function adalahMotor(kat){ return bentukKat(kat) === "moto"; }
 let katalogKategori = [], katalogLayanan = [];
+const katTerpilih = new Set();   // id jenis kendaraan yang sedang dicentang
+let katModePilih = false;        // kotak centang baru tampil setelah satu baris ditahan
 
 async function renderKatalog(){
   try{
@@ -4874,32 +5073,277 @@ async function renderKatalog(){
     gambarDaftarLayanan();
   }catch(e){ gagal(e); }
 }
+const katTerbuka = new Set();    // id jenis kendaraan yang dropdown-nya sedang terbuka
 function gambarDaftarKategori(){
+  // Centang & dropdown milik jenis yang sudah dihapus tidak boleh tertinggal.
+  const idAda = new Set(katalogKategori.map(k => k.id));
+  [katTerpilih, katTerbuka].forEach(set => [...set].forEach(id => { if(!idAda.has(id)) set.delete(id); }));
+  gambarPilihKategori();
   $("daftarKategori").innerHTML = katalogKategori.map(k => {
     const harga = katalogLayanan
       .filter(s => k.prices[s.slug]!==undefined)
-      .map(s => esc(s.label)+" "+rp(k.prices[s.slug])+" / upah "+rp((k.wages&&k.wages[s.slug])||0)).join(" &middot; ");
-    return '<div class="kat-baris">'
-      + '<div class="kat-info">'
-      +   '<div class="kat-nama">'+esc(k.label)+'</div>'
-      +   '<div class="kat-detail">'+(harga || "belum ada harga")+'</div>'
-      +   '<div class="kat-detail">'+esc(NAMA_BENTUK[k.shape]||k.shape)
-      +     (k.used_count? ' &middot; '+k.used_count+' transaksi' : '')+'</div>'
-      + '</div>'
-      + '<button class="btn-edit-pk" onclick="editKategori(\''+jsStr(k.slug)+'\')" title="Ubah">&#9998;</button>'
-      + '<button class="btn-hapus-pk" onclick="hapusKategori('+k.id+',\''+jsStr(k.label)+'\')" title="Hapus">&#10005;</button>'
-      + '</div>';
+      .map(s => '<div class="rk-detail">'+esc(s.label)+' <b>'+rp(k.prices[s.slug])+'</b> &middot; upah '
+        + rp((k.wages&&k.wages[s.slug])||0)+'</div>').join("");
+    return barisRk({
+      id: k.id, mode: katModePilih, terpilih: katTerpilih.has(k.id), terbuka: katTerbuka.has(k.id),
+      cek: 'pilihKategori('+k.id+',this.checked)',
+      kiri: katalogKategori.length>1
+        ? '<span class="kat-geser" title="Tahan lalu geser untuk mengubah urutan">&#9776;</span>' : '',
+      nama: esc(k.label),
+      isi: (harga || '<div class="rk-detail">belum ada harga</div>')
+        + '<div class="rk-detail">Bentuk: '+esc(NAMA_BENTUK[k.shape]||k.shape)
+        +   (k.used_count? ' &middot; '+k.used_count+' transaksi' : '')+'</div>'
+        + aksiRk('editKategori(\''+jsStr(k.slug)+'\')', 'hapusKategori('+k.id+',\''+jsStr(k.label)+'\')'),
+    });
   }).join("");
+  pasangGeserKategori();
+  pasangTahanKategori();
+}
+/* ---------- Pilih banyak jenis kendaraan ----------
+   Mode pilih tidak tampil sejak awal: tahan satu baris (~setengah detik)
+   untuk memunculkan kotak centang, "Pilih semua", Ubah, dan Hapus. Selama
+   mode ini aktif, ketuk baris lain untuk ikut memilihnya. */
+function gambarPilihKategori(){
+  const n = katTerpilih.size, semua = katalogKategori.length;
+  if(!semua){ $("katPilihBar").innerHTML = ""; return; }
+  if(!katModePilih){
+    $("katPilihBar").innerHTML = semua>1
+      ? '<span class="kat-pilih-petunjuk">Ketuk untuk detail &middot; tahan untuk memilih beberapa.</span>' : '';
+    return;
+  }
+  $("katPilihBar").innerHTML =
+    '<label class="kat-pilih-semua"><input type="checkbox" class="kat-cek" id="katCekSemua"'
+    +   (n===semua?" checked":"")+' onchange="pilihSemuaKategori(this.checked)">'
+    +   (n ? n+" dipilih" : "Pilih semua")+'</label>'
+    + (n ? '<button class="kat-pilih-aksi" onclick="ubahKategoriTerpilih()">&#9998; Ubah</button>'
+         + '<button class="kat-pilih-aksi bahaya" onclick="hapusKategoriTerpilih()">&#10005; Hapus</button>' : '')
+    + '<button class="kat-pilih-aksi" onclick="keluarModePilihKategori()">Batal</button>';
+  // Sebagian tercentang: kotak "Pilih semua" tampil setengah (garis).
+  $("katCekSemua").indeterminate = n>0 && n<semua;
+}
+function keluarModePilihKategori(){
+  katModePilih = false;
+  katTerpilih.clear();
+  gambarDaftarKategori();
+}
+function pasangTahanKategori(){
+  pasangTahanPilih($("daftarKategori"), {
+    baris: ".rk-baris",
+    // Tombol, pegangan geser, kotak centang, dan isi dropdown punya kerjanya sendiri.
+    kecuali: KECUALI_RK,
+    aktif: () => katModePilih,
+    mulai: id => { katModePilih = true; katTerpilih.add(id); gambarDaftarKategori(); },
+    ketuk: id => pilihKategori(id, !katTerpilih.has(id)),
+    ketukBiasa: id => bukaRk("daftarKategori", katTerbuka, id),
+  });
+}
+/* Tahan satu baris ~setengah detik = masuk mode pilih; selama mode itu aktif,
+   ketukan di baris lain ikut memilihnya. Di luar mode pilih, ketukan biasa
+   diteruskan ke o.ketukBiasa (buka/tutup dropdown). Baris harus punya data-id. */
+function pasangTahanPilih(wadah, o){
+  if(wadah.dataset.tahan) return;
+  wadah.dataset.tahan = "1";
+  const LAMA_TAHAN = 500, BATAS_GESER = 10;
+  let timer = null, x0 = 0, y0 = 0, baruTahan = false;
+  const barisDari = e => e.target.closest(o.kecuali) ? null : e.target.closest(o.baris);
+  const batal = () => { clearTimeout(timer); timer = null; };
+
+  wadah.addEventListener("pointerdown", e => {
+    const baris = barisDari(e);
+    if(!baris || o.aktif()) return;
+    x0 = e.clientX; y0 = e.clientY;
+    batal();
+    timer = setTimeout(() => {
+      timer = null;
+      baruTahan = true;   // klik yang menyusul saat jari dilepas jangan membatalkan centangnya
+      o.mulai(+baris.dataset.id);
+    }, LAMA_TAHAN);
+  });
+  // Jari bergeser = sedang menggulung halaman, bukan menahan.
+  wadah.addEventListener("pointermove", e => {
+    if(timer && Math.hypot(e.clientX - x0, e.clientY - y0) > BATAS_GESER) batal();
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(n => wadah.addEventListener(n, batal));
+  wadah.addEventListener("contextmenu", e => { if(barisDari(e)) e.preventDefault(); });
+  wadah.addEventListener("click", e => {
+    if(baruTahan){ baruTahan = false; return; }
+    const baris = barisDari(e);
+    if(!baris) return;
+    if(o.aktif()) o.ketuk(+baris.dataset.id);
+    else if(o.ketukBiasa) o.ketukBiasa(+baris.dataset.id);
+  });
+}
+function pilihKategori(id, ya){
+  ya ? katTerpilih.add(id) : katTerpilih.delete(id);
+  const baris = $("daftarKategori").querySelector('.rk-baris[data-id="'+id+'"]');
+  if(baris){
+    baris.classList.toggle("terpilih", ya);
+    const cek = baris.querySelector(".kat-cek");
+    if(cek) cek.checked = ya;
+  }
+  gambarPilihKategori();
+}
+function pilihSemuaKategori(ya){
+  katTerpilih.clear();
+  if(ya) katalogKategori.forEach(k => katTerpilih.add(k.id));
+  gambarDaftarKategori();
+}
+/* Ubah banyak jenis sekaligus. Satu jenis saja -> form ubah biasa. Lebih dari
+   satu: nama tidak bisa disamakan, jadi yang ditawarkan bentuk serta harga &
+   upah per layanan. Kolom yang dikosongkan berarti TIDAK diubah, dan layanan
+   yang tidak dimiliki suatu jenis tidak ditambahkan ke jenis itu. */
+async function ubahKategoriTerpilih(){
+  const pilihan = katalogKategori.filter(k => katTerpilih.has(k.id));
+  if(!pilihan.length) return;
+  if(pilihan.length===1) return editKategori(pilihan[0].slug);
+
+  const layanan = katalogLayanan.filter(s => pilihan.some(k => k.prices[s.slug]!==undefined));
+  const {value: ubah} = await Swal.fire({
+    title: "Ubah "+pilihan.length+" jenis kendaraan",
+    html:
+      '<div class="sw-judul" style="margin-top:0">'+pilihan.map(k => esc(k.label)).join(", ")+'</div>'
+      +'<div class="sw-field-label">Bentuk</div>'
+      +'<select id="swKatBentuk" class="sw-select"><option value="">(tidak diubah)</option>'
+      +  Object.entries(NAMA_BENTUK).map(([v,n]) => '<option value="'+v+'">'+esc(n)+'</option>').join("")
+      +'</select>'
+      +'<div class="sw-judul">Harga &amp; upah baru per layanan. Kosongkan yang tidak diubah.</div>'
+      + layanan.map(s =>
+          '<label class="sw-layanan tanpa-cek">'
+          + '<span class="sw-label">'+esc(s.label)+'</span>'
+          + '<span class="mini-field"><span class="mini-label">Harga</span>'
+          +   '<input type="number" class="sw-harga" data-svc="'+s.slug+'" placeholder="tetap"></span>'
+          + '<span class="mini-field"><span class="mini-label">Upah</span>'
+          +   '<input type="number" class="sw-upah" data-svc="'+s.slug+'" placeholder="tetap"></span>'
+          + '</label>').join(""),
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Simpan", cancelButtonText: "Batal", confirmButtonColor: "#1B9E62",
+    preConfirm: () => {
+      const baca = kelas => {
+        const hasil = {};
+        document.querySelectorAll(kelas).forEach(inp => {
+          if(inp.value.trim()!=="") hasil[inp.dataset.svc] = Math.max(0, parseInt(inp.value,10)||0);
+        });
+        return hasil;
+      };
+      const u = {shape: document.getElementById("swKatBentuk").value, prices: baca(".sw-harga"), wages: baca(".sw-upah")};
+      if(!u.shape && !Object.keys(u.prices).length && !Object.keys(u.wages).length){
+        return Swal.showValidationMessage("Belum ada yang diubah");
+      }
+      return u;
+    },
+  });
+  if(!ubah) return;
+
+  const gagalList = [];
+  for(const k of pilihan){
+    const prices = {...k.prices}, wages = {};
+    Object.keys(prices).forEach(svc => {
+      wages[svc] = (k.wages && k.wages[svc]) || 0;
+      if(ubah.prices[svc]!==undefined) prices[svc] = ubah.prices[svc];
+      if(ubah.wages[svc]!==undefined)  wages[svc]  = ubah.wages[svc];
+    });
+    try{
+      await api("/wash-categories/"+k.id, {method:"PATCH",
+        body:{label:k.label, shape: ubah.shape || k.shape, prices, wages}});
+    }catch(e){ gagalList.push("<b>"+esc(k.label)+"</b>: "+esc(e.message)); }
+  }
+  katTerpilih.clear();
+  katModePilih = false;
+  await muatUlangKatalog();
+  if(gagalList.length){
+    Swal.fire({icon:"warning", title:"Sebagian tidak tersimpan",
+      html:'<div style="text-align:left;font-size:14px">'+gagalList.join("<br><br>")+'</div>'});
+  }else{
+    Swal.fire({icon:"success", title:pilihan.length+" jenis kendaraan diubah", timer:1700, showConfirmButton:false});
+  }
+}
+/* Hapus banyak sekaligus. Server tetap yang memutuskan per jenis: yang sudah
+   dipakai transaksi atau katalog kendaraan ditolak dan dilaporkan di akhir. */
+async function hapusKategoriTerpilih(){
+  const pilihan = katalogKategori.filter(k => katTerpilih.has(k.id));
+  if(!pilihan.length) return;
+  const r = await Swal.fire({title:"Hapus "+pilihan.length+" jenis kendaraan?",
+    text: pilihan.map(k => k.label).join(", "), icon:"warning", showCancelButton:true,
+    confirmButtonText:"Ya, hapus", cancelButtonText:"Batal", confirmButtonColor:"#d33"});
+  if(!r.isConfirmed) return;
+
+  const gagalList = [];
+  let terhapus = 0;
+  for(const k of pilihan){
+    try{ await api("/wash-categories/"+k.id, {method:"DELETE"}); terhapus++; }
+    catch(e){ gagalList.push("<b>"+esc(k.label)+"</b>: "+esc(e.message)); }
+  }
+  katTerpilih.clear();
+  katModePilih = false;
+  await muatUlangKatalog();
+  if(gagalList.length){
+    Swal.fire({icon: terhapus ? "warning" : "error",
+      title: terhapus ? terhapus+" terhapus, "+gagalList.length+" tidak bisa" : "Tidak bisa dihapus",
+      html: '<div style="text-align:left;font-size:14px">'+gagalList.join("<br><br>")+'</div>'});
+  }else{
+    Swal.fire({icon:"success", title:terhapus+" jenis kendaraan dihapus", timer:1700, showConfirmButton:false});
+  }
+}
+/* Geser urutan jenis kendaraan: tahan pegangan di kiri baris, seret ke atas
+   atau bawah, lepas. Pakai pointer event (bukan drag-and-drop HTML5) karena
+   yang itu tidak jalan di layar sentuh tablet kasir. Urutannya disimpan ke
+   sort_order, jadi tombol di layar kasir dan pembukuan ikut berubah. */
+function pasangGeserKategori(){
+  const wadah = $("daftarKategori");
+  if(wadah.dataset.geser) return;
+  wadah.dataset.geser = "1";
+  let baris = null, pid = null;
+  const urutanLayar = () => [...wadah.querySelectorAll(".rk-baris")].map(b => +b.dataset.id);
+
+  const gerak = e => {
+    if(!baris || e.pointerId !== pid) return;
+    e.preventDefault();
+    const lain = [...wadah.querySelectorAll(".rk-baris")].filter(b => b !== baris);
+    const sesudah = lain.find(b => { const r = b.getBoundingClientRect(); return e.clientY < r.top + r.height/2; });
+    if(sesudah){ if(baris.nextElementSibling !== sesudah) wadah.insertBefore(baris, sesudah); }
+    else if(wadah.lastElementChild !== baris) wadah.appendChild(baris);
+  };
+  const lepas = async e => {
+    if(!baris || e.pointerId !== pid) return;
+    document.removeEventListener("pointermove", gerak);
+    document.removeEventListener("pointerup", lepas);
+    document.removeEventListener("pointercancel", lepas);
+    baris.classList.remove("digeser");
+    baris = null;
+    const ids = urutanLayar();
+    if(ids.join() === katalogKategori.map(k => k.id).join()) return;
+    try{
+      await api("/wash-categories/urutan", {method:"PUT", body:{ids}});
+      await muatUlangKatalog();
+    }catch(err){ gambarDaftarKategori(); gagal(err); }
+  };
+  wadah.addEventListener("pointerdown", e => {
+    const pegangan = e.target.closest(".kat-geser");
+    if(!pegangan || baris) return;
+    e.preventDefault();
+    baris = pegangan.closest(".rk-baris");
+    pid = e.pointerId;
+    baris.classList.add("digeser");
+    document.addEventListener("pointermove", gerak, {passive:false});
+    document.addEventListener("pointerup", lepas);
+    document.addEventListener("pointercancel", lepas);
+  });
 }
 function gambarDaftarLayanan(){
-  $("daftarLayanan").innerHTML = katalogLayanan.map(s =>
-    '<div class="pk-baris">'
-    + '<span class="pk-nama">'+esc(s.label)
-    +   (s.used_count? ' <span class="waktu">'+s.used_count+' transaksi</span>' : '')+'</span>'
-    + '<button class="btn-edit-pk" onclick="editLayanan('+s.id+',\''+jsStr(s.label)+'\')" title="Ubah nama">&#9998;</button>'
-    + '<button class="btn-hapus-pk" onclick="hapusLayanan('+s.id+',\''+jsStr(s.label)+'\')" title="Hapus">&#10005;</button>'
-    + '</div>'
-  ).join("");
+  daftarRingkas("layanan", {
+    wadah: "daftarLayanan", satuan: "layanan", gambar: gambarDaftarLayanan,
+    ids: () => katalogLayanan.map(s => s.id),
+    nama: id => (katalogLayanan.find(s => s.id===id) || {}).label || "",
+    ubahSatu: id => editLayanan(id, DAFTAR.layanan.nama(id)),
+    hapusSatu: id => api("/wash-services/"+id, {method:"DELETE"}),
+    sesudah: muatUlangKatalog,
+  });
+  $("daftarLayanan").innerHTML = katalogLayanan.map(s => barisDaftar("layanan", s.id, esc(s.label),
+    '<div class="rk-detail">'+(s.used_count? s.used_count+' transaksi' : 'Belum pernah dipakai')+'</div>'
+    + aksiRk('editLayanan('+s.id+',\''+jsStr(s.label)+'\')', 'hapusLayanan('+s.id+',\''+jsStr(s.label)+'\')', 'Ubah nama')
+  )).join("");
+  pasangDaftar("layanan");
 }
 
 /** Form tambah/ubah jenis kendaraan. slug null = tambah baru. */
@@ -5008,23 +5452,39 @@ async function hapusLayanan(id, label){
 }
 
 /* ---------- PENGATURAN: ADD-ON ---------- */
+let addonSemua = [];
 async function renderAddonPengaturan(){
   try{
-    const list = await api("/addons");
-    $("daftarAddon").innerHTML = list.length===0
-      ? '<div class="cat-kosong">Belum ada layanan tambahan.</div>'
-      : list.map(a =>
-          '<div class="item-baris">'
-          + barisItemAtas(esc(a.name), "",
-              'editAddon('+a.id+',\''+jsStr(a.name)+'\')', 'hapusAddon('+a.id+')')
-          + '<div class="item-bawah">'
-          +   miniField("Harga (Rp)", a.price, 'ubahHargaAddon('+a.id+', this.value)')
-          +   '<button class="btn-hadir'+(a.is_active?" aktif":"")+'" onclick="toggleAddonAktif('+a.id+','+(a.is_active?0:1)+')">'
-          +     (a.is_active?"&#10003; Aktif":"Nonaktif")+'</button>'
-          + '</div>'
-          + '</div>'
-        ).join("");
+    addonSemua = await api("/addons");
+    gambarDaftarAddon();
   }catch(e){ gagal(e); }
+}
+function gambarDaftarAddon(){
+  daftarRingkas("addon", {
+    wadah: "daftarAddon", satuan: "add-on", gambar: gambarDaftarAddon,
+    ids: () => addonSemua.map(a => a.id),
+    nama: id => (addonSemua.find(a => a.id===id) || {}).name || "",
+    ubahSatu: id => editAddon(id, DAFTAR.addon.nama(id)),
+    hapusSatu: id => api("/addons/"+id, {method:"DELETE"}),
+    sesudah: muatUlangKatalog,
+    ubahBanyak: {
+      kolom: [{kunci:"price", label:"Harga (Rp)"}, OPSI_STATUS],
+      simpan: (id, body) => api("/addons/"+id, {method:"PATCH", body}),
+    },
+  });
+  $("daftarAddon").innerHTML = addonSemua.length===0
+    ? '<div class="cat-kosong">Belum ada layanan tambahan.</div>'
+    : addonSemua.map(a => barisDaftar("addon", a.id,
+        esc(a.name)+' <span class="item-tag">'+rp(a.price)+'</span>'
+          + (a.is_active ? '' : ' <span class="item-tag">nonaktif</span>'),
+        '<div class="item-bawah">'
+        +   miniField("Harga (Rp)", a.price, 'ubahHargaAddon('+a.id+', this.value)')
+        +   '<button class="btn-hadir'+(a.is_active?" aktif":"")+'" onclick="toggleAddonAktif('+a.id+','+(a.is_active?0:1)+')">'
+        +     (a.is_active?"&#10003; Aktif":"Nonaktif")+'</button>'
+        + '</div>'
+        + aksiRk('editAddon('+a.id+',\''+jsStr(a.name)+'\')', 'hapusAddon('+a.id+')', 'Ubah nama')
+      )).join("");
+  pasangDaftar("addon");
 }
 async function tambahAddon(){
   const name = $("inAddonNama").value.trim();
@@ -5072,6 +5532,14 @@ let kendaraanCariTimer = null;
    (mis. mobil terakhir di halaman terakhir baru dihapus). */
 let kendaraanHalaman = 1;
 
+/* Pilih banyak mobil. Centang disimpan per id supaya bertahan saat pindah
+   halaman. kdSemua = "pilih semua N mobil" lintas halaman: layar tidak
+   memegang id seluruh katalog, jadi server yang menerapkannya ke semua mobil
+   yang cocok dengan kata cari saat itu. */
+const kdTerpilih = new Set();
+let kdModePilih = false, kdSemua = false, kdHalamanIds = [], kdTotal = 0;
+let kdHalaman = null;   // halaman terakhir dari server: {daftar, m, q}
+
 /** Pilihan jenis kendaraan sesuai katalog owner yang berlaku sekarang. */
 function opsiKategori(terpilih){
   return Object.entries(CFG.categories).map(([slug, k]) =>
@@ -5105,12 +5573,31 @@ async function renderKendaraan(){
       : '<div class="kendaraan-cek-judul">&#9888; '+perluCek+' mobil di bawah ini jenisnya dari tebakan AI '
         + 'dan belum kamu benarkan. Selama belum dicek, harganya ditentukan mesin.</div>';
 
-    const daftar = r.data;
-    $("daftarKendaraan").innerHTML = daftar.length===0
-      ? '<div class="cat-kosong">'+(q? 'Tidak ada mobil bernama "'+esc(q)+'" di daftar.'
-                                     : 'Katalog masih kosong.')+'</div>'
-      : daftar.map(barisKendaraan).join("") + pagerKendaraan(m, q);
+    kdHalaman = {daftar: r.data, m, q};
+    kdHalamanIds = r.data.map(v => v.id);
+    kdTotal = m.total || 0;
+    pasangTahanPilih($("daftarKendaraan"), {
+      baris: ".rk-baris",
+      // Isi dropdown, tombol, dan tombol halaman punya kerjanya sendiri.
+      kecuali: KECUALI_RK,
+      aktif: () => kdModePilih,
+      mulai: id => { kdModePilih = true; kdTerpilih.add(id); gambarDaftarKendaraan(); },
+      ketuk: id => pilihKendaraan(id, !(kdSemua || kdTerpilih.has(id))),
+      ketukBiasa: id => bukaRk("daftarKendaraan", kdTerbuka, id),
+    });
+    gambarDaftarKendaraan();
   }catch(e){ gagal(e); }
+}
+/* Menggambar halaman yang sudah di tangan. Mencentang dan masuk/keluar mode
+   pilih lewat sini, tanpa bertanya lagi ke server. */
+function gambarDaftarKendaraan(){
+  if(!kdHalaman) return;
+  const {daftar, m, q} = kdHalaman;
+  gambarPilihKendaraan();
+  $("daftarKendaraan").innerHTML = daftar.length===0
+    ? '<div class="cat-kosong">'+(q? 'Tidak ada mobil bernama "'+esc(q)+'" di daftar.'
+                                   : 'Katalog masih kosong.')+'</div>'
+    : daftar.map(barisKendaraan).join("") + pagerKendaraan(m, q);
 }
 
 /* Tombol halaman di BAWAH daftar: owner sampai ke sana setelah selesai
@@ -5135,32 +5622,120 @@ async function keHalamanKendaraan(hal){
   if(cari) cari.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
-/* Jumlah pemakaian ikut di baris ATAS bersama nama, bukan di sebelah dropdown:
-   di lebar HP (375px) dropdown jenis sudah memakan seluruh baris bawah, dan
-   angka di sampingnya terpotong tepi kartu. */
+/* Kepala baris: nama + jenisnya. Jumlah pemakaian, dropdown jenis, dan
+   tombol Ubah nama/Hapus ada di dalam dropdown baris itu. */
+const kdTerbuka = new Set();
 function barisKendaraan(v){
-  return '<div class="item-baris'+(v.needs_review?" perlu-cek":"")+'">'
-    + '<div class="item-atas">'
-    +   '<span class="item-nama">'+esc(v.name)
-    +     (v.needs_review? ' <span class="item-tag tag-ai">tebakan AI</span>' : '')
-    +     ' <span class="item-tag">'+(v.used_count? v.used_count+'x dicuci' : 'belum pernah')+'</span></span>'
-    +   '<span class="item-aksi">'
-    +     '<button class="btn-edit-pk" title="Ubah nama" onclick="editNamaKendaraan('+v.id+',\''+jsStr(v.name)+'\')">&#9998;</button>'
-    +     '<button class="btn-hapus-pk" title="Hapus" onclick="hapusKendaraan('+v.id+',\''+jsStr(v.name)+'\')">&#10005;</button>'
-    +   '</span>'
-    + '</div>'
-    + '<div class="item-bawah">'
-    +   '<label class="mini-field"><span class="mini-label">Jenis &amp; harga</span>'
-    +     '<select onchange="ubahKategoriKendaraan('+v.id+', this.value)">'+opsiKategori(v.category)+'</select></label>'
-    + '</div>'
-    + '</div>';
+  return barisRk({
+    id: v.id, kelas: v.needs_review ? "perlu-cek" : "",
+    mode: kdModePilih, terpilih: kdSemua || kdTerpilih.has(v.id), terbuka: kdTerbuka.has(v.id),
+    cek: 'pilihKendaraan('+v.id+',this.checked)',
+    nama: esc(v.name)
+      + (v.needs_review? ' <span class="item-tag tag-ai">tebakan AI</span>' : '')
+      + ' <span class="item-tag">'+esc(labelKat(v.category))+'</span>',
+    isi: '<div class="rk-detail">'+(v.used_count? v.used_count+'x dicuci' : 'Belum pernah dicuci')+'</div>'
+      + '<div class="item-bawah">'
+      +   '<label class="mini-field"><span class="mini-label">Jenis &amp; harga</span>'
+      +     '<select onchange="ubahKategoriKendaraan('+v.id+', this.value)">'+opsiKategori(v.category)+'</select></label>'
+      + '</div>'
+      + aksiRk('editNamaKendaraan('+v.id+',\''+jsStr(v.name)+'\')', 'hapusKendaraan('+v.id+',\''+jsStr(v.name)+'\')', 'Ubah nama'),
+  });
+}
+
+/* ---------- Pilih banyak mobil ----------
+   Sama seperti jenis kendaraan: tahan satu mobil untuk memunculkan kotak
+   centang, lalu Ubah jenis atau Hapus untuk semua yang dipilih. */
+function gambarPilihKendaraan(){
+  const bar = $("kdPilihBar");
+  if(!kdModePilih){
+    bar.innerHTML = kdTotal>1
+      ? '<span class="kat-pilih-petunjuk">Ketuk untuk detail &middot; tahan untuk memilih beberapa.</span>' : '';
+    return;
+  }
+  const q = ($("cariKendaraan").value || "").trim();
+  const n = kdSemua ? kdTotal : kdTerpilih.size;
+  const diHalaman = kdHalamanIds.filter(id => kdTerpilih.has(id)).length;
+  const halPenuh = kdSemua || (kdHalamanIds.length>0 && diHalaman===kdHalamanIds.length);
+  bar.innerHTML =
+    '<label class="kat-pilih-semua"><input type="checkbox" class="kat-cek" id="kdCekSemua"'
+    +   (halPenuh?" checked":"")+' onchange="pilihHalamanKendaraan(this.checked)">'
+    +   (n ? n+" dipilih" : "Pilih semua")+'</label>'
+    + (n ? '<button class="kat-pilih-aksi" onclick="ubahKendaraanTerpilih()">&#9998; Ubah</button>'
+         + '<button class="kat-pilih-aksi bahaya" onclick="hapusKendaraanTerpilih()">&#10005; Hapus</button>' : '')
+    + '<button class="kat-pilih-aksi" onclick="keluarModePilihKendaraan()">Batal</button>'
+    + (halPenuh && !kdSemua && kdTotal>kdTerpilih.size
+        ? '<button class="kat-pilih-lintas" onclick="pilihSemuaKendaraan()">Pilih semua '+kdTotal+' mobil'
+          + (q ? ' yang cocok dengan "'+esc(q)+'"' : ' di daftar')+'</button>' : '')
+    + (kdSemua ? '<span class="kat-pilih-petunjuk penuh">Semua '+kdTotal+' mobil'
+          + (q ? ' yang cocok dengan "'+esc(q)+'"' : ' di daftar')+' terpilih, termasuk di halaman lain.</span>' : '');
+  $("kdCekSemua").indeterminate = !halPenuh && diHalaman>0;
+}
+function pilihKendaraan(id, ya){
+  // Melepas satu mobil dari "semua": yang tersisa hanya bisa diingat untuk
+  // halaman ini, karena id halaman lain tidak ada di layar.
+  if(kdSemua && !ya){ kdSemua = false; kdTerpilih.clear(); kdHalamanIds.forEach(x => kdTerpilih.add(x)); }
+  ya ? kdTerpilih.add(id) : kdTerpilih.delete(id);
+  gambarDaftarKendaraan();
+}
+function pilihHalamanKendaraan(ya){
+  if(!ya && kdSemua){ kdSemua = false; kdTerpilih.clear(); }
+  kdHalamanIds.forEach(id => ya ? kdTerpilih.add(id) : kdTerpilih.delete(id));
+  gambarDaftarKendaraan();
+}
+function pilihSemuaKendaraan(){ kdSemua = true; gambarDaftarKendaraan(); }
+function keluarModePilihKendaraan(){
+  kdModePilih = false; kdSemua = false; kdTerpilih.clear();
+  gambarDaftarKendaraan();
+}
+/** Sasaran aksi massal: seluruh hasil kata cari, atau id yang dicentang. */
+function sasaranKendaraan(){
+  return kdSemua ? {semua:true, q:($("cariKendaraan").value || "").trim()} : {ids:[...kdTerpilih]};
+}
+/* Ubah massal = pindah jenis (dan harganya). Nama tiap mobil berbeda, jadi
+   nama tetap diubah satu per satu lewat tombol pensil di barisnya. */
+async function ubahKendaraanTerpilih(){
+  const n = kdSemua ? kdTotal : kdTerpilih.size;
+  if(!n) return;
+  const {value: category} = await Swal.fire({
+    title: "Ubah jenis "+n+" mobil",
+    html: '<div class="sw-field-label">Pindahkan semuanya ke jenis</div>'
+      + '<select id="swKdJenis" class="sw-select"><option value="" selected disabled>Pilih jenis&hellip;</option>'
+      + opsiKategori(null)+'</select>'
+      + '<div class="sw-judul">Berlaku untuk cucian berikutnya. Transaksi lampau tidak ikut berubah.</div>',
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Simpan", cancelButtonText: "Batal", confirmButtonColor: "#1B9E62",
+    preConfirm: () => document.getElementById("swKdJenis").value || Swal.showValidationMessage("Pilih jenisnya dulu"),
+  });
+  if(!category) return;
+  try{
+    const r = await api("/vehicles/massal", {method:"POST", body:{aksi:"pindah", category, ...sasaranKendaraan()}});
+    keluarModePilihKendaraan();
+    await segarkanKatalogKendaraan();
+    Swal.fire({icon:"success", title:r.jumlah+" mobil dipindah ke "+labelKat(category), timer:1900, showConfirmButton:false});
+  }catch(e){ gagal(e); }
+}
+async function hapusKendaraanTerpilih(){
+  const n = kdSemua ? kdTotal : kdTerpilih.size;
+  if(!n) return;
+  const r = await Swal.fire({title:"Hapus "+n+" mobil dari daftar?", icon:"warning",
+    text:"Kasir tidak akan menemukannya lagi saat mengetik namanya. Transaksi lampau tidak terpengaruh.",
+    showCancelButton:true, confirmButtonText:"Ya, hapus "+n+" mobil", cancelButtonText:"Batal", confirmButtonColor:"#d33"});
+  if(!r.isConfirmed) return;
+  try{
+    const h = await api("/vehicles/massal", {method:"POST", body:{aksi:"hapus", ...sasaranKendaraan()}});
+    keluarModePilihKendaraan();
+    await segarkanKatalogKendaraan();
+    Swal.fire({icon:"success", title:h.jumlah+" mobil dihapus", timer:1700, showConfirmButton:false});
+  }catch(e){ gagal(e); }
 }
 
 function jadwalCariKendaraan(){
   clearTimeout(kendaraanCariTimer);
   // Kata cari baru = daftar baru; halaman 4 dari pencarian lama tidak
   // berarti apa-apa untuk hasil yang sekarang.
-  kendaraanCariTimer = setTimeout(() => { kendaraanHalaman = 1; renderKendaraan(); }, 250);
+  // "Semua N mobil" dihitung untuk kata cari yang lama — jangan terbawa.
+  kendaraanCariTimer = setTimeout(() => { kendaraanHalaman = 1; kdSemua = false; renderKendaraan(); }, 250);
 }
 
 async function tambahKendaraan(){
@@ -5351,17 +5926,28 @@ async function renderAkunKasir(){
   if(ROLE!=="owner"){ blok.classList.add("hidden"); return; }
   blok.classList.remove("hidden");
   try{
-    const akun = await api("/users");
-    $("daftarAkunKasir").innerHTML = akun.length===0
-      ? '<div class="cat-kosong">Belum ada akun kasir. Buat di atas — kasir login pakai username &amp; password itu.</div>'
-      : akun.map(u =>
-          '<div class="pk-baris">'
-          +'<span class="pk-nama">'+esc(u.name)+' <span class="waktu">'+esc(u.username)+'</span></span>'
-          +'<button class="btn-edit-pk" onclick="editAkunKasir('+u.id+',\''+jsStr(u.name)+'\',\''+jsStr(u.username)+'\')" title="Ubah akun">&#9998;</button>'
-          +'<button class="btn-hapus-pk" onclick="hapusAkunKasir('+u.id+')" title="Hapus">&#10005;</button>'
-          +'</div>'
-        ).join("");
+    akunKasirSemua = await api("/users");
+    gambarDaftarAkunKasir();
   }catch(e){ gagal(e); }
+}
+let akunKasirSemua = [];
+function gambarDaftarAkunKasir(){
+  const cari = id => akunKasirSemua.find(u => u.id===id) || {};
+  daftarRingkas("akun", {
+    wadah: "daftarAkunKasir", satuan: "akun kasir", gambar: gambarDaftarAkunKasir,
+    ids: () => akunKasirSemua.map(u => u.id),
+    nama: id => cari(id).name || "",
+    ubahSatu: id => editAkunKasir(id, cari(id).name, cari(id).username),
+    hapusSatu: id => api("/users/"+id, {method:"DELETE"}),
+    sesudah: renderAkunKasir,
+  });
+  $("daftarAkunKasir").innerHTML = akunKasirSemua.length===0
+    ? '<div class="cat-kosong">Belum ada akun kasir. Buat di atas — kasir login pakai username &amp; password itu.</div>'
+    : akunKasirSemua.map(u => barisDaftar("akun", u.id, esc(u.name),
+        '<div class="rk-detail">Username: <b>'+esc(u.username)+'</b></div>'
+        + aksiRk('editAkunKasir('+u.id+',\''+jsStr(u.name)+'\',\''+jsStr(u.username)+'\')', 'hapusAkunKasir('+u.id+')')
+      )).join("");
+  pasangDaftar("akun");
 }
 async function tambahAkunKasir(){
   const name = $("inAkunNama").value.trim();
@@ -5667,23 +6253,36 @@ function setFilterMenu(f){
   document.querySelectorAll(".chip-filter").forEach(c => c.classList.toggle("aktif", c.dataset.f===f));
   renderDaftarProduk();
 }
+let produkTampil = [];   // menu yang lolos saringan jenis + kata cari
 function renderDaftarProduk(){
   const q = menuCari.trim().toLowerCase();
-  const cocok = produkSemua.filter(p =>
+  produkTampil = produkSemua.filter(p =>
     (menuFilter==="semua" || p.type===menuFilter) &&
     (!q || p.name.toLowerCase().includes(q)));
-  $("daftarProduk").innerHTML = cocok.length===0
+  const cari = id => produkSemua.find(p => p.id===id) || {};
+  daftarRingkas("produk", {
+    wadah: "daftarProduk", satuan: "menu", gambar: renderDaftarProduk,
+    // "Pilih semua" = semua yang sedang tampil, mengikuti saringan & kata cari.
+    ids: () => produkTampil.map(p => p.id),
+    nama: id => cari(id).name || "",
+    ubahSatu: id => editProduk(id, cari(id).name, cari(id).type),
+    hapusSatu: id => api("/products/"+id, {method:"DELETE"}),
+    sesudah: () => renderMenuFnb(),
+    ubahBanyak: {
+      kolom: [{kunci:"price", label:"Harga (Rp)"},
+              {kunci:"type", label:"Jenis", opsi:[["makanan","Makanan"],["minuman","Minuman"]]},
+              OPSI_STATUS],
+      simpan: (id, body) => api("/products/"+id, {method:"PATCH", body}),
+    },
+  });
+  $("daftarProduk").innerHTML = produkTampil.length===0
     ? '<div class="cat-kosong">'+(produkSemua.length? "Tidak ada menu yang cocok." : "Belum ada menu.")+'</div>'
-    : cocok.map(p =>
-        '<div class="item-baris'+(p.consignor_id?" titipan":"")+'">'
-        + barisItemAtas(
-            esc(p.name)
-              + (p.consignor_id
-                  ? ' <span class="item-tag tag-titip">&#129309; '+esc(namaPenitip(p))+'</span>'
-                  : ''),
-            (p.type==="makanan"? "&#127836; Makanan" : "&#129380; Minuman"),
-            'editProduk('+p.id+',\''+jsStr(p.name)+'\',\''+p.type+'\')',
-            'hapusProduk('+p.id+')')
+    : produkTampil.map(p => barisDaftar("produk", p.id,
+        esc(p.name)
+          + (p.consignor_id ? ' <span class="item-tag tag-titip">&#129309; '+esc(namaPenitip(p))+'</span>' : '')
+          + ' <span class="item-tag">'+rp(p.price)+'</span>'
+          + (p.is_active ? '' : ' <span class="item-tag">nonaktif</span>'),
+        '<div class="rk-detail">'+(p.type==="makanan"? "&#127836; Makanan" : "&#129380; Minuman")+'</div>'
         + '<div class="item-bawah">'
         +   miniField("Harga (Rp)", p.price, 'ubahHargaProduk('+p.id+', this.value)')
         //  Barang titipan: kotak stok diganti harga setor + tombol barang
@@ -5698,8 +6297,10 @@ function renderDaftarProduk(){
         +   '<button class="btn-hadir'+(p.is_active?" aktif":"")+'" onclick="toggleProduk('+p.id+','+(p.is_active?0:1)+')">'
         +     (p.is_active?"&#10003; Aktif":"Nonaktif")+'</button>'
         + '</div>'
-        + '</div>'
-      ).join("");
+        + aksiRk('editProduk('+p.id+',\''+jsStr(p.name)+'\',\''+p.type+'\')', 'hapusProduk('+p.id+')'),
+        p.consignor_id ? "titipan" : ""
+      )).join("");
+  pasangDaftar("produk");
 }
 
 /* ---------- PENGATURAN: TITIP JUAL (owner) ----------
@@ -5723,10 +6324,7 @@ async function renderPenitip(){
     $("titipUtangTotal").textContent = utangTotal ? "utang " + rp(utangTotal) : "";
     $("titipUtangTotal").classList.toggle("hidden", !utangTotal);
 
-    $("daftarPenitip").innerHTML = penitipSemua.length===0
-      ? '<div class="cat-kosong">Belum ada penitip. Tambahkan dulu orangnya, '
-        + 'baru barangnya didaftarkan di "Tambah menu" di bawah.</div>'
-      : penitipSemua.map(barisPenitip).join("");
+    gambarDaftarPenitip();
 
     isiPilihanPenitip();
   }catch(e){ gagal(e); }
@@ -5739,26 +6337,36 @@ function bagiHasilTeks(c){
     : "harga setor per barang";
 }
 
+function gambarDaftarPenitip(){
+  daftarRingkas("penitip", {
+    wadah: "daftarPenitip", satuan: "penitip", gambar: gambarDaftarPenitip,
+    ids: () => penitipSemua.map(c => c.id),
+    nama: id => (penitipSemua.find(c => c.id===id) || {}).name || "",
+    ubahSatu: id => editPenitip(id),
+    hapusSatu: id => api("/consignors/"+id, {method:"DELETE"}),
+    sesudah: renderPenitip,
+  });
+  $("daftarPenitip").innerHTML = penitipSemua.length===0
+    ? '<div class="cat-kosong">Belum ada penitip. Tambahkan dulu orangnya, '
+      + 'baru barangnya didaftarkan di "Tambah menu" di bawah.</div>'
+    : penitipSemua.map(barisPenitip).join("");
+  pasangDaftar("penitip");
+}
 function barisPenitip(c){
-  return '<div class="item-baris'+(c.utang? " punya-utang":"")+'">'
-    + '<div class="item-atas">'
-    +   '<span class="item-nama">'+esc(c.name)
-    +     ' <span class="item-tag">'+bagiHasilTeks(c)+'</span>'
-    +     (c.jumlah_barang? ' <span class="item-tag">'+c.jumlah_barang+' barang</span>' : '')
-    +     (c.is_active? '' : ' <span class="item-tag">nonaktif</span>')
-    +   '</span>'
-    +   '<span class="item-aksi">'
-    +     '<button class="btn-edit-pk" title="Ubah" onclick="editPenitip('+c.id+')">&#9998;</button>'
-    +     '<button class="btn-hapus-pk" title="Hapus" onclick="hapusPenitip('+c.id+')">&#10005;</button>'
-    +   '</span>'
-    + '</div>'
+  return barisDaftar("penitip", c.id,
+    esc(c.name)
+      + (c.utang? ' <span class="item-tag">utang '+rp(c.utang)+'</span>' : '')
+      + (c.is_active? '' : ' <span class="item-tag">nonaktif</span>'),
+    '<div class="rk-detail">'+bagiHasilTeks(c)
+    +   (c.jumlah_barang? ' &middot; '+c.jumlah_barang+' barang' : '')+'</div>'
     + '<div class="item-bawah">'
     +   '<span class="titip-utang'+(c.utang? " ada":"")+'">'
     +     (c.utang? "Utang " + rp(c.utang) : "Tidak ada utang")+'</span>'
     +   '<button class="btn-hadir" onclick="rincianPenitip('+c.id+')">Rincian</button>'
     +   (c.utang? '<button class="btn-hadir aktif" onclick="setorPenitip('+c.id+')">Setor</button>' : '')
     + '</div>'
-    + '</div>';
+    + aksiRk('editPenitip('+c.id+')', 'hapusPenitip('+c.id+')'),
+    c.utang ? "punya-utang" : "");
 }
 
 /** Form tambah/ubah penitip. id null = tambah baru. */
@@ -5984,19 +6592,7 @@ function bacaQtyGerak(maks){
   return qty;
 }
 
-/* ---------- Baris daftar barang (menu F&B & add-on) ----------
-   Isinya terlalu banyak untuk satu baris di tablet, jadi dipecah dua:
-   nama + tombol di atas, angka + status di bawah. */
-function barisItemAtas(namaHtml, tagHtml, onEdit, onHapus){
-  return '<div class="item-atas">'
-    + '<span class="item-nama">'+namaHtml
-    +   (tagHtml? ' <span class="item-tag">'+tagHtml+'</span>' : '')+'</span>'
-    + '<span class="item-aksi">'
-    +   '<button class="btn-edit-pk" title="Ubah" onclick="'+onEdit+'">&#9998;</button>'
-    +   '<button class="btn-hapus-pk" title="Hapus" onclick="'+onHapus+'">&#10005;</button>'
-    + '</span>'
-    + '</div>';
-}
+/* ---------- Kotak isian di dalam dropdown baris (menu F&B & add-on) ---------- */
 /** Kotak angka berlabel — tanpa label, kasir menebak mana harga mana stok. */
 function miniField(label, nilai, onChange, waspada){
   return '<label class="mini-field'+(waspada?" habis":"")+'">'

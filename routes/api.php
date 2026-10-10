@@ -202,6 +202,7 @@ Route::middleware('pin.auth')->group(function () {
         // Katalog cuci: jenis kendaraan & jenis layanan (tambah/ubah/hapus)
         Route::get('/wash-categories', [WashCategoryController::class, 'index']);
         Route::post('/wash-categories', [WashCategoryController::class, 'store']);
+        Route::put('/wash-categories/urutan', [WashCategoryController::class, 'urutkan']);
         Route::patch('/wash-categories/{washCategory}', [WashCategoryController::class, 'update']);
         Route::delete('/wash-categories/{washCategory}', [WashCategoryController::class, 'destroy']);
 
@@ -223,6 +224,7 @@ Route::middleware('pin.auth')->group(function () {
         // "perlu dicek" sampai dibenarkan di sini.
         Route::get('/vehicles', [VehicleController::class, 'index']);
         Route::post('/vehicles', [VehicleController::class, 'store']);
+        Route::post('/vehicles/massal', [VehicleController::class, 'massal']);
         Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update']);
         Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
 

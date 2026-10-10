@@ -1,0 +1,30 @@
+{
+  "slug": "kembar99",
+  "nama_bisnis": "KEMBAR 99 CARWASH",
+  "status": "disiapkan",
+  "paket_harga": null,
+  "domain": "kembar99-carwash.byrapiin.my.id",
+  "zona_waktu": "Asia/Jakarta",
+  "hosting": {
+    "jenis": "mandiri",
+    "cpanel_user": "byrapiin",
+    "folder_app": "kembar99-app",
+    "docroot": "kembar99-carwash.byrapiin.my.id",
+    "prefix_db": "byrapiin"
+  },
+  "owner": {
+    "nama": "Dimas"
+  },
+  "mulai": null,
+  "versi": {
+    "commit": null,
+    "pasti": true,
+    "migrasi_terakhir": null
+  },
+  "catatan": [
+    "Menumpang di akun cPanel byrapiin (hosting biasa ArenHost) bersama demo dan thamrin, bukan akun sendiri - pindahkan ke reseller saat jadi berlangganan.",
+    "Docroot ~/kembar99-carwash.byrapiin.my.id sejajar ~/kembar99-app (BUKAN rapiin-app, itu milik demo).",
+    "Database & user MySQL: byrapiin_kembar99.",
+    "Lokasi Lamongan (WIB). Percobaan gratis 1 bulan; paket_harga belum ditentukan - isi saat jadi berlangganan."
+  ]
+}

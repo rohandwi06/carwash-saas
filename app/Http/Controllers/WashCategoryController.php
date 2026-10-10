@@ -94,6 +94,36 @@ class WashCategoryController extends Controller
         return response()->json(['data' => ['slug' => $washCategory->slug]]);
     }
 
+    /**
+     * PUT /api/wash-categories/urutan — {ids: [id, id, ...]} dari atas ke bawah.
+     * Urutan ini dipakai di mana-mana lewat scope urut(): tombol jenis
+     * kendaraan di layar kasir, pembukuan, dan daftar upah.
+     */
+    public function urutkan(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ids'   => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        // Daftar harus lengkap: urutan sebagian membuat jenis yang tidak
+        // disebut bertabrakan nomornya dengan yang baru diurutkan.
+        $semua = WashCategory::pluck('id')->all();
+        if (count($data['ids']) !== count($semua) || array_diff($semua, $data['ids'])) {
+            return response()->json([
+                'message' => 'Daftar jenis kendaraan sudah berubah. Muat ulang halaman lalu coba lagi.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($data) {
+            foreach ($data['ids'] as $i => $id) {
+                WashCategory::whereKey($id)->update(['sort_order' => $i + 1]);
+            }
+        });
+
+        return response()->json(['data' => null]);
+    }
+
     /** DELETE /api/wash-categories/{washCategory} */
     public function destroy(WashCategory $washCategory): JsonResponse
     {
