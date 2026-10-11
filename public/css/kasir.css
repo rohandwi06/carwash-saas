@@ -200,6 +200,9 @@
   .stat.masuk .s-nilai{color:var(--water-dk)}
   /* Kotak Omzet yang bisa dibuka jadi Cash / TF / QRIS. Saat terbuka kotaknya
      membentang dua kolom supaya label dan rupiahnya muat sebaris. */
+  /* Pembukuan: ringkasan sehari dipecah jadi kartu-kartu. */
+  .judul-hari{font-size:17px;font-weight:900;margin:4px 2px 10px}
+  .cat-blok.blok-laba{border-color:var(--go);background:rgba(27,158,98,.06)}
   .stat-buka{cursor:pointer}
   .stat-buka.buka{grid-column:1/-1}
   .stat-buka.buka .trx-panah{transform:rotate(180deg)}

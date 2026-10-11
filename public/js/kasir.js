@@ -3378,28 +3378,41 @@ async function renderBuku(){
       api("/fnb-sales?date="+tgl),
     ]);
     if(tglPilih !== tgl) return; // pilihan sudah berubah — hasil ini basi, jangan render
-    // Ringkasan sehari tetap seperti dulu (permintaan owner 03/10: jangan
-    // diubah). Yang baru hanya blok "Per buku" di bawahnya: transaksi cuci,
-    // F&B, dan pengeluaran dirinci di dalam bukunya masing-masing
-    // (renderBukuPerBuku), menggantikan daftar buku yang dulu tidak bisa dibuka.
+    // Ringkasan sehari dipecah jadi empat kartu (permintaan owner 11/10 —
+    // satu daftar panjang sulit dibaca: Cash Total, upah, dan laba berderet
+    // tanpa terlihat mana yang dijumlah dan mana yang dikurangkan). Semua
+    // baris lama tetap ada; yang baru hanya pengelompokan dan subtotalnya:
+    //   Uang masuk - Uang keluar = Laba bersih, lalu Setoran cash sendiri.
+    // Di bawahnya blok "Per buku" (renderBukuPerBuku) seperti sebelumnya.
     const pisah = pisahBayarHari(trx, fnb);
     const upahRows = h.worker_wages.map(w =>
       '<div class="cat-baris"><span>&#128119; '+esc(w.name)+' &middot; '+w.vehicles+' kendaraan</span><b>'+rp(w.wage)+'</b></div>').join("");
+    const masuk  = uangMasukHari(h);
+    // Sama dengan potongan di BookkeepingService::dailyRecap(): setoran ke
+    // penitip bukan biaya, hak penitip bukan pendapatan.
+    const keluar = (h.wages||0) + (h.expenses||0) - (h.consignor_payout||0) + (h.consignor_share||0);
+    // Setoran: angka tiap buku dari server (yang sudah diajukan dibekukan).
+    const buku = h.books || [];
+    const keluarBuku = buku.reduce((t,b) => t + (b.expenses||0), 0);
+    const setoran    = buku.reduce((t,b) => t + (b.amount||0), 0);
+    const diLuar     = (h.cash_total||0) - keluarBuku - setoran;
     $("detailHari").innerHTML =
-      '<div class="cat-blok"><h3>&#128197; '+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</h3>'
-      // Total = cucian + F&B (koreksi owner 09/10; dulu cucian saja, sehingga
-      // hari yang hanya berisi jajanan tertulis Rp 0). Sama dengan jumlah
-      // baris Cuci Motor + Cuci Mobil + F&B di bawahnya; tip tidak ikut.
-      +'<div class="cat-baris"><span>Total</span><b>'+rp((h.total||0) + (h.fnb_total||0))+'</b></div>'
-      // Tip, Cuci Motor, dan Cuci Mobil bisa dibuka: masing-masing dipisah
-      // Cash dan TF (permintaan owner 03/10). Menggantikan tiga baris lama
-      // "TF / Cash Motor / Cash Mobil", yang tidak menyebut TF motor & TF
-      // mobil secara terpisah dan tidak menyebut tip sama sekali.
-      +barisPisahBayar("buku-tip", "Tip", pisah.tip)
+      '<div class="judul-hari">&#128197; '+fmtTgl(tgl)+(tgl===hariIni()?' &middot; HARI INI':'')+'</div>'
+
+      // ---- 1. Uang masuk ----
+      +'<div class="cat-blok"><h3>&#128176; Uang masuk</h3>'
+      // Cuci Motor, Cuci Mobil, dan Tip bisa dibuka: dipisah per cara bayar.
       +barisPisahBayar("buku-motor", "Cuci Motor", pisah.motor)
       +barisPisahBayar("buku-mobil", "Cuci Mobil", pisah.mobil)
       +'<div class="cat-baris"><span>F&amp;B</span><b>'+(h.fnb_total?rp(h.fnb_total):"kosong")+'</b></div>'
-      +'<div class="cat-baris"><span>Cash Total</span><b>'+rp(h.cash_total)+'</b></div>'
+      // Total = cucian + F&B (koreksi owner 09/10); tip punya barisnya sendiri.
+      +'<div class="cat-baris"><span>Total <span class="waktu">cucian + F&amp;B</span></span><b>'+rp((h.total||0) + (h.fnb_total||0))+'</b></div>'
+      +barisPisahBayar("buku-tip", "Tip", pisah.tip)
+      +'<div class="cat-baris tebal"><span>UANG MASUK</span><b class="hijau">'+rp(masuk)+'</b></div>'
+      +'</div>'
+
+      // ---- 2. Uang keluar ----
+      +'<div class="cat-blok"><h3>&#128184; Uang keluar</h3>'
       +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
       +upahRows
       // Pengeluaran bisa dibuka (permintaan owner 09/10). Isinya baris yang
@@ -3410,9 +3423,40 @@ async function renderBuku(){
           ? barisBuka("buku-keluar", 'Pengeluaran <span class="waktu">'+h.expense_list.length+'x</span>',
               '-'+rp(h.expenses), "merah", h.expense_list.map(e => barisKeluar(e)).join(""))
           : '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(h.expenses)+'</b></div>')
-      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="hijau">'+rp(h.profit)+'</b></div>'
-      +'<div style="margin-top:12px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
+      // Hak penitip & setoran titipan: hanya muncul di cucian yang menerima
+      // titipan. Dulu tidak ditulis di sini, sehingga Laba Bersih tidak bisa
+      // dicocokkan dari baris yang terlihat.
+      +barisTitipanRekap(h)
+      +'<div class="cat-baris tebal"><span>UANG KELUAR</span><b class="merah">-'+rp(keluar)+'</b></div>'
       +'</div>'
+
+      // ---- 3. Laba bersih ----
+      +'<div class="cat-blok blok-laba"><h3>&#9989; Laba bersih</h3>'
+      +'<div class="cat-baris"><span>Uang masuk</span><b>'+rp(masuk)+'</b></div>'
+      +'<div class="cat-baris"><span>Uang keluar</span><b class="merah">-'+rp(keluar)+'</b></div>'
+      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(h.profit>=0?"hijau":"merah")+'">'+rp(h.profit)+'</b></div>'
+      +'</div>'
+
+      // ---- 4. Setoran cash ----
+      // Hitungan TERPISAH dari laba: hanya uang fisik di laci. Transfer, QRIS,
+      // tip, dan upah tidak ikut — itu sebabnya angkanya tidak sama dengan
+      // uang masuk maupun laba.
+      +'<div class="cat-blok"><h3>&#128181; Setoran cash</h3>'
+      +'<div class="cat-baris"><span>Cash Total <span class="waktu">cucian + F&amp;B</span></span><b>'+rp(h.cash_total)+'</b></div>'
+      +(buku.length
+          ? '<div class="cat-baris"><span>Pengeluaran dari laci</span><b class="merah">-'+rp(keluarBuku)+'</b></div>'
+            + (diLuar !== 0
+                ? '<div class="cat-baris"><span>Di luar buku kas / dikoreksi sesudah disetor</span><b class="merah">'+(diLuar>0?"-":"+")+rp(Math.abs(diLuar))+'</b></div>'
+                : '')
+            + '<div class="cat-baris tebal"><span>SETORAN CASH</span><b>'+rp(setoran)+'</b></div>'
+            + (buku.length > 1
+                ? buku.map(b => '<div class="cat-baris"><span>'+esc(b.label)+' <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)+'</span></span><b>'+rp(b.amount||0)+'</b></div>').join("")
+                : '')
+          : '<div class="cat-kosong">Tanggal ini tidak punya buku kas, jadi tidak ada setoran.</div>')
+      +'<div class="waktu" style="white-space:normal;margin-top:8px">Hanya uang fisik di laci. Transfer, QRIS, dan tip tidak ikut disetor.</div>'
+      +'</div>'
+
+      +'<div style="margin-bottom:14px"><button class="btn-export" onclick="window.location=API+\'/reports/daily/csv?date='+tgl+'&token=\'+encodeURIComponent(TOKEN)">&#128190; Unduh CSV tanggal ini</button></div>'
       +'<div class="cat-blok"><h3>&#128214; Per buku</h3>'
       +'<div id="bukuPerBuku"></div></div>';
     // Tanggal baru dibuka: buku tunggal langsung terbuka (tidak ada yang perlu
