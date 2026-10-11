@@ -2026,8 +2026,8 @@ function barisKompensasi(h, kunci){
   if(!h.compensation) return "";
   return barisBuka(kunci, '&#127873; Kompensasi karyawan <span class="waktu">'+daftar.length+'x</span>',
     '-'+rp(h.compensation), "merah",
-    daftar.map(k => '<div class="cat-baris"><span>'+esc(k.worker_name)
-      + (k.reason ? ' <span class="waktu">'+esc(k.reason)+'</span>' : '')+'</span>'
+    daftar.map(k => '<div class="cat-baris"><span class="komp-siapa">'+esc(k.worker_name)
+      + (k.reason ? '<span class="komp-ket">'+esc(k.reason)+'</span>' : '')+'</span>'
       + '<b class="merah">-'+rp(k.amount)+'</b></div>').join(""));
 }
 

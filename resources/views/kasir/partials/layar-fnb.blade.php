@@ -24,7 +24,7 @@
         </div>
         <div>
           <div class="sec-label">Pembayaran</div>
-          <div class="bayar-grid">
+          <div class="bayar-grid bayar-3">
             <button id="fnbCash" class="btn-bayar aktif" onclick="setBayarFnb('cash')">&#128181; Cash</button>
             <button id="fnbTf" class="btn-bayar tf" onclick="setBayarFnb('tf')">&#127974; Transfer</button>
             <button id="fnbQris" class="btn-bayar qris" onclick="setBayarFnb('qris')">&#128241; QRIS</button>

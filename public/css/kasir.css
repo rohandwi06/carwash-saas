@@ -72,10 +72,11 @@
   .sec-label{font-size:13px;font-weight:900;letter-spacing:2px;color:var(--ink2);
     text-transform:uppercase;margin-bottom:10px}
 
-  .grid-ukuran{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid-ukuran{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .btn-ukuran{background:var(--card);border:2.5px solid var(--line);border-radius:18px;
-    padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;
     transition:transform .06s}
+  .btn-ukuran svg{max-width:100%;height:auto}   /* siluet ikut menyempit di HP kecil */
   .btn-ukuran:active{transform:scale(.97)}
   .btn-ukuran:hover{border-color:var(--water)}
   .btn-ukuran.motor{border-color:var(--tag)}
@@ -106,10 +107,15 @@
   .radio{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);flex:none}
   .aktif .radio{border-color:var(--water);background:radial-gradient(circle,var(--water) 45%,transparent 50%)}
 
-  .bayar-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .bayar-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .btn-bayar{background:var(--card);border:2.5px solid var(--line);border-radius:14px;
-    padding:16px 4px;font-size:20px;font-size:clamp(13px,3.9vw,20px);font-weight:900;text-align:center;
-    white-space:nowrap}
+    padding:16px;font-size:20px;font-weight:900;text-align:center}
+  /* Tiga tombol cara bayar (Cash / Transfer / QRIS). Sengaja kelas tersendiri:
+     .bayar-grid juga dipakai pilihan dua tombol di Pengaturan (Makanan/Minuman,
+     Persenan/Upah per mobil) yang harus tetap dua kolom. Huruf mengecil
+     mengikuti lebar layar supaya "Transfer" tidak patah jadi dua baris di HP. */
+  .bayar-grid.bayar-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .bayar-3 .btn-bayar{padding:16px 4px;font-size:clamp(13px,3.9vw,20px);white-space:nowrap}
   .btn-bayar.aktif{border-color:var(--go);background:rgba(27,158,98,.08);color:var(--go-dk)}
   .btn-bayar.tf.aktif{border-color:var(--water);background:rgba(229,168,0,.08);color:var(--water-dk)}
   .btn-bayar.qris.aktif{border-color:var(--qris);background:rgba(43,108,176,.08);color:var(--qris)}
@@ -200,6 +206,11 @@
   .stat.masuk .s-nilai{color:var(--water-dk)}
   /* Kotak Omzet yang bisa dibuka jadi Cash / TF / QRIS. Saat terbuka kotaknya
      membentang dua kolom supaya label dan rupiahnya muat sebaris. */
+  /* Baris kompensasi di dropdown Rekap & Pembukuan. Keterangannya diketik
+     bebas oleh owner (sampai 160 huruf), jadi ditaruh di baris sendiri dan
+     boleh patah — di dalam .waktu yang nowrap ia meluber keluar kartu. */
+  .komp-siapa{min-width:0;overflow-wrap:anywhere}
+  .komp-ket{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);line-height:1.35}
   /* Pembukuan: ringkasan sehari dipecah jadi kartu-kartu. */
   .judul-hari{font-size:17px;font-weight:900;margin:4px 2px 10px}
   .cat-blok.blok-laba{border-color:var(--go);background:rgba(27,158,98,.06)}
@@ -1196,3 +1207,13 @@
   .pd-badge{background:var(--ink);color:var(--tag);border-radius:6px;padding:1px 6px;
     font-size:10.5px;font-weight:900;letter-spacing:.5px;display:inline-block;
     vertical-align:middle;white-space:nowrap}
+
+  /* HP sangat sempit (di bawah 360px, mis. 320px). Di lebar ini tombol dua
+     kolom tidak lagi muat dengan ukuran huruf biasa, dan tiga tombol cara
+     bayar di formulir data tanggal lampau tidak muat di setengah baris. */
+  @media (max-width:359px){
+    .btn-bayar{padding:14px 6px;font-size:16px}
+    .btn-ukuran{padding:14px 8px 12px}
+    .bu-label{font-size:18px}
+    .susulan-bayar{grid-column:1 / -1}
+  }
