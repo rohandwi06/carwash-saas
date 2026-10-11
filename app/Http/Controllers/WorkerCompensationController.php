@@ -98,6 +98,9 @@ class WorkerCompensationController extends Controller
     /** DELETE /api/worker-compensations/{workerCompensation} — koreksi salah input. */
     public function destroy(WorkerCompensation $workerCompensation): JsonResponse
     {
+        // Kompensasi otomatis yang dihapus owner tidak boleh dibuat lagi oleh
+        // cucian berikutnya di hari yang sama.
+        app(\App\Services\DailyRuleService::class)->tandaiDilewati($workerCompensation);
         $workerCompensation->delete();
 
         return response()->json(['data' => null]);

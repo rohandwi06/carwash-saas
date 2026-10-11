@@ -202,6 +202,9 @@ class WageAdjustmentController extends Controller
     /** DELETE /api/wage-adjustments/{wageAdjustment} — koreksi salah input. */
     public function destroy(WageAdjustment $wageAdjustment): JsonResponse
     {
+        // Potongan otomatis yang dihapus owner tidak boleh dibuat lagi oleh
+        // cucian berikutnya di hari yang sama.
+        app(\App\Services\DailyRuleService::class)->tandaiDilewati($wageAdjustment);
         $wageAdjustment->delete();
 
         return response()->json(['data' => null]);
@@ -222,6 +225,9 @@ class WageAdjustmentController extends Controller
             'ids'   => ['required', 'array', 'min:1', 'max:500'],
             'ids.*' => ['integer', 'distinct'],
         ]);
+
+        WageAdjustment::whereIn('id', $data['ids'])->whereNotNull('rule_id')->get()
+            ->each(fn (WageAdjustment $a) => app(\App\Services\DailyRuleService::class)->tandaiDilewati($a));
 
         $jumlah = WageAdjustment::whereIn('id', $data['ids'])->delete();
 

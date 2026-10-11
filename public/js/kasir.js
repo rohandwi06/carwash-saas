@@ -1206,6 +1206,7 @@ function bukaPk(hal){
   }
   // Deposit pekerja hanya ada di sebagian cucian.
   $("pkBarisDeposit").classList.toggle("hidden", !$("blokDeposit"));
+  renderAturan();   // daftar aturan otomatis milik halaman ini (potongan / kompensasi)
   window.scrollTo(0, 0);
 }
 
@@ -1694,6 +1695,7 @@ function barisEntri(a, opsi){
   return '<div class="upah-entri">'
     + '<div class="upah-entri-atas">'
     +   '<span>'+(timpa ? '<span class="chip-timpa">TIMPA</span>' : '<span class="chip-potong">POTONG</span>')
+    +     (a.rule_id ? ' <span class="chip-auto">OTOMATIS</span>' : '')
     +     (opsi.nama ? ' '+esc(a.worker_name) : '')
     +     (opsi.tanggal ? ' '+fmtTglPendek(tglSaja(a.date)) : '')+'</span>'
     +   '<span style="white-space:nowrap"><b class="'+(timpa ? '' : 'merah')+'">'
@@ -1895,6 +1897,131 @@ async function hapusPenyesuaian(id){
   }catch(e){ gagal(e); }
 }
 
+/* ---------- ATURAN OTOMATIS HARIAN ----------
+   Potongan upah / kompensasi yang dicatat sendiri tiap hari untuk pekerja yang
+   mengerjakan cucian hari itu (permintaan owner 11/10: "gak perlu input manual
+   satu satu"). Owner menyetel aturannya sekali; server yang mencatat barisnya
+   setiap kali cucian disimpan (DailyRuleService::sinkron). Barisnya muncul di
+   kartu upah / daftar kompensasi seperti catatan biasa, bertanda OTOMATIS, dan
+   tetap bisa dihapus per hari.
+
+   Satu blok (#blokAturan) dipakai halaman Potongan upah dan Kompensasi; yang
+   ditampilkan mengikuti halaman yang sedang dibuka. */
+let aturanSemua = [];
+let aturanUrutan = 0;   // hanya pemuatan terakhir yang boleh menulis ke layar
+
+/** Jenis aturan milik halaman yang sedang dibuka, atau null di halaman lain. */
+function jenisAturanHal(){
+  const hal = $("layarPekerja").dataset.hal;
+  return hal === "potongan" || hal === "kompensasi" ? hal : null;
+}
+
+async function renderAturan(){
+  const jenis = jenisAturanHal();
+  if(!jenis || !$("blokAturan")) return;
+  const komp = jenis === "kompensasi";
+  $("aturanJudul").innerHTML = "&#128260; "+(komp ? "Kompensasi" : "Potongan")+" otomatis harian";
+  $("aturanKet").innerHTML = komp
+    ? "Kompensasi tetap yang diberikan sendiri tiap hari, mis. uang makan. Tidak perlu dicatat satu-satu."
+    : "Potongan tetap yang dipotong sendiri tiap hari, mis. cicilan kasbon. Tidak perlu dicatat satu-satu.";
+
+  const ke = ++aturanUrutan;
+  try{ aturanSemua = await api("/daily-rules"); }
+  catch(e){ gagal(e); return; }
+  if(ke !== aturanUrutan || jenisAturanHal() !== jenis) return;
+
+  const daftar = aturanSemua.filter(a => a.type === jenis);
+  $("daftarAturan").innerHTML = daftar.length
+    ? daftar.map(barisAturan).join("")
+    : '<div class="cat-kosong">Belum ada aturan otomatis.</div>';
+}
+
+function barisAturan(a){
+  return '<div class="aturan-baris'+(a.is_active ? '' : ' mati')+'">'
+    + '<div class="aturan-atas">'
+    +   '<div class="aturan-isi">'
+    +     '<div class="aturan-siapa">'+(a.worker ? esc(a.worker.name) : "Semua pekerja")+'</div>'
+    +     '<div class="aturan-jumlah">'+rp(a.amount)+' per orang, tiap hari kerja</div>'
+    +     '<div class="aturan-ket">'+esc(a.reason)+'</div>'
+    +   '</div>'
+    +   '<button class="btn-hadir'+(a.is_active ? ' aktif' : '')+'" title="Nyalakan / matikan"'
+    +     ' onclick="nyalakanAturan('+a.id+','+(a.is_active ? 0 : 1)+')">'+(a.is_active ? "Aktif" : "Mati")+'</button>'
+    + '</div>'
+    + aksiRk("formAturan("+a.id+")", "hapusAturan("+a.id+")")
+    + '</div>';
+}
+
+/** Sesudah aturan berubah: catatan hari ini ikut berubah, jadi kartu upah,
+    daftar kompensasi, dan titik kalender dimuat ulang. */
+async function segarkanSesudahAturan(){
+  penyTitik.kunci = null;
+  await Promise.all([renderAturan(), renderPenyesuaian()]);
+}
+
+/** Tambah (tanpa id) atau ubah (dengan id) satu aturan — satu jendela untuk keduanya. */
+async function formAturan(id){
+  const jenis = jenisAturanHal();
+  if(!jenis) return;
+  const lama = id ? aturanSemua.find(a => a.id === id) : null;
+  const komp = jenis === "kompensasi";
+
+  const {value: hasil} = await Swal.fire({
+    title: (lama ? "Ubah" : "Tambah")+" "+(komp ? "kompensasi" : "potongan")+" otomatis",
+    html:
+        '<div class="sw-field-label">Untuk siapa *</div>'
+      + '<select id="swAturanPekerja" class="sw-select">'
+      +   '<option value="">Semua pekerja yang kerja hari itu</option>'
+      +   pekerja.map(p => '<option value="'+p.id+'"'+(lama && lama.worker_id === p.id ? ' selected' : '')+'>'+esc(p.name)+'</option>').join("")
+      + '</select>'
+      + '<div class="sw-field-label">Jumlah per orang per hari (Rp) *</div>'
+      + '<input id="swAturanJumlah" class="swal2-input" type="number" inputmode="numeric" min="1" value="'+(lama ? lama.amount : "")+'">'
+      + '<div class="sw-field-label">Keterangan *</div>'
+      + '<input id="swAturanAlasan" class="swal2-input" maxlength="160" placeholder="'+(komp ? "mis. Uang makan" : "mis. Cicilan kasbon")+'" value="'+esc(lama ? lama.reason : "")+'">',
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Simpan",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#1B9E62",
+    width: 460,
+    preConfirm: () => {
+      const ambil = i => document.getElementById(i).value.trim();
+      const amount = parseInt(ambil("swAturanJumlah"), 10);
+      const reason = ambil("swAturanAlasan");
+      if(!(amount > 0)) return Swal.showValidationMessage("Isi jumlahnya");
+      if(!reason) return Swal.showValidationMessage("Isi keterangannya");
+      return {worker_id: ambil("swAturanPekerja") ? +ambil("swAturanPekerja") : null, amount, reason};
+    },
+  });
+  if(!hasil) return;
+
+  try{
+    await (lama
+      ? api("/daily-rules/"+id, {method:"PATCH", body:hasil})
+      : api("/daily-rules", {method:"POST", body:{...hasil, type:jenis}}));
+    await segarkanSesudahAturan();
+    Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2400,
+      title: lama ? "Aturan diperbarui" : "Aturan aktif mulai hari ini"});
+  }catch(e){ gagal(e); }
+}
+
+async function nyalakanAturan(id, nyala){
+  try{
+    await api("/daily-rules/"+id, {method:"PATCH", body:{is_active: !!nyala}});
+    await segarkanSesudahAturan();
+  }catch(e){ gagal(e); }
+}
+
+async function hapusAturan(id){
+  const yakin = await Swal.fire({icon:"warning", title:"Hapus aturan ini?",
+    html:"Catatan otomatis <b>hari ini</b> ikut ditarik. Catatan hari-hari sebelumnya tetap ada.",
+    showCancelButton:true, confirmButtonText:"Ya, hapus", cancelButtonText:"Batal", confirmButtonColor:"#d33"});
+  if(!yakin.isConfirmed) return;
+  try{
+    await api("/daily-rules/"+id, {method:"DELETE"});
+    await segarkanSesudahAturan();
+  }catch(e){ gagal(e); }
+}
+
 /* ---------- KOMPENSASI KARYAWAN ----------
    "Sangu" dari owner di luar upah cucian: uang makan, uang bensin (permintaan
    owner 11/10). Tanggalnya mengikuti pilihan di kalender Upah & potongan
@@ -1966,7 +2093,7 @@ async function renderKompensasi(){
 function barisKompEntri(k, denganTanggal){
   return '<div class="upah-entri">'
     + '<div class="upah-entri-atas">'
-    +   '<span>'+esc(k.worker_name)+(denganTanggal ? ' <span class="waktu">'+fmtTglPendek(tglSaja(k.date))+'</span>' : '')+'</span>'
+    +   '<span>'+esc(k.worker_name)+(k.rule_id ? ' <span class="chip-auto">OTOMATIS</span>' : '')+(denganTanggal ? ' <span class="waktu">'+fmtTglPendek(tglSaja(k.date))+'</span>' : '')+'</span>'
     +   '<span style="white-space:nowrap"><b>'+rp(k.amount)+'</b>'
     +   ' <button class="btn-void" title="Hapus catatan ini" onclick="hapusKompensasi('+k.id+')">&#10005;</button></span>'
     + '</div>'

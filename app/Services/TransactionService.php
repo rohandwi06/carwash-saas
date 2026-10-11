@@ -22,7 +22,27 @@ class TransactionService
         private WageService $wages,
         private FnbService $fnb,
         private CashBookService $books,
+        private DailyRuleService $aturan,
     ) {}
+
+    /**
+     * Jalankan aturan otomatis harian (potongan & kompensasi) untuk satu
+     * tanggal. Dipanggil setiap kali "siapa yang kerja hari itu" bisa berubah:
+     * cucian dicatat, dikoreksi, atau dibatalkan.
+     *
+     * Kegagalannya TIDAK boleh menggagalkan pencatatan cucian — kasir harus
+     * tetap bisa menerima uang walau otomatisasinya bermasalah. Galatnya
+     * dilaporkan ke log; sinkron() sendiri membatalkan perubahannya yang
+     * setengah jalan.
+     */
+    private function sinkronAturan(string $date): void
+    {
+        try {
+            $this->aturan->sinkron($date);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
 
     public function create(array $data): Transaction
     {
@@ -63,6 +83,7 @@ class TransactionService
             }
 
             $this->wages->attachWorkers($transaction, $data['worker_ids'] ?? []);
+            $this->sinkronAturan($date);
 
             // Makanan/minuman yang dipesan bersamaan: tetap disimpan sebagai
             // penjualan F&B (stok & laporan F&B ikut aturan yang sama),
@@ -167,6 +188,10 @@ class TransactionService
                 } else {
                     $this->wages->attachWorkers($trx, $data['worker_ids']);
                 }
+
+                // Pekerjanya berubah: yang tidak lagi kerja hari itu kehilangan
+                // catatan otomatisnya, yang baru masuk mendapatkannya.
+                $this->sinkronAturan($trx->date->toDateString());
             }
 
             // Buku kas yang sudah ditutup memakai angka BEKU (lihat
@@ -288,6 +313,8 @@ class TransactionService
                 $hasil[] = $trx->load('workers', 'addons', 'fnbSales.items');
             }
 
+            $this->sinkronAturan($date);
+
             foreach (array_values($fnb) as $i => $jual) {
                 try {
                     $this->fnb->createBackdated([
@@ -384,6 +411,9 @@ class TransactionService
             // Makanan/minuman yang ikut dibatalkan: stoknya dikembalikan.
             // Uangnya sendiri otomatis keluar dari rekap lewat FnbSale::valid().
             $this->fnb->restoreStock($terkunci->fnbSales()->with('items')->get());
+
+            // Pekerja yang cuciannya tinggal ini tidak lagi "kerja hari itu".
+            $this->sinkronAturan($terkunci->date->toDateString());
         });
 
         return $transaction->refresh()->load('workers', 'addons');

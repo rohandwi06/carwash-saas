@@ -47,6 +47,21 @@
           <div id="daftarPekerja"></div>
         </div>
 
+        {{-- Aturan otomatis harian (permintaan owner 11/10): potongan atau
+             kompensasi yang dicatat sendiri tiap hari untuk pekerja yang
+             mengerjakan cucian hari itu, supaya tidak diinput satu-satu.
+             Satu blok untuk dua halaman — isinya (judul, daftar aturan)
+             digambar renderAturan() menurut halaman yang sedang dibuka. --}}
+        <div class="cat-blok" id="blokAturan" data-pk="potongan kompensasi">
+          <h3 id="aturanJudul">&#128260; Otomatis harian</h3>
+          <div class="peny-ket" id="aturanKet"></div>
+          <div id="daftarAturan"></div>
+          <button class="btn-cetak-ulang" style="margin-top:10px" onclick="formAturan()">&#10133; Tambah aturan otomatis</button>
+          <div class="peny-catatan" style="margin-top:12px">Dicatat saat pekerjanya mengerjakan cucian
+            pertamanya hari itu; yang tidak masuk tidak kena. Mengubah atau mematikan aturan berlaku
+            <b>mulai hari ini</b> &mdash; hari-hari sebelumnya tidak berubah.</div>
+        </div>
+
         {{-- Upah & potongan: dulu dua blok (potongan dengan kalendernya, lalu
              kalender upah terpisah di bawah) yang menjawab pertanyaan yang sama
              — uang pekerja per hari. Kini satu kalender untuk semuanya:

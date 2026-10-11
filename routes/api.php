@@ -267,5 +267,12 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/worker-compensations', [\App\Http\Controllers\WorkerCompensationController::class, 'store']);
         Route::delete('/worker-compensations/{workerCompensation}', [\App\Http\Controllers\WorkerCompensationController::class, 'destroy']);
 
+        // Aturan otomatis harian (potongan & kompensasi untuk yang kerja hari
+        // itu). Owner-only: menggerakkan uang pekerja & laba tiap hari.
+        Route::get('/daily-rules', [\App\Http\Controllers\DailyRuleController::class, 'index']);
+        Route::post('/daily-rules', [\App\Http\Controllers\DailyRuleController::class, 'store']);
+        Route::patch('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'update']);
+        Route::delete('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'destroy']);
+
     });
 });

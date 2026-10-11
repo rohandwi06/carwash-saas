@@ -16,7 +16,9 @@ class WorkerCompensation extends Model
     // jadi tanpa ini ia mencari tabel worker_compensation.
     protected $table = 'worker_compensations';
 
-    protected $fillable = ['worker_id', 'worker_name', 'amount', 'reason', 'date', 'created_by'];
+    protected $fillable = ['worker_id', 'worker_name', 'amount', 'reason', 'date', 'created_by',
+        // Terisi bila barisnya dibuat aturan otomatis harian (DailyRuleService).
+        'rule_id'];
 
     protected $casts = [
         // ':Y-m-d' mencegah tanggal mundur satu hari saat dibaca frontend —

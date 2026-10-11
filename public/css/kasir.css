@@ -206,6 +206,18 @@
   .stat.masuk .s-nilai{color:var(--water-dk)}
   /* Kotak Omzet yang bisa dibuka jadi Cash / TF / QRIS. Saat terbuka kotaknya
      membentang dua kolom supaya label dan rupiahnya muat sebaris. */
+  /* Aturan otomatis harian (Pekerja & Upah > Potongan upah / Kompensasi). */
+  .aturan-baris{padding:12px 0;border-bottom:1px solid var(--line)}
+  .aturan-baris:last-child{border-bottom:none}
+  .aturan-baris.mati .aturan-isi{opacity:.5}
+  .aturan-atas{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .aturan-isi{min-width:0;overflow-wrap:anywhere}
+  .aturan-siapa{font-size:15.5px;font-weight:900}
+  .aturan-jumlah{font-size:14px;font-weight:800;color:var(--ink2)}
+  .aturan-ket{font-size:13px;font-weight:600;color:var(--ink2);line-height:1.35;margin-top:2px}
+  .aturan-baris .rk-aksi{margin-top:10px}
+  .chip-auto{background:rgba(43,108,176,.12);color:var(--qris);border-radius:6px;padding:1px 6px;
+    font-size:10.5px;font-weight:900;letter-spacing:.3px;white-space:nowrap}
   /* Baris kompensasi di dropdown Rekap & Pembukuan. Keterangannya diketik
      bebas oleh owner (sampai 160 huruf), jadi ditaruh di baris sendiri dan
      boleh patah — di dalam .waktu yang nowrap ia meluber keluar kartu. */

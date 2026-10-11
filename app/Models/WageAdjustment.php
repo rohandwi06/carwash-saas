@@ -17,7 +17,9 @@ class WageAdjustment extends Model
     public const TIMPA    = 'timpa';
 
     protected $fillable = ['worker_id', 'worker_name', 'type', 'amount',
-        'reason', 'date', 'book_id', 'created_by'];
+        'reason', 'date', 'book_id', 'created_by',
+        // Terisi bila barisnya dibuat aturan otomatis harian (DailyRuleService).
+        'rule_id'];
 
     protected $casts = [
         // ':Y-m-d' mencegah tanggal mundur satu hari saat dibaca frontend —
