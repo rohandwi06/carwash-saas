@@ -70,5 +70,39 @@
 
           <div id="daftarPenyesuaian" style="margin-top:16px"></div>
         </div>
+
+        {{-- Kompensasi karyawan: "sangu" dari owner di luar upah cucian (uang
+             makan, uang bensin). Memakai tanggal yang dipilih di kalender
+             Upah & potongan di atas. Memotong laba bersih di barisnya sendiri;
+             tidak menyentuh upah, omzet, maupun setoran cash.
+             Owner-only, dibuka oleh renderKompensasi() di kasir.js. --}}
+        <div class="cat-blok hidden" id="blokKompensasi">
+          <h3>&#127873; Kompensasi karyawan</h3>
+          <div class="peny-ket">Uang tambahan dari owner di luar upah cucian, misalnya uang makan
+            atau uang bensin. Jumlahnya berlaku <b>per orang, per tanggal</b>.</div>
+
+          <div class="form-keluar" style="margin:12px 0 6px">
+            <select id="inKompPekerja" class="inp-range" style="flex:1" onchange="perbaruiTotalKomp()"></select>
+          </div>
+          <div class="form-keluar" style="margin-bottom:6px">
+            <input id="inKompJumlah" type="number" inputmode="numeric" placeholder="Jumlah per orang (Rp)"
+                   oninput="perbaruiTotalKomp()">
+          </div>
+          <div class="form-keluar" style="margin-bottom:6px">
+            <input id="inKompAlasan" placeholder="Keterangan (mis. Uang makan)" maxlength="160" list="kompSaran">
+            <datalist id="kompSaran"><option value="Uang makan"><option value="Uang bensin"></datalist>
+          </div>
+          {{-- Total yang akan tercatat = jumlah x orang x tanggal, sebelum disimpan. --}}
+          <div class="peny-bagi" id="kompTotal"></div>
+          <div class="peny-tanggal" id="kompTanggal"></div>
+          <button class="btn-catat" id="btnKompCatat" style="background:var(--go);width:100%;margin-bottom:12px"
+                  onclick="tambahKompensasi()">&#10133; Catat kompensasi</button>
+
+          <div class="peny-catatan">Kompensasi memotong <b>laba bersih</b> hari itu di barisnya
+            sendiri. Upah, omzet, dan setoran cash kasir tidak berubah &mdash; uangnya dari owner,
+            bukan dari laci.</div>
+
+          <div id="daftarKompensasi" style="margin-top:16px"></div>
+        </div>
       </div>
     </section>

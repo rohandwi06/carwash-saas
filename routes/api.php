@@ -261,5 +261,11 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/wage-adjustments/bulk-delete', [WageAdjustmentController::class, 'destroyMany']);
         Route::delete('/wage-adjustments/{wageAdjustment}', [WageAdjustmentController::class, 'destroy']);
 
+        // Kompensasi karyawan ("sangu" dari owner: uang makan, uang bensin).
+        // Owner-only dengan alasan yang sama: mengubah laba bersih.
+        Route::get('/worker-compensations', [\App\Http\Controllers\WorkerCompensationController::class, 'index']);
+        Route::post('/worker-compensations', [\App\Http\Controllers\WorkerCompensationController::class, 'store']);
+        Route::delete('/worker-compensations/{workerCompensation}', [\App\Http\Controllers\WorkerCompensationController::class, 'destroy']);
+
     });
 });

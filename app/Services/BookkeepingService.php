@@ -24,6 +24,7 @@ class BookkeepingService
     public function __construct(
         private WageService $wages,
         private ConsignmentService $titipan,
+        private CompensationService $kompensasi,
     ) {}
 
     /**
@@ -71,6 +72,13 @@ class BookkeepingService
         // masuk laci (ikut fnb_cash), tapi ia milik orang lain.
         $hakPenitip = $this->titipan->hakTerjual(from: $date, to: $date);
 
+        // Kompensasi karyawan: uangnya dari owner, bukan dari laci, jadi tidak
+        // menempel ke buku kas mana pun. Hanya dihitung untuk sehari penuh —
+        // rekap satu buku tidak memuatnya. Memotong laba, tidak menyentuh
+        // omzet maupun setoran cash.
+        $kompensasi = $bookId === null ? $this->kompensasi->hari($date) : collect();
+        $totalKompensasi = (int) $kompensasi->sum('amount');
+
         return [
             'date'          => $date,
             'vehicles'      => $trx->count(),
@@ -92,7 +100,10 @@ class BookkeepingService
             // dari uang di laci hari ini yang sebenarnya bukan miliknya.
             'consignor_share' => $hakPenitip,
             'consignor_payout' => $setoranTitipan,
-            'profit'        => $total + $tip + $fnbTotal - $wages - $expenseOperasional - $hakPenitip,
+            'compensation'  => $totalKompensasi,
+            'compensation_list' => $kompensasi->values(),
+            'profit'        => $total + $tip + $fnbTotal - $wages - $expenseOperasional - $hakPenitip
+                               - $totalKompensasi,
             'by_payment'    => $this->rincianBayar($trx),
             'worker_wages'  => $this->wages->dailyRecap($date, $bookId),
             // Daftar buku SELALU dari sehari penuh, bukan dari hasil yang
@@ -276,6 +287,7 @@ class BookkeepingService
             ->groupBy('date')->get();
 
         $upah = $this->wages->rangeByDate($from, $to);
+        $kompensasi = $this->kompensasi->perTanggal($from, $to);
 
         // Dua angka titipan, sama seperti di dailyRecap():
         //   hak penitip    -> memotong laba (uang orang yang ikut masuk laci)
@@ -291,7 +303,7 @@ class BookkeepingService
             ->groupBy('date')->get();
 
         $kosong = ['vehicles' => 0, 'total' => 0, 'tip' => 0, 'fnb_total' => 0, 'wages' => 0,
-            'expenses' => 0, 'consignor_share' => 0, 'consignor_payout' => 0];
+            'expenses' => 0, 'consignor_share' => 0, 'consignor_payout' => 0, 'compensation' => 0];
 
         $byDate = [];
 
@@ -328,6 +340,10 @@ class BookkeepingService
             $byDate[$key] ??= ['date' => $key] + $kosong;
             $byDate[$key]['consignor_share'] = $jumlah;
         }
+        foreach ($kompensasi as $key => $jumlah) {
+            $byDate[$key] ??= ['date' => $key] + $kosong;
+            $byDate[$key]['compensation'] = $jumlah;
+        }
 
         ksort($byDate);
         $days = collect(array_values($byDate))->map(function (array $d) {
@@ -337,7 +353,9 @@ class BookkeepingService
             $d['omzet']  = $d['total'] + $d['tip'] + $d['fnb_total']
                 - ($d['expenses'] - $d['consignor_payout'])   // setoran bukan biaya
                 - $d['consignor_share'];                      // hak penitip, bukan pendapatan
-            $d['profit'] = $d['omzet'] - $d['wages'];
+            // Kompensasi karyawan memotong laba, bukan omzet: uangnya dari
+            // owner, tidak keluar dari laci.
+            $d['profit'] = $d['omzet'] - $d['wages'] - $d['compensation'];
             return $d;
         });
 
@@ -354,6 +372,7 @@ class BookkeepingService
                 'tip'            => (int) $days->sum('tip'),
                 'wages'          => (int) $days->sum('wages'),
                 'expenses'       => (int) $days->sum('expenses'),
+                'compensation'   => (int) $days->sum('compensation'),
                 // Titipan dipisah supaya owner bisa membaca laba tanpa bertanya
                 // "kok F&B-nya segini tapi labanya segitu".
                 'consignor_share'  => (int) $days->sum('consignor_share'),

@@ -1370,6 +1370,7 @@ async function renderPenyesuaian(){
   if(!blok) return;
   if(ROLE!=="owner"){ blok.classList.add("hidden"); return; }
   blok.classList.remove("hidden");
+  renderKompensasi();   // memakai tanggal pilihan yang sama; pemuatannya sendiri
 
   setJenisPenyesuaian(jenisPenyesuaian);
 
@@ -1870,6 +1871,142 @@ async function hapusPenyesuaian(id){
   }catch(e){ gagal(e); }
 }
 
+/* ---------- KOMPENSASI KARYAWAN ----------
+   "Sangu" dari owner di luar upah cucian: uang makan, uang bensin (permintaan
+   owner 11/10). Tanggalnya mengikuti pilihan di kalender Upah & potongan
+   (penyPilihan; kosong = hari ini). Jumlah berlaku per orang per tanggal.
+   Memotong laba bersih di barisnya sendiri — bukan bagian dari upah, dan
+   tidak menyentuh omzet atau setoran cash (uangnya bukan dari laci). */
+let kompUrutan = 0;   // hanya pemuatan terakhir yang boleh menulis ke layar
+
+function tanggalKomp(){ return penyPilihan.length ? [...penyPilihan] : [hariIni()]; }
+
+/** Pekerja penerima menurut pilihan dropdown: semua, satu, atau belum dipilih ([]). */
+function penerimaKomp(){
+  const v = $("inKompPekerja").value;
+  if(v === "semua") return pekerja.map(p => p.id);
+  return v ? [+v] : [];
+}
+
+function perbaruiTotalKomp(){
+  const orang = penerimaKomp().length;
+  const hari  = tanggalKomp().length;
+  const jumlah = Math.max(0, parseInt($("inKompJumlah").value, 10) || 0);
+  $("kompTotal").innerHTML = (orang && jumlah && (orang > 1 || hari > 1))
+    ? rp(jumlah)+" &times; "+orang+" orang"+(hari > 1 ? " &times; "+hari+" tanggal" : "")
+      +" = <b>"+rp(jumlah * orang * hari)+"</b>"
+    : "";
+}
+
+async function renderKompensasi(){
+  const blok = $("blokKompensasi");
+  if(!blok) return;
+  blok.classList.remove("hidden");
+
+  const pilihan = $("inKompPekerja").value;
+  $("inKompPekerja").innerHTML = pekerja.length===0
+    ? '<option value="">— belum ada pekerja —</option>'
+    : '<option value="">— pilih pekerja —</option>'
+      + '<option value="semua">Semua pekerja ('+pekerja.length+' orang)</option>'
+      + pekerja.map(p => '<option value="'+p.id+'">'+esc(p.name)+'</option>').join("");
+  $("inKompPekerja").value = pilihan;
+
+  const tanggal = tanggalKomp();
+  const n = penyPilihan.length;
+  const MAKS = 6;
+  $("kompTanggal").innerHTML = '<span class="peny-tgl-isi">&#128197; Tanggal: <b>'
+    + (n===0 ? "hari ini ("+fmtTglPendek(hariIni())+")"
+       : penyPilihan.slice(0, MAKS).map(fmtTglPendek).join(", ")+(n > MAKS ? " +"+(n-MAKS) : ""))
+    + '</b></span>'
+    + '<button class="peny-tgl-btn" onclick="keKalenderPeny()">'
+    +   (n===0 ? "Pilih tanggal lain" : "Ubah tanggal")+'</button>';
+  perbaruiTotalKomp();
+
+  const ke = ++kompUrutan;
+  let rows;
+  try{ rows = await api("/worker-compensations?"+tanggal.map(t => "dates[]="+t).join("&")); }
+  catch(e){ gagal(e); return; }
+  if(ke !== kompUrutan) return;
+
+  const total = rows.reduce((t,k) => t + k.amount, 0);
+  const banyakTgl = tanggal.length > 1;
+  $("daftarKompensasi").innerHTML =
+    '<div class="cat-baris tebal"><span>Kompensasi '+(banyakTgl ? tanggal.length+" tanggal" : fmtTglPendek(tanggal[0]))
+    + ' <span class="waktu">'+rows.length+'x</span></span><b class="merah">'+(total ? "-"+rp(total) : rp(0))+'</b></div>'
+    + (rows.length
+        ? rows.map(k => barisKompEntri(k, banyakTgl)).join("")
+        : '<div class="cat-kosong">Belum ada kompensasi di tanggal ini.</div>');
+}
+
+/** Satu catatan kompensasi di daftar layar Pekerja & Upah, dengan tombol hapus. */
+function barisKompEntri(k, denganTanggal){
+  return '<div class="upah-entri">'
+    + '<div class="upah-entri-atas">'
+    +   '<span>'+esc(k.worker_name)+(denganTanggal ? ' <span class="waktu">'+fmtTglPendek(tglSaja(k.date))+'</span>' : '')+'</span>'
+    +   '<span style="white-space:nowrap"><b>'+rp(k.amount)+'</b>'
+    +   ' <button class="btn-void" title="Hapus catatan ini" onclick="hapusKompensasi('+k.id+')">&#10005;</button></span>'
+    + '</div>'
+    + '<div class="upah-entri-ket">'+(k.reason ? esc(k.reason) : '<i>tanpa keterangan</i>')+'</div>'
+    + '<div class="upah-trx-sub">dicatat '+esc(k.created_by || "—")+'</div>'
+    + '</div>';
+}
+
+async function tambahKompensasi(){
+  const worker_ids = penerimaKomp();
+  const amount = parseInt($("inKompJumlah").value, 10);
+  const reason = $("inKompAlasan").value.trim();
+  const dates  = tanggalKomp();
+  const peringatan = t => Swal.fire({icon:"warning", title:t, confirmButtonColor:"#1B9E62"});
+  if(!worker_ids.length) return peringatan("Pilih pekerja dulu");
+  if(!(amount > 0))      return peringatan("Isi jumlah kompensasi");
+  if(!reason)            return peringatan("Isi keterangannya, mis. Uang makan");
+
+  // Lebih dari satu catatan sekaligus: tegaskan dulu totalnya — salah pilih
+  // "Semua pekerja" di banyak tanggal langsung memotong laba berlipat.
+  const catatan = worker_ids.length * dates.length;
+  if(catatan > 1){
+    const yakin = await Swal.fire({icon:"question", title:"Catat "+catatan+" kompensasi?",
+      html: esc(reason)+" "+rp(amount)+" &times; "+worker_ids.length+" orang"
+        + (dates.length > 1 ? " &times; "+dates.length+" tanggal" : "")
+        + "<br>Total <b>"+rp(amount * catatan)+"</b> dipotong dari laba bersih.",
+      showCancelButton:true, confirmButtonText:"Ya, catat", cancelButtonText:"Batal",
+      confirmButtonColor:"#1B9E62"});
+    if(!yakin.isConfirmed) return;
+  }
+
+  $("btnKompCatat").disabled = true;
+  try{
+    await api("/worker-compensations", {method:"POST", body:{worker_ids, amount, reason, dates}});
+    $("inKompJumlah").value = "";
+    $("inKompAlasan").value = "";
+    await renderKompensasi();
+    Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2200,
+      title:"Kompensasi tercatat"});
+  }catch(e){ gagal(e); }
+  finally{ $("btnKompCatat").disabled = false; }
+}
+
+async function hapusKompensasi(id){
+  if(!await konfirmasiHapus()) return;
+  try{
+    await api("/worker-compensations/"+id, {method:"DELETE"});
+    await renderKompensasi();
+  }catch(e){ gagal(e); }
+}
+
+/* Baris "Kompensasi karyawan" di Rekap dan Pembukuan: bisa dibuka jadi daftar
+   penerimanya. Kosong (tanpa baris) kalau hari itu tidak ada kompensasi, atau
+   yang sedang dilihat satu buku saja — kompensasi tidak menempel ke buku kas. */
+function barisKompensasi(h, kunci){
+  const daftar = h.compensation_list || [];
+  if(!h.compensation) return "";
+  return barisBuka(kunci, '&#127873; Kompensasi karyawan <span class="waktu">'+daftar.length+'x</span>',
+    '-'+rp(h.compensation), "merah",
+    daftar.map(k => '<div class="cat-baris"><span>'+esc(k.worker_name)
+      + (k.reason ? ' <span class="waktu">'+esc(k.reason)+'</span>' : '')+'</span>'
+      + '<b class="merah">-'+rp(k.amount)+'</b></div>').join(""));
+}
+
 /* Tarif upah kini diatur bersama jenis kendaraan di Pengaturan (editKategori). */
 
 /**
@@ -2289,7 +2426,9 @@ async function renderRekap(){
               '<div class="cat-baris"><span>'+esc(e.description)
               + (e.created_by ? ' <span class="waktu">&#128100; '+esc(e.created_by)+'</span>' : '')+'</span>'
               + '<b class="merah">-'+rp(e.amount)+'</b></div>').join("")))
-      + barisTitipanRekap(h);
+      + barisTitipanRekap(h)
+      // Dari owner, bukan dari laci: memotong Laba Bersih, bukan Omzet.
+      + barisKompensasi(h, "komp");
 
     $("statMasuk").textContent = rp(omzetHari(h));
     gambarOmzetRekap(h, tipRows);
@@ -3364,6 +3503,7 @@ async function renderBuku(){
       +'<div class="cat-baris"><span>Omzet</span><b class="hijau">'+rp(s.total)+'</b></div>'
       +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(s.wages)+'</b></div>'
       +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(s.expenses)+'</b></div>'
+      +(s.compensation ? '<div class="cat-baris"><span>Kompensasi karyawan</span><b class="merah">-'+rp(s.compensation)+'</b></div>' : '')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
 
     if(!tglPilih){
@@ -3390,7 +3530,8 @@ async function renderBuku(){
     const masuk  = uangMasukHari(h);
     // Sama dengan potongan di BookkeepingService::dailyRecap(): setoran ke
     // penitip bukan biaya, hak penitip bukan pendapatan.
-    const keluar = (h.wages||0) + (h.expenses||0) - (h.consignor_payout||0) + (h.consignor_share||0);
+    const keluar = (h.wages||0) + (h.expenses||0) - (h.consignor_payout||0) + (h.consignor_share||0)
+      + (h.compensation||0);
     // Setoran: angka tiap buku dari server (yang sudah diajukan dibekukan).
     const buku = h.books || [];
     const keluarBuku = buku.reduce((t,b) => t + (b.expenses||0), 0);
@@ -3427,6 +3568,7 @@ async function renderBuku(){
       // titipan. Dulu tidak ditulis di sini, sehingga Laba Bersih tidak bisa
       // dicocokkan dari baris yang terlihat.
       +barisTitipanRekap(h)
+      +barisKompensasi(h, "buku-komp")
       +'<div class="cat-baris tebal"><span>UANG KELUAR</span><b class="merah">-'+rp(keluar)+'</b></div>'
       +'</div>'
 
@@ -4288,6 +4430,7 @@ function renderRangeResults(data, from, to){
     +'<div class="cat-baris"><span>Omzet</span><b class="hijau">'+rp(s.total)+'</b></div>'
     +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(s.wages)+'</b></div>'
     +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(s.expenses)+'</b></div>'
+      +(s.compensation ? '<div class="cat-baris"><span>Kompensasi karyawan</span><b class="merah">-'+rp(s.compensation)+'</b></div>' : '')
     +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
 
   let html = '<div class="cat-blok"><h3>📊 Detail harian</h3>';
@@ -4341,6 +4484,7 @@ async function renderDashboard(){
       +'<div class="cat-baris"><span>Tip</span><b>'+rp(s.tip)+'</b></div>'
       +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(s.wages)+'</b></div>'
       +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(s.expenses)+'</b></div>'
+      +(s.compensation ? '<div class="cat-baris"><span>Kompensasi karyawan</span><b class="merah">-'+rp(s.compensation)+'</b></div>' : '')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
 
     gambarTren(r.points);

@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  */
 class StatisticsService
 {
-    public function __construct(private WageService $wages) {}
+    public function __construct(private WageService $wages, private CompensationService $kompensasi) {}
 
     /** @param 'harian'|'mingguan'|'bulanan' $period */
     public function report(string $period): array
@@ -70,7 +70,8 @@ class StatisticsService
 
         $upah = $this->upahPerTanggal($mulai, $selesai);
 
-        $kosong = ['wash' => 0, 'fnb' => 0, 'tip' => 0, 'wages' => 0, 'expenses' => 0, 'vehicles' => 0];
+        $kosong = ['wash' => 0, 'fnb' => 0, 'tip' => 0, 'wages' => 0, 'expenses' => 0, 'vehicles' => 0,
+            'compensation' => 0];
         $ember  = [];
 
         foreach ($this->kerangka($period, $mulai, $selesai) as $kunci => $label) {
@@ -111,6 +112,15 @@ class StatisticsService
             }
         }
 
+        // Kompensasi karyawan — sumber yang sama dengan laporan harian &
+        // rentang (CompensationService), supaya laba di Dashboard ikut turun.
+        foreach ($this->kompensasi->perTanggal($mulai->toDateString(), $selesai->toDateString()) as $tanggal => $jumlah) {
+            $k = $this->kunci($period, CarbonImmutable::parse($tanggal));
+            if (isset($ember[$k])) {
+                $ember[$k]['compensation'] += $jumlah;
+            }
+        }
+
         return collect($ember)->map(function (array $d) {
             // Omzet = uang masuk (cucian + F&B + tip) DIKURANGI pengeluaran.
             // Tip ikut karena memang uang yang diterima hari itu; pengeluaran
@@ -120,7 +130,7 @@ class StatisticsService
             // Rumus laba TIDAK berubah hasilnya: omzet bersih dikurangi upah
             // sama persis dengan (cuci + tip + F&B - upah - pengeluaran).
             // Ditulis lewat omzet supaya pengeluaran tidak terpotong dua kali.
-            $d['profit'] = $d['omzet'] - $d['wages'];
+            $d['profit'] = $d['omzet'] - $d['wages'] - $d['compensation'];
 
             return $d;
         })->values()->all();
@@ -192,6 +202,7 @@ class StatisticsService
             'tip'            => (int) $t->sum('tip'),
             'wages'          => (int) $t->sum('wages'),
             'expenses'       => (int) $t->sum('expenses'),
+            'compensation'   => (int) $t->sum('compensation'),
             'profit'         => (int) $t->sum('profit'),
             'vehicles'       => $vehicle,
             'active_periods' => $aktif,

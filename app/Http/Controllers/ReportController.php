@@ -157,6 +157,7 @@ class ReportController extends Controller
             fputcsv($out, ['Cash Total', $recap['cash_total']], ';');
             fputcsv($out, ['Upah pekerja', $recap['wages']], ';');
             fputcsv($out, ['Pengeluaran', $recap['expenses']], ';');
+            fputcsv($out, ['Kompensasi karyawan', $recap['compensation'] ?: 'kosong'], ';');
             fputcsv($out, ['LABA BERSIH', $recap['profit']], ';');
 
             fclose($out);
