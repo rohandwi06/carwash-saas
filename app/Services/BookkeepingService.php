@@ -364,7 +364,12 @@ class BookkeepingService
             'to'     => $to,
             'days'   => $days,
             'summary'=> [
-                'operating_days' => $days->count(),
+                // Hari "beroperasi" = ada cucian, penjualan, atau pengeluaran.
+                // Gaji bulanan dibebankan tiap hari kalender, termasuk hari
+                // tutup; hari yang isinya cuma upah tidak dihitung beroperasi.
+                'operating_days' => $days->filter(
+                    fn (array $d) => $d['vehicles'] > 0 || $d['fnb_total'] > 0 || $d['expenses'] > 0
+                )->count(),
                 'vehicles'       => (int) $days->sum('vehicles'),
                 'total'          => (int) $days->sum('omzet'),
                 'wash_total'     => (int) $days->sum('total'),

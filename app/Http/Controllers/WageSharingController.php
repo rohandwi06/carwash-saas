@@ -14,6 +14,8 @@ use Illuminate\Validation\Rule;
  *            (wage_rates.amount, diatur di tab Kendaraan). Ini cara lama.
  *   persen   bagi hasil — sekian persen dari harga cuci + add-on untuk
  *            pekerja, sisanya owner. Satu angka untuk semua kendaraan.
+ *   bulanan  upah per bulan — gaji tetap tiap pekerja (WorkerSalaryController),
+ *            dibebankan rata per hari; cucian tidak membawa upah sendiri.
  *
  * Yang diubah di sini hanya berlaku untuk transaksi BERIKUTNYA: upah tiap
  * transaksi dibekukan di transaction_worker.wage_share saat dicatat, jadi
@@ -34,7 +36,7 @@ class WageSharingController extends Controller
     public function update(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'mode'    => ['required', Rule::in([WageService::MODE_NOMINAL, WageService::MODE_PERSEN])],
+            'mode'    => ['required', Rule::in([WageService::MODE_NOMINAL, WageService::MODE_PERSEN, WageService::MODE_BULANAN])],
             // Bagian pekerja. Wajib saat persenan; di mode nominal angkanya
             // dibiarkan tersimpan supaya tidak hilang kalau owner bolak-balik.
             'percent' => ['required_if:mode,'.WageService::MODE_PERSEN, 'nullable', 'integer', 'min:0', 'max:100'],

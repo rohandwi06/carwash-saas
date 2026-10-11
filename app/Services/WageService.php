@@ -8,6 +8,7 @@ use App\Models\WageAdjustment;
 use App\Models\WageRate;
 use App\Models\Worker;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Upah pekerja: tarif per jenis kendaraan + layanan, dibagi rata jika dikerjakan
@@ -22,8 +23,16 @@ class WageService
     /** Bagi hasil: sekian persen dari harga cuci + add-on untuk pekerja. */
     public const MODE_PERSEN = 'persen';
 
+    /**
+     * Upah per bulan: gaji tetap tiap pekerja, dibebankan rata per hari
+     * (SalaryService). Cucian tidak membawa upah sendiri selama mode ini berlaku.
+     */
+    public const MODE_BULANAN = 'bulanan';
+
     /** Bagian pekerja bila owner memilih persenan tapi belum pernah mengisi angkanya. */
     public const PERSEN_BAWAAN = 40;
+
+    public function __construct(private SalaryService $gaji) {}
 
     /**
      * Cara hitung upah yang sedang berlaku. Cucian yang belum pernah menyentuh
@@ -36,20 +45,46 @@ class WageService
         $persen = Setting::get('wage_percent');
 
         return [
-            'mode'    => Setting::get('wage_mode') === self::MODE_PERSEN ? self::MODE_PERSEN : self::MODE_NOMINAL,
+            'mode'    => self::modeSah(Setting::get('wage_mode')),
             'percent' => $persen === null ? self::PERSEN_BAWAAN : max(0, min(100, (int) $persen)),
         ];
     }
 
-    /** Simpan cara hitung upah. $percent null = angka persen yang tersimpan tidak diubah. */
+    /**
+     * Simpan cara hitung upah. $percent null = angka persen yang tersimpan tidak diubah.
+     *
+     * Persenan <-> upah per kendaraan hanya berlaku untuk transaksi berikutnya,
+     * seperti dulu. Masuk ke atau keluar dari UPAH PER BULAN berlaku untuk
+     * SELURUH HARI INI: sehari tidak boleh setengah digaji harian dan setengah
+     * dibayar per cucian (keduanya akan terhitung). Jadi upah cucian hari ini
+     * dihitung ulang menurut cara barunya; hari-hari sebelumnya tidak disentuh.
+     */
     public function setSharing(string $mode, ?int $percent = null): array
     {
-        Setting::put('wage_mode', $mode === self::MODE_PERSEN ? self::MODE_PERSEN : self::MODE_NOMINAL);
-        if ($percent !== null) {
-            Setting::put('wage_percent', (string) max(0, min(100, $percent)));
-        }
+        $lama = $this->sharing()['mode'];
+        $baru = self::modeSah($mode);
 
-        return $this->sharing();
+        return DB::transaction(function () use ($lama, $baru, $percent) {
+            Setting::put('wage_mode', $baru);
+            if ($percent !== null) {
+                Setting::put('wage_percent', (string) max(0, min(100, $percent)));
+            }
+
+            if ($lama !== $baru && in_array(self::MODE_BULANAN, [$lama, $baru], true)) {
+                $baru === self::MODE_BULANAN ? $this->gaji->mulai() : $this->gaji->berhenti();
+
+                Transaction::valid()->whereDate('date', now()->toDateString())->with('workers')->get()
+                    ->each(fn (Transaction $t) => $this->attachWorkers($t, $t->workers->pluck('id')->all()));
+            }
+
+            return $this->sharing();
+        });
+    }
+
+    /** Mode yang tidak dikenal (termasuk belum pernah diatur) = upah per kendaraan. */
+    private static function modeSah(?string $mode): string
+    {
+        return in_array($mode, [self::MODE_PERSEN, self::MODE_BULANAN], true) ? $mode : self::MODE_NOMINAL;
     }
 
     /**
@@ -64,8 +99,16 @@ class WageService
      * Pecahan rupiah dibuang (intdiv), sama seperti pembagian rata di
      * bagiUpah(): sisanya tinggal di owner, tidak dibulatkan ke atas.
      */
-    public function jatahFor(string $category, string $service, int $totalCuci): int
+    public function jatahFor(string $category, string $service, int $totalCuci, ?string $date = null): int
     {
+        // Hari yang upahnya per bulan: cucian tidak membawa upah sendiri,
+        // pekerjanya dibayar lewat gaji harian. Ditentukan oleh TANGGAL
+        // cuciannya, bukan pengaturan saat ini — cucian susulan untuk tanggal
+        // sebelum mode bulanan dimulai tetap dibayar per kendaraan.
+        if ($this->gaji->berlaku($date ?? now()->toDateString())) {
+            return 0;
+        }
+
         $atur = $this->sharing();
 
         return $atur['mode'] === self::MODE_PERSEN
@@ -117,7 +160,8 @@ class WageService
 
         // total = harga cuci + add-on; sudah tersimpan sebelum fungsi ini
         // dipanggil, baik saat transaksi dibuat maupun dikoreksi.
-        $jatah = $this->jatahFor($transaction->category, $transaction->service, (int) $transaction->total);
+        $jatah = $this->jatahFor($transaction->category, $transaction->service, (int) $transaction->total,
+            $transaction->date?->toDateString());
         $upahTraining = $this->traineeWageFor($transaction->category, $transaction->service);
         $training = Worker::whereIn('id', $workerIds)->where('is_trainee', true)->pluck('id')->all();
 
@@ -209,7 +253,7 @@ class WageService
      *
      * @param  array{timpa:?int,potongan:int}|null  $adj
      */
-    public function terapkanPenyesuaian(int $upahHitungan, ?array $adj): int
+    public function terapkanPenyesuaian(int $upahHitungan, ?array $adj, bool $bulanan = false): int
     {
         if ($adj === null) {
             return $upahHitungan;
@@ -217,7 +261,12 @@ class WageService
 
         $dasar = $adj['timpa'] ?? $upahHitungan;
 
-        return max(0, $dasar - $adj['potongan']);
+        // $bulanan: pekerjanya digaji per bulan dan angka ini cuma bagian SATU
+        // HARI dari gajinya (keputusan owner 2026-10-11: potongan mengurangi
+        // gaji bulan berjalan). Potongan kasbon Rp 500.000 jelas lebih besar
+        // dari gaji sehari — kalau dibatasi nol di sini, potongannya hilang.
+        // Jadi angka harinya boleh minus; jumlah sebulannya = gaji - potongan.
+        return $bulanan ? $dasar - $adj['potongan'] : max(0, $dasar - $adj['potongan']);
     }
 
     /**
@@ -227,13 +276,13 @@ class WageService
      * bukan jumlah yang tercatat — kalau tidak, owner membaca "dipotong
      * Rp 100.000" untuk pekerja yang upahnya memang Rp 0.
      */
-    public function potonganTerpakai(int $upahHitungan, ?array $adj): int
+    public function potonganTerpakai(int $upahHitungan, ?array $adj, bool $bulanan = false): int
     {
         if ($adj === null) {
             return 0;
         }
 
-        return ($adj['timpa'] ?? $upahHitungan) - $this->terapkanPenyesuaian($upahHitungan, $adj);
+        return ($adj['timpa'] ?? $upahHitungan) - $this->terapkanPenyesuaian($upahHitungan, $adj, $bulanan);
     }
 
     /**
@@ -288,6 +337,10 @@ class WageService
     public function dailyRecap(string $date, ?int $bookId = null): Collection
     {
         $penyesuaian = $this->penyesuaianHari($date, $bookId);
+        // Gaji bulanan tidak menempel ke buku kas mana pun (sama seperti
+        // kompensasi), jadi hanya dihitung untuk sehari penuh. 'salary' =
+        // bagian gaji hari itu; sudah termasuk di dalam 'gross_wage'.
+        $gaji = $bookId === null ? $this->gaji->harian($date) : [];
 
         return Worker::query()
             ->with(['transactions' => function ($q) use ($date, $bookId) {
@@ -301,26 +354,32 @@ class WageService
                 }
             }])
             ->get()
-            ->map(function (Worker $w) use ($penyesuaian) {
-                $adj    = $penyesuaian[$w->id] ?? null;
-                $kotor  = (int) $w->transactions->sum('pivot.wage_share');
+            ->map(function (Worker $w) use ($penyesuaian, $gaji) {
+                $adj     = $penyesuaian[$w->id] ?? null;
+                $harian  = $gaji[$w->id] ?? 0;
+                $kotor   = (int) $w->transactions->sum('pivot.wage_share') + $harian;
+                $bulanan = $harian > 0;
 
                 return [
                     'id'         => $w->id,
                     'name'       => $w->name,
                     'vehicles'   => $w->transactions->count(),
+                    'salary'     => $harian,
                     'gross_wage' => $kotor,
                     'penalty'    => (int) ($adj['potongan'] ?? 0),
-                    'penalty_applied' => $this->potonganTerpakai($kotor, $adj),
+                    'penalty_applied' => $this->potonganTerpakai($kotor, $adj, $bulanan),
                     'override'   => $adj['timpa'] ?? null,
-                    'wage'       => $this->terapkanPenyesuaian($kotor, $adj),
+                    'wage'       => $this->terapkanPenyesuaian($kotor, $adj, $bulanan),
                     'breakdown'  => $w->transactions->map($this->barisTransaksi(...))->values()->toArray(),
                 ];
             })
             // Pekerja yang tidak mengerjakan apa pun tetap muncul kalau hari
             // itu punya penyesuaian — potongan yang dicatat untuk orang yang
             // sedang tidak kebagian cucian jangan sampai hilang dari layar.
+            // Pekerja bergaji bulanan muncul tiap hari, kerja atau tidak:
+            // gajinya memang dibebankan tiap hari.
             ->filter(fn ($row) => $row['vehicles'] > 0
+                || $row['salary'] > 0
                 || $row['penalty'] > 0
                 || $row['override'] !== null)
             ->values();
@@ -367,27 +426,43 @@ class WageService
             ->groupBy('transactions.date', 'transaction_worker.worker_id')
             ->get();
 
-        $penyesuaian = $this->penyesuaianRentang($startDate, $endDate);
-
-        $hasil = [];
+        // [tanggal][pekerja] => upah kotor: bagian dari cucian + gaji harian.
+        $perHari = [];
         foreach ($kotor as $row) {
             $tgl = $row->tgl instanceof \Carbon\Carbon
                 ? $row->tgl->toDateString()
                 : (string) $row->tgl;
 
-            $hasil[$tgl] ??= 0;
-            $hasil[$tgl] += $this->terapkanPenyesuaian(
-                (int) $row->wages,
-                $penyesuaian[$tgl][$row->pk] ?? null,
-            );
+            $perHari[$tgl][(int) $row->pk] = (int) $row->wages;
         }
 
-        // Hari yang TIDAK punya cucian sama sekali tapi punya penyesuaian:
-        // 'timpa' di hari seperti itu tetap memunculkan angka upah, jadi
-        // harinya tidak boleh hilang dari rekap.
+        $gaji = $this->gaji->harianRentang($startDate, $endDate);
+        foreach ($gaji as $tgl => $perPekerja) {
+            foreach ($perPekerja as $pk => $harian) {
+                $perHari[$tgl][$pk] = ($perHari[$tgl][$pk] ?? 0) + $harian;
+            }
+        }
+
+        $penyesuaian = $this->penyesuaianRentang($startDate, $endDate);
+
+        $hasil = [];
+        foreach ($perHari as $tgl => $perPekerja) {
+            foreach ($perPekerja as $pk => $upah) {
+                $hasil[$tgl] = ($hasil[$tgl] ?? 0) + $this->terapkanPenyesuaian(
+                    $upah,
+                    $penyesuaian[$tgl][$pk] ?? null,
+                    isset($gaji[$tgl][$pk]),
+                );
+            }
+        }
+
+        // Pekerja yang hari itu TIDAK punya upah kotor (tanpa cucian, tanpa
+        // gaji harian) tapi punya penyesuaian: 'timpa' di hari seperti itu
+        // tetap memunculkan angka upah, jadi harinya tidak boleh hilang dari
+        // rekap.
         foreach ($penyesuaian as $tgl => $perPekerja) {
             foreach ($perPekerja as $pk => $adj) {
-                if (isset($hasil[$tgl]) && $this->punyaUpahKotor($kotor, $tgl, $pk)) {
+                if (isset($perHari[$tgl][$pk])) {
                     continue;
                 }
                 $hasil[$tgl] = ($hasil[$tgl] ?? 0) + $this->terapkanPenyesuaian(0, $adj);
@@ -397,20 +472,11 @@ class WageService
         return $hasil;
     }
 
-    /** Apakah pekerja ini sudah ikut terhitung dari upah kotor tanggal itu. */
-    private function punyaUpahKotor(Collection $kotor, string $tgl, int $workerId): bool
-    {
-        return $kotor->contains(function ($row) use ($tgl, $workerId) {
-            $t = $row->tgl instanceof \Carbon\Carbon ? $row->tgl->toDateString() : (string) $row->tgl;
-
-            return $t === $tgl && (int) $row->pk === $workerId;
-        });
-    }
-
     /** Rekap upah per pekerja untuk range tanggal dengan breakdown per tanggal. */
     public function byDateRange(string $startDate, string $endDate): Collection
     {
         $penyesuaian = $this->penyesuaianRentang($startDate, $endDate);
+        $gaji = $this->gaji->harianRentang($startDate, $endDate);
 
         return Worker::query()
             ->with(['transactions' => fn ($q) => $q
@@ -419,51 +485,45 @@ class WageService
                 ->orderBy('date')
             ])
             ->get()
-            ->map(function (Worker $w) use ($penyesuaian) {
+            ->map(function (Worker $w) use ($penyesuaian, $gaji) {
                 // Dihitung per TANGGAL, bukan sekali di akhir: 'timpa' berlaku
                 // untuk satu hari tertentu, jadi menjumlahkan dulu lalu
                 // menyesuaikan akan menimpa upah seluruh rentang.
-                $harian = $w->transactions
-                    ->groupBy(fn ($t) => $t->date->toDateString())
-                    ->map(function ($dayTrx, $date) use ($w, $penyesuaian) {
-                        $kotor = (int) $dayTrx->sum('pivot.wage_share');
-                        $adj   = $penyesuaian[$date][$w->id] ?? null;
+                $perTanggal = $w->transactions->groupBy(fn ($t) => $t->date->toDateString());
 
-                        return [
-                            'date'       => (string) $date,
-                            'vehicles'   => $dayTrx->count(),
-                            'gross_wage' => $kotor,
-                            'penalty'    => (int) ($adj['potongan'] ?? 0),
-                            'penalty_applied' => $this->potonganTerpakai($kotor, $adj),
-                            'override'   => $adj['timpa'] ?? null,
-                            'wage'       => $this->terapkanPenyesuaian($kotor, $adj),
-                        ];
-                    });
+                // Tanggal yang punya sesuatu untuk pekerja ini: cucian, gaji
+                // harian (upah per bulan), atau penyesuaian. Dua yang terakhir
+                // ikut supaya hari tanpa cucian tidak lenyap dari kartunya.
+                $punya = fn (array $peta) => array_keys(array_filter($peta, fn ($per) => isset($per[$w->id])));
+                $tanggal = collect($perTanggal->keys())
+                    ->merge($punya($gaji))->merge($punya($penyesuaian))
+                    ->map(fn ($t) => (string) $t)->unique()->sort()->values();
 
-                // Hari yang pekerja ini tidak kebagian cucian tapi tetap punya
-                // penyesuaian — supaya potongannya terlihat, bukan lenyap.
-                foreach ($penyesuaian as $tgl => $perPekerja) {
-                    if (isset($perPekerja[$w->id]) && ! $harian->has($tgl)) {
-                        $adj = $perPekerja[$w->id];
-                        $harian->put($tgl, [
-                            'date'       => (string) $tgl,
-                            'vehicles'   => 0,
-                            'gross_wage' => 0,
-                            'penalty'    => (int) $adj['potongan'],
-                            'penalty_applied' => $this->potonganTerpakai(0, $adj),
-                            'override'   => $adj['timpa'],
-                            'wage'       => $this->terapkanPenyesuaian(0, $adj),
-                        ]);
-                    }
-                }
+                $harian = $tanggal->map(function (string $tgl) use ($w, $perTanggal, $gaji, $penyesuaian) {
+                    $cucian   = $perTanggal->get($tgl, collect());
+                    $gajiHari = $gaji[$tgl][$w->id] ?? 0;
+                    $kotor    = (int) $cucian->sum('pivot.wage_share') + $gajiHari;
+                    $adj      = $penyesuaian[$tgl][$w->id] ?? null;
+                    $bulanan  = $gajiHari > 0;
 
-                $harian = $harian->sortBy('date')->values();
+                    return [
+                        'date'       => $tgl,
+                        'vehicles'   => $cucian->count(),
+                        'salary'     => $gajiHari,
+                        'gross_wage' => $kotor,
+                        'penalty'    => (int) ($adj['potongan'] ?? 0),
+                        'penalty_applied' => $this->potonganTerpakai($kotor, $adj, $bulanan),
+                        'override'   => $adj['timpa'] ?? null,
+                        'wage'       => $this->terapkanPenyesuaian($kotor, $adj, $bulanan),
+                    ];
+                });
 
                 return [
                     'id'              => $w->id,
                     'name'            => $w->name,
                     'total_wage'      => (int) $harian->sum('wage'),
                     'total_gross'     => (int) $harian->sum('gross_wage'),
+                    'total_salary'    => (int) $harian->sum('salary'),
                     'total_penalty'   => (int) $harian->sum('penalty'),
                     'total_penalty_applied' => (int) $harian->sum('penalty_applied'),
                     'total_vehicles'  => $w->transactions->count(),
@@ -496,6 +556,7 @@ class WageService
                 return array_merge($row, [
                     'total_wage'      => (int) $harian->sum('wage'),
                     'total_gross'     => (int) $harian->sum('gross_wage'),
+                    'total_salary'    => (int) $harian->sum('salary'),
                     'total_penalty'   => (int) $harian->sum('penalty'),
                     'total_penalty_applied' => (int) $harian->sum('penalty_applied'),
                     'total_vehicles'  => (int) $harian->sum('vehicles'),

@@ -1,6 +1,6 @@
 -- ===================================================================
 --  Migrasi 10-11 Oktober 2026: QRIS, detail pelanggan, kompensasi
---  karyawan, dan aturan otomatis harian
+--  karyawan, aturan otomatis harian, dan upah per bulan
 --  cPanel -> phpMyAdmin -> pilih database -> tab SQL -> tempel SEMUA -> Go
 --
 --  WAJIB BACKUP DULU: phpMyAdmin -> database yang sama -> tab Export -> Go.
@@ -18,6 +18,8 @@
 --  4. Membuat tabel `daily_rules`, `daily_rule_worker`, dan
 --     `daily_rule_skips` (aturan otomatis harian), dan menambah kolom
 --     penanda `rule_id` di `wage_adjustments` dan `worker_compensations`.
+--  5. Membuat tabel `monthly_wage_periods` dan `worker_salaries` (cara
+--     upah per bulan).
 --
 --  Tidak ada baris yang diubah atau dihapus. AMAN DIJALANKAN ULANG
 --  (IF NOT EXISTS). Sintaks khusus MariaDB.
@@ -153,7 +155,35 @@ CREATE UNIQUE INDEX IF NOT EXISTS `worker_compensations_rule_id_worker_id_date_u
   ON `worker_compensations` (`rule_id`, `worker_id`, `date`);
 
 
--- ---------- 5. Tandai migrasi sudah jalan --------------------------
+-- ---------- 5. Upah per bulan -------------------------------------
+-- Cara upah ketiga: gaji tetap tiap pekerja, dibebankan rata per hari.
+-- `monthly_wage_periods` = kapan saja cara itu berlaku (end_date kosong =
+-- masih berlaku); `worker_salaries` = gaji seorang pekerja mulai sebuah
+-- tanggal. Dua-duanya kosong sampai owner memilih "Upah per bulan".
+
+CREATE TABLE IF NOT EXISTS `monthly_wage_periods` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `start_date` DATE NOT NULL,
+  `end_date` DATE NULL,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `worker_salaries` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `worker_id` BIGINT UNSIGNED NOT NULL,
+  `amount` INT UNSIGNED NOT NULL,
+  `start_date` DATE NOT NULL,
+  `created_by` VARCHAR(255) NULL,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL,
+  UNIQUE KEY `worker_salaries_worker_id_start_date_unique` (`worker_id`, `start_date`),
+  CONSTRAINT `worker_salaries_worker_id_foreign`
+    FOREIGN KEY (`worker_id`) REFERENCES `workers` (`id`) ON DELETE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+
+-- ---------- 6. Tandai migrasi sudah jalan --------------------------
 
 SET @batch = (SELECT MAX(`batch`) + 1 FROM `migrations`);
 
@@ -169,11 +199,13 @@ FROM (
     SELECT '2026_10_11_000003_create_daily_rules_tables'
     UNION ALL
     SELECT '2026_10_11_000004_add_workers_to_daily_rules'
+    UNION ALL
+    SELECT '2026_10_11_000005_create_monthly_wage_tables'
 ) m
 WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 
 
--- ---------- 6. Pemeriksaan akhir -----------------------------------
+-- ---------- 7. Pemeriksaan akhir -----------------------------------
 -- Hasil yang benar, berurutan:
 --   1-2. cara bayar menyebut enum('cash','tf','qris')
 --   3-4. masing-masing 2 baris kolom customer_
@@ -181,7 +213,9 @@ WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 --   6.   10 baris kolom tabel aturan harian: ada all_workers, TIDAK ada worker_id
 --   7.   2 baris kolom tabel pekerja pilihan aturan
 --   8.   1 baris kolom rule_id di wage_adjustments
---   9.   5 baris migrasi
+--   9.   7 baris kolom tabel gaji bulanan
+--   10.  5 baris kolom tabel periode upah per bulan
+--   11.  6 baris migrasi
 
 SHOW COLUMNS FROM `transactions` LIKE 'payment_method';
 SHOW COLUMNS FROM `fnb_sales` LIKE 'payment_method';
@@ -191,4 +225,6 @@ SHOW COLUMNS FROM `worker_compensations`;
 SHOW COLUMNS FROM `daily_rules`;
 SHOW COLUMNS FROM `daily_rule_worker`;
 SHOW COLUMNS FROM `wage_adjustments` LIKE 'rule_id';
+SHOW COLUMNS FROM `worker_salaries`;
+SHOW COLUMNS FROM `monthly_wage_periods`;
 SELECT `migration`, `batch` FROM `migrations` WHERE `migration` LIKE '2026_10_1%';

@@ -17,7 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 class StatisticsService
 {
-    public function __construct(private WageService $wages, private CompensationService $kompensasi) {}
+    public function __construct(private WageService $wages, private CompensationService $kompensasi,
+        private SalaryService $gaji) {}
 
     /** @param 'harian'|'mingguan'|'bulanan' $period */
     public function report(string $period): array
@@ -177,7 +178,7 @@ class StatisticsService
     /** Total upah per tanggal dalam rentang. */
     private function upahPerTanggal(CarbonImmutable $mulai, CarbonImmutable $selesai): array
     {
-        return Transaction::valid()
+        $upah = Transaction::valid()
             ->join('transaction_worker', 'transaction_worker.transaction_id', '=', 'transactions.id')
             ->whereBetween('transactions.date', [$mulai->toDateString(), $selesai->toDateString()])
             ->selectRaw('transactions.date as tgl, SUM(transaction_worker.wage_share) as upah')
@@ -186,6 +187,14 @@ class StatisticsService
             ->mapWithKeys(fn ($v, $k) => [
                 ($k instanceof \DateTimeInterface ? $k->format('Y-m-d') : (string) $k) => (int) $v,
             ])->all();
+
+        // Upah per bulan: gaji harian tiap pekerja, sumber yang sama dengan
+        // laporan harian & rentang (SalaryService).
+        foreach ($this->gaji->harianRentang($mulai->toDateString(), $selesai->toDateString()) as $tgl => $perPekerja) {
+            $upah[$tgl] = ($upah[$tgl] ?? 0) + array_sum($perPekerja);
+        }
+
+        return $upah;
     }
 
     private function ringkasan(array $titik, CarbonImmutable $mulai, CarbonImmutable $selesai): array

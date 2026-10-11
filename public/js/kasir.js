@@ -223,6 +223,11 @@ function gagal(e){
   alert("⚠ " + e.message + "\nPeriksa koneksi ke server."); console.error(e);
 }
 
+/* Angka yang ditulis sebagai PENGURANG ("-Rp 5.000"). Dengan upah per bulan,
+   upah sehari bisa minus di hari potongan besar dicatat; "-Rp -5.000" tidak
+   terbaca, jadi ditulis sebagai penambah. */
+function rpKeluar(n){ return n >= 0 ? "-"+rp(n) : "+"+rp(-n); }
+
 async function konfirmasiHapus(){
   const result = await Swal.fire({
     title: 'Yakin ingin menghapus data?',
@@ -1618,9 +1623,10 @@ function kartuUpah(w, entri, rekap){
         '<div class="upah-trx">'
         + '<span class="upah-trx-kiri">'+fmtTgl(d.date)
         +   '<span class="upah-trx-sub">'+d.vehicles+' kendaraan'
+        +     (d.salary > 0 ? ' &middot; gaji harian '+rp(d.salary) : '')
         +     (d.penalty > 0 || d.override !== null ? ' &middot; hasil hitungan '+rp(d.gross_wage) : '')
         +   '</span></span>'
-        + '<b class="hijau">'+rp(d.wage)+'</b>'
+        + '<b class="'+(d.wage < 0 ? "merah" : "hijau")+'">'+rp(d.wage)+'</b>'
         + '</div>').join("")
     // Bentuknya SAMA dengan baris ringkas di Rekap Hari Ini (permintaan owner
     // 03/10): kepala cukup jam, kendaraan, dan upahnya; plat, jenis, layanan,
@@ -1639,6 +1645,14 @@ function kartuUpah(w, entri, rekap){
              ["Upah", rp(t.wage)]]
               .map(b => '<div class="cat-baris trx-det-baris"><span class="waktu">'+b[0]+'</span><span>'+b[1]+'</span></div>').join("")
         + '</div></div>').join("");
+
+  // Upah per bulan: bagian gaji hari itu, di atas daftar cuciannya (yang
+  // upahnya Rp 0 selama cara ini berlaku).
+  const gajiHari = !rekap && w.salary > 0
+    ? '<div class="upah-trx"><span class="upah-trx-kiri">Gaji harian'
+      + '<span class="upah-trx-sub">upah per bulan, dirata per hari</span></span>'
+      + '<b class="hijau">'+rp(w.salary)+'</b></div>'
+    : '';
 
   // Bagian potongan & ringkasan hanya kalau ada — kartu yang normal tetap
   // seringkas dulu, dan yang dipotong langsung terlihat kenapa angkanya beda.
@@ -1662,7 +1676,7 @@ function kartuUpah(w, entri, rekap){
                 ? '<span class="upah-trx-sub">tercatat '+rp(tercatat)+' &mdash; upah tidak pernah minus</span>' : '')
             + '</span><b class="merah">-'+rp(terpakai)+'</b></div>'
           : '')
-    +   '<div class="upah-peny-baris tebal"><span>Diterima</span><b class="hijau">'+rp(diterima)+'</b></div>'
+    +   '<div class="upah-peny-baris tebal"><span>Diterima</span><b class="'+(diterima < 0 ? "merah" : "hijau")+'">'+rp(diterima)+'</b></div>'
     + '</div>';
 
   const tanda = [];
@@ -1677,11 +1691,12 @@ function kartuUpah(w, entri, rekap){
     +       (rekap ? ' &middot; '+w.daily_breakdown.length+' hari' : '')
     +       (tanda.length ? ' &middot; <span class="upah-tanda-peny">'+tanda.join(", ")+'</span>' : '')
     +     '</span></span>'
-    +   '<b class="hijau">'+rp(diterima)+'</b>'
+    +   '<b class="'+(diterima < 0 ? "merah" : "hijau")+'">'+rp(diterima)+'</b>'
     +   '<span class="trx-panah">'+(buka ? '&#9652;' : '&#9662;')+'</span>'
     + '</button>'
     + '<div class="upah-detail'+(buka ? '' : ' hidden')+'">'
-    +   (baris || '<div class="cat-kosong">Tidak ada cucian.</div>')
+    +   gajiHari
+    +   (baris || (gajiHari ? '' : '<div class="cat-kosong">Tidak ada cucian.</div>'))
     +   peny
     + '</div>'
     + '</div>';
@@ -1876,11 +1891,16 @@ async function cekUpahSebelumPotong(worker_id, tanggal, bagian){
 
   const data = await api("/reports/wages?from="+lampau[0]+"&to="+lampau[lampau.length-1]);
   const pk = data.find(w => Number(w.id) === worker_id);
-  const upah = {};
-  ((pk && pk.daily_breakdown) || []).forEach(d => { upah[tglSaja(d.date)] = d.wage; });
+  const upah = {}, bulanan = {};
+  ((pk && pk.daily_breakdown) || []).forEach(d => {
+    upah[tglSaja(d.date)] = d.wage;
+    bulanan[tglSaja(d.date)] = d.salary > 0;
+  });
 
   return tanggal.flatMap((t, i) => {
     if(t >= hariIni()) return [];
+    // Digaji per bulan: potongan mengurangi gaji bulan berjalan, selalu terpakai penuh.
+    if(bulanan[t]) return [];
     const u = upah[t] || 0;
     if(u <= 0)         return [fmtTglPendek(t)+': upahnya Rp 0 &mdash; potongan '+rp(bagian[i])+' di tanggal ini tidak memotong apa-apa.'];
     if(u < bagian[i])  return [fmtTglPendek(t)+': upahnya cuma '+rp(u)+' &mdash; dari '+rp(bagian[i])+' yang benar-benar terpotong hanya '+rp(u)+'.'];
@@ -2582,7 +2602,7 @@ async function renderRekap(){
       + (bayar.length
           ? bayar.map(p => barisBayar(p, perBayar[p.method] || [])).join("")
           : '<div class="cat-kosong">Belum ada transaksi'+(rekapBukuPilih!==null? ' di buku ini':'')+'.</div>')
-      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
+      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(h.wages)+'</b></div>'
       +'<div class="cat-baris tebal"><span>Laba Cuci</span><b class="hijau">'+rp(cuciLaba)+'</b></div>';
 
     $("rekapFnb").innerHTML =
@@ -3687,7 +3707,7 @@ async function renderBuku(){
       +'<div class="cat-baris"><span>F&amp;B</span><b>'+(s.fnb_total? rp(s.fnb_total):"kosong")+'</b></div>'
       +'<div class="cat-baris"><span>Tip</span><b>'+(s.tip? rp(s.tip):"kosong")+'</b></div>'
       +'<div class="cat-baris"><span>Omzet</span><b class="hijau">'+rp(s.total)+'</b></div>'
-      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(s.wages)+'</b></div>'
+      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(s.wages)+'</b></div>'
       +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(s.expenses)+'</b></div>'
       +(s.compensation ? '<div class="cat-baris"><span>Kompensasi karyawan</span><b class="merah">-'+rp(s.compensation)+'</b></div>' : '')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
@@ -3740,7 +3760,7 @@ async function renderBuku(){
 
       // ---- 2. Uang keluar ----
       +'<div class="cat-blok"><h3>&#128184; Uang keluar</h3>'
-      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(h.wages)+'</b></div>'
+      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(h.wages)+'</b></div>'
       +upahRows
       // Pengeluaran bisa dibuka (permintaan owner 09/10). Isinya baris yang
       // sama persis dengan layar Pengeluaran — termasuk tombol koreksi &
@@ -4351,7 +4371,7 @@ function kartuBuku(g){
     + '<div class="cat-baris"><span>Cuci <span class="waktu">'+sah.length+'x</span></span><b>'+rp(cuci)+'</b></div>'
     + '<div class="cat-baris"><span>Tip</span><b>'+(tip ? rp(tip) : "kosong")+'</b></div>'
     + '<div class="cat-baris"><span>F&amp;B</span><b>'+(fnbT ? rp(fnbT) : "kosong")+'</b></div>'
-    + (upah!==null ? '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(upah)+'</b></div>' : '')
+    + (upah!==null ? '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(upah)+'</b></div>' : '')
     + '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'+(kel ? '-'+rp(kel) : rp(0))+'</b></div>'
     + '<div class="cat-baris tebal"><span>'+(upah!==null ? 'Laba buku' : 'Selisih')+'</span><b class="'+(hasil>=0?"hijau":"merah")+'">'+rp(hasil)+'</b></div>'
     // Uang tunai yang disetor kasir untuk buku ini (cash cuci + cash F&B −
@@ -4614,7 +4634,7 @@ function renderRangeResults(data, from, to){
     +'<div class="cat-baris"><span>F&amp;B</span><b>'+(s.fnb_total? rp(s.fnb_total):"kosong")+'</b></div>'
     +'<div class="cat-baris"><span>Tip</span><b>'+(s.tip? rp(s.tip):"kosong")+'</b></div>'
     +'<div class="cat-baris"><span>Omzet</span><b class="hijau">'+rp(s.total)+'</b></div>'
-    +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(s.wages)+'</b></div>'
+    +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(s.wages)+'</b></div>'
     +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(s.expenses)+'</b></div>'
       +(s.compensation ? '<div class="cat-baris"><span>Kompensasi karyawan</span><b class="merah">-'+rp(s.compensation)+'</b></div>' : '')
     +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
@@ -4668,7 +4688,7 @@ async function renderDashboard(){
       '<div class="cat-baris"><span>Cucian</span><b>'+rp(s.wash)+'</b></div>'
       +'<div class="cat-baris"><span>Makanan &amp; minuman</span><b>'+rp(s.fnb)+'</b></div>'
       +'<div class="cat-baris"><span>Tip</span><b>'+rp(s.tip)+'</b></div>'
-      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">-'+rp(s.wages)+'</b></div>'
+      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(s.wages)+'</b></div>'
       +'<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(s.expenses)+'</b></div>'
       +(s.compensation ? '<div class="cat-baris"><span>Kompensasi karyawan</span><b class="merah">-'+rp(s.compensation)+'</b></div>' : '')
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(s.profit>=0?"hijau":"merah")+'">'+rp(s.profit)+'</b></div>';
@@ -6494,19 +6514,29 @@ function setTabPengaturan(tab, gulirKeAtas = true){
   if(gulirKeAtas && layar && !layar.classList.contains("hidden")) window.scrollTo({top:0, behavior:"smooth"});
 }
 
-/* ---------- PENGATURAN: BAGI HASIL UPAH (khusus owner) ----------
-   Dua cara menghitung upah satu cucian:
+/* ---------- PENGATURAN: CARA HITUNG UPAH (khusus owner) ----------
+   Tiga cara membayar pekerja:
      persen   sekian persen dari harga cuci + add-on untuk pekerja, sisanya
               owner — satu angka untuk semua jenis kendaraan;
-     nominal  upah per mobil, nominal tetap per jenis kendaraan + layanan
-              (diisi di tab Kendaraan) — cara lama.
+     nominal  upah per kendaraan, nominal tetap per jenis kendaraan + layanan
+              (diisi di menu Kendaraan) — cara lama;
+     bulanan  upah per bulan (permintaan owner 11/10): gaji tetap tiap pekerja,
+              dibebankan ke laporan harian sebesar gaji / jumlah hari bulan itu.
+              Selama cara ini berlaku, cucian tidak membawa upah sendiri.
    Layar ini hanya memilih & menampilkan contoh; hitungannya di server
-   (WageService::jatahFor), dan hanya berlaku untuk transaksi berikutnya. */
-let bagiHasil = null;   // {tersimpan:{mode,percent}, mode, percent} — mode/percent = yang sedang dipilih di layar
+   (WageService, SalaryService). */
+let bagiHasil = null;   // {tersimpan:{mode,percent}, mode, percent, gaji:[{worker_id,name,amount}], gajiTersimpan:{id:rupiah}}
+
+const CARA_UPAH = [
+  {mode:"persen",  judul:"Persenan",           sub:"Sekian persen dari harga cuci + add-on"},
+  {mode:"nominal", judul:"Upah per kendaraan", sub:"Nominal tetap per jenis kendaraan & layanan"},
+  {mode:"bulanan", judul:"Upah per bulan",     sub:"Gaji tetap tiap pekerja, berapa pun cuciannya"},
+];
 
 async function muatBagiHasil(){
-  const d = await api("/wage-sharing");
-  bagiHasil = {tersimpan: d, mode: d.mode, percent: d.percent};
+  const [d, gaji] = await Promise.all([api("/wage-sharing"), api("/worker-salaries")]);
+  bagiHasil = {tersimpan: d, mode: d.mode, percent: d.percent, gaji,
+    gajiTersimpan: Object.fromEntries(gaji.map(g => [g.worker_id, g.amount]))};
   gambarBagiHasil();
 }
 
@@ -6516,53 +6546,100 @@ function persenBagiHasil(){
   return isNaN(v) ? 0 : Math.max(0, Math.min(100, v));
 }
 
+/** Gaji bulanan yang sedang diketik untuk satu pekerja; kosong/ngawur dianggap 0. */
+function gajiDiketik(g){
+  const v = parseInt(g.amount, 10);
+  return isNaN(v) ? 0 : Math.max(0, v);
+}
+
+/** Ada yang belum disimpan: cara hitungnya, angka persennya, atau gaji siapa pun. */
+function bagiHasilBerubah(){
+  const b = bagiHasil;
+  if(b.mode !== b.tersimpan.mode) return true;
+  if(b.mode === "persen")  return persenBagiHasil() !== b.tersimpan.percent;
+  if(b.mode === "bulanan") return b.gaji.some(g => gajiDiketik(g) !== b.gajiTersimpan[g.worker_id]);
+  return false;
+}
+
 function gambarBagiHasil(){
   const wadah = $("bagiHasilUpah"); if(!wadah || !bagiHasil) return;
-  const persen = bagiHasil.mode === "persen";
-  const berubah = bagiHasil.mode !== bagiHasil.tersimpan.mode
-    || (persen && persenBagiHasil() !== bagiHasil.tersimpan.percent);
+  const mode = bagiHasil.mode;
+
+  let isi;
+  if(mode === "persen"){
+    isi = '<div class="field" style="margin-bottom:10px"><label for="inPersenUpah">Bagian pekerja (%)</label>'
+      + '<input id="inPersenUpah" type="number" inputmode="numeric" min="0" max="100" value="'+persenBagiHasil()+'"'
+      +   ' style="text-transform:none" oninput="bagiHasil.percent=this.value;gambarContohBagiHasil()"></div>'
+      + '<div id="contohBagiHasil"></div>';
+  }else if(mode === "bulanan"){
+    isi = '<div class="peny-ket">Isi gaji per bulan tiap pekerja. Di laporan harian dibebankan '
+      +   '<b>gaji &divide; jumlah hari bulan itu</b>, kerja atau tidak. Cucian tidak lagi membawa upah sendiri.</div>'
+      + (bagiHasil.gaji.length
+          ? bagiHasil.gaji.map((g, i) =>
+              '<div class="gaji-baris">'
+              + '<span class="gaji-nama">'+esc(g.name)+'<span class="gaji-hari" id="gajiHari'+i+'"></span></span>'
+              + '<input type="number" inputmode="numeric" min="0" step="50000" placeholder="0" aria-label="Gaji per bulan '+esc(g.name)+'"'
+              +   ' value="'+(gajiDiketik(g) || "")+'" oninput="bagiHasil.gaji['+i+'].amount=this.value;gambarContohBagiHasil()">'
+              + '</div>').join("")
+            + '<div class="cat-baris tebal"><span>Total gaji sebulan</span><b id="gajiTotal"></b></div>'
+          : '<div class="cat-kosong">Belum ada pekerja. Tambahkan di Pekerja &amp; Upah dulu.</div>')
+      + '<div class="peny-ket" style="margin-top:8px">Gaji Rp 0 = pekerja itu tidak digaji bulanan. Potongan upah mengurangi gaji bulan berjalan.</div>';
+  }else{
+    isi = '<div class="cat-baris"><span>Nominal upah diatur per jenis kendaraan &amp; layanan.</span></div>'
+      + '<button class="btn-cetak-ulang" onclick="setTabPengaturan(\'kendaraan\')">&#128663; Atur di menu Kendaraan</button>';
+  }
 
   wadah.innerHTML =
-      '<div class="peny-ket">Cara menghitung upah tiap cucian. Berlaku untuk transaksi <b>berikutnya</b> &mdash; '
-    +   'upah yang sudah tercatat tidak berubah.</div>'
-    + '<div class="bayar-grid" style="margin-bottom:12px">'
-    +   '<button class="btn-bayar'+(persen ? ' aktif' : '')+'" style="font-size:15.5px;padding:14px 6px" onclick="pilihModeBagiHasil(\'persen\')">Persenan</button>'
-    +   '<button class="btn-bayar'+(persen ? '' : ' aktif')+'" style="font-size:15.5px;padding:14px 6px" onclick="pilihModeBagiHasil(\'nominal\')">Upah per mobil</button>'
+      '<div class="peny-ket">Cara membayar pekerja. Pilih satu, berlaku untuk semua pekerja.</div>'
+    + '<div class="pilih-cara">'
+    +   CARA_UPAH.map(c =>
+          '<button class="btn-cara'+(mode === c.mode ? ' aktif' : '')+'" onclick="pilihModeBagiHasil(\''+c.mode+'\')">'
+          + '<span class="radio"></span>'
+          + '<span class="btn-cara-teks"><span class="btn-cara-judul">'+c.judul+'</span>'
+          +   '<span class="btn-cara-sub">'+esc(c.sub)+'</span></span>'
+          + '</button>').join("")
     + '</div>'
-    + (persen
-        ? '<div class="field" style="margin-bottom:10px"><label for="inPersenUpah">Bagian pekerja (%)</label>'
-          + '<input id="inPersenUpah" type="number" inputmode="numeric" min="0" max="100" value="'+persenBagiHasil()+'"'
-          +   ' style="text-transform:none" oninput="bagiHasil.percent=this.value;gambarContohBagiHasil()"></div>'
-          + '<div id="contohBagiHasil"></div>'
-        : '<div class="cat-baris"><span>Nominal upah diatur per jenis kendaraan &amp; layanan.</span></div>'
-          + '<button class="btn-cetak-ulang" onclick="setTabPengaturan(\'kendaraan\')">&#128663; Atur di menu Kendaraan</button>')
+    + isi
     + '<button class="btn-catat" id="btnSimpanBagiHasil" onclick="simpanBagiHasil()"'
-    +   ' style="background:var(--go);width:100%;margin-top:12px'+(berubah ? '' : ';opacity:.5')+'"'+(berubah ? '' : ' disabled')+'>'
-    +   (berubah ? '&#10003; Simpan cara hitung' : '&#10003; Tersimpan')+'</button>';
+    +   ' style="background:var(--go);width:100%;margin-top:12px"></button>';
   gambarContohBagiHasil();
 }
 
-/* Contoh hitungan — digambar terpisah supaya mengetik angka persen tidak
-   menggambar ulang kotak isiannya (kursor terlempar keluar). */
+/* Bagian yang ikut berubah saat mengetik — contoh persenan, gaji per hari,
+   total gaji, dan tombol simpan — digambar terpisah supaya mengetik angka
+   tidak menggambar ulang kotak isiannya (kursor terlempar keluar). */
 function gambarContohBagiHasil(){
-  const persen = bagiHasil.mode === "persen";
+  const mode = bagiHasil.mode;
   const p = persenBagiHasil();
-  const wadah = $("contohBagiHasil");
-  if(wadah && persen){
+
+  const contoh = $("contohBagiHasil");
+  if(contoh && mode === "persen"){
     const cuci = 40000, addon = 10000, dasar = cuci + addon;
     const upah = Math.floor(dasar * p / 100);
-    wadah.innerHTML =
+    contoh.innerHTML =
         '<div class="cat-baris"><span>Bagian owner</span><b>'+(100 - p)+'%</b></div>'
       + '<div class="peny-ket" style="margin-top:8px">Contoh: mobil '+rp(cuci)+' + add-on '+rp(addon)+' = <b>'+rp(dasar)+'</b>.'
       +   '<br>Upah dibagi ke pekerja <b>'+rp(upah)+'</b>, bagian owner <b>'+rp(dasar - upah)+'</b>.'
       +   '<br>Tip dan F&amp;B tidak ikut dihitung.</div>';
   }
+
+  if(mode === "bulanan"){
+    const kini = new Date();
+    const hari = new Date(kini.getFullYear(), kini.getMonth() + 1, 0).getDate();   // jumlah hari bulan ini
+    bagiHasil.gaji.forEach((g, i) => {
+      const el = $("gajiHari"+i);
+      if(el) el.textContent = gajiDiketik(g) ? "sekitar "+rp(Math.floor(gajiDiketik(g) / hari))+" per hari" : "tidak digaji bulanan";
+    });
+    const total = $("gajiTotal");
+    if(total) total.textContent = rp(bagiHasil.gaji.reduce((t, g) => t + gajiDiketik(g), 0));
+  }
+
   const tombol = $("btnSimpanBagiHasil");
   if(tombol){
-    const berubah = bagiHasil.mode !== bagiHasil.tersimpan.mode || (persen && p !== bagiHasil.tersimpan.percent);
+    const berubah = bagiHasilBerubah();
     tombol.disabled = !berubah;
     tombol.style.opacity = berubah ? "" : ".5";
-    tombol.innerHTML = berubah ? "&#10003; Simpan cara hitung" : "&#10003; Tersimpan";
+    tombol.innerHTML = berubah ? "&#10003; Simpan" : "&#10003; Tersimpan";
   }
 }
 
@@ -6572,31 +6649,53 @@ function pilihModeBagiHasil(mode){
 }
 
 async function simpanBagiHasil(){
-  const persen = bagiHasil.mode === "persen";
-  const p = persenBagiHasil();
+  const b = bagiHasil, mode = b.mode, p = persenBagiHasil();
+  const gantiCara = mode !== b.tersimpan.mode;
+  const totalGaji = b.gaji.reduce((t, g) => t + gajiDiketik(g), 0);
+
+  // Upah per bulan tanpa satu pun gaji = semua pekerja tercatat tidak dibayar.
+  if(mode === "bulanan" && totalGaji === 0){
+    return Swal.fire({icon:"warning", title:"Isi gajinya dulu",
+      text:"Upah per bulan butuh gaji minimal satu pekerja.", confirmButtonColor:"#1B9E62"});
+  }
+
+  const judul = mode === "persen" ? "Pakai bagi hasil "+p+"% : "+(100 - p)+"%?"
+    : mode === "bulanan" ? (gantiCara ? "Pakai upah per bulan?" : "Simpan gaji bulanan?")
+    : "Pakai upah per kendaraan?";
+  const isi = mode === "persen" ? "Pekerja <b>"+p+"%</b> dari harga cuci + add-on, owner <b>"+(100 - p)+"%</b>."
+    : mode === "bulanan" ? "Tiap pekerja digaji tetap per bulan, total <b>"+rp(totalGaji)+"</b>. Di laporan harian dibebankan rata per hari."
+    : "Upah memakai nominal per jenis kendaraan yang diisi di menu Kendaraan.";
+  // Masuk/keluar upah per bulan berlaku untuk seluruh hari ini (server
+  // menghitung ulang upah cucian hari ini); selain itu hanya ke depan.
+  const berlaku = gantiCara && (mode === "bulanan" || b.tersimpan.mode === "bulanan")
+      ? "Berlaku untuk <b>seluruh hari ini</b>: upah cucian hari ini dihitung ulang. Hari-hari sebelumnya tidak berubah."
+    : mode === "bulanan"
+      ? "Gaji baru berlaku mulai hari ini. Hari-hari sebelumnya tidak berubah."
+      : "Berlaku mulai transaksi berikutnya. Upah yang sudah tercatat tidak berubah.";
+
   const tanya = await Swal.fire({
-    icon:"question",
-    title: persen ? "Pakai bagi hasil "+p+"% : "+(100 - p)+"%?" : "Pakai upah per mobil?",
-    html: (persen
-        ? "Pekerja <b>"+p+"%</b> dari harga cuci + add-on, owner <b>"+(100 - p)+"%</b>."
-        : "Upah memakai nominal per jenis kendaraan yang diisi di tab Kendaraan.")
-      + "<br><br>Berlaku mulai transaksi berikutnya. Upah yang sudah tercatat tidak berubah.",
+    icon:"question", title: judul, html: isi+"<br><br>"+berlaku,
     showCancelButton:true, confirmButtonText:"Ya, simpan", cancelButtonText:"Batal",
     confirmButtonColor:"#1B9E62",
   });
   if(!tanya.isConfirmed) return;
   try{
-    const body = {mode: bagiHasil.mode};
-    if(persen) body.percent = p;
+    // Gaji dulu, baru cara hitungnya: saat upah per bulan mulai berlaku,
+    // angka gajinya sudah ada.
+    if(mode === "bulanan" && b.gaji.length){
+      await api("/worker-salaries", {method:"PUT",
+        body:{salaries: b.gaji.map(g => ({worker_id: g.worker_id, amount: gajiDiketik(g)}))}});
+    }
+    const body = {mode};
+    if(mode === "persen") body.percent = p;
     await api("/wage-sharing", {method:"PUT", body});
     // Dimuat ulang seluruh tab: "jatah pekerja" di daftar training ikut berubah.
     await renderKaryawanTraining();
     Swal.fire({toast:true, position:"top-end", icon:"success",
-      title: persen ? "Bagi hasil "+p+"% : "+(100 - p)+"%" : "Upah per mobil",
+      title: mode === "persen" ? "Bagi hasil "+p+"% : "+(100 - p)+"%" : mode === "bulanan" ? "Upah per bulan" : "Upah per kendaraan",
       showConfirmButton:false, timer:1800});
   }catch(e){ gagal(e); }
 }
-
 /* ---------- PENGATURAN: KARYAWAN TRAINING (khusus owner) ----------
    Training TIDAK ikut bagi rata: SETIAP anak training menerima nominal tetap
    per cucian, sisanya baru dibagi ke pekerja senior. Angkanya diatur di sini; perhitungannya

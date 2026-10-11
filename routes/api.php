@@ -274,5 +274,9 @@ Route::middleware('pin.auth')->group(function () {
         Route::patch('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'update']);
         Route::delete('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'destroy']);
 
+        // Gaji bulanan tiap pekerja (cara upah "per bulan"). Owner-only.
+        Route::get('/worker-salaries', [\App\Http\Controllers\WorkerSalaryController::class, 'index']);
+        Route::put('/worker-salaries', [\App\Http\Controllers\WorkerSalaryController::class, 'update']);
+
     });
 });

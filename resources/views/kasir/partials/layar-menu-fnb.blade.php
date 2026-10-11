@@ -20,7 +20,7 @@
           <button class="mpk-baris" data-tab="karyawan" onclick="setTabPengaturan('karyawan')">
             <span class="mpk-ikon">&#128119;</span>
             <span class="mpk-teks"><span class="mpk-judul">Karyawan</span>
-              <span class="mpk-sub">Bagi hasil upah, karyawan training, dan status pekerja</span></span>
+              <span class="mpk-sub">Cara hitung upah, karyawan training, dan status pekerja</span></span>
             <span class="mpk-panah">&#8250;</span>
           </button>
           <button class="mpk-baris" data-tab="shift" onclick="setTabPengaturan('shift')">
@@ -170,7 +170,7 @@
                mobil. Diisi JS lewat renderBagiHasil(); hanya berlaku untuk
                transaksi berikutnya (upah lama dibekukan di transaksinya). --}}
           <div class="cat-blok">
-            <h3>&#129309; Bagi hasil upah</h3>
+            <h3>&#129309; Cara hitung upah</h3>
             <div id="bagiHasilUpah"></div>
           </div>
 
