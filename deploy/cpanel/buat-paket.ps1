@@ -14,6 +14,10 @@
                 (sama dengan ops/config.json). OTIN: otin-carwash.
     -Database   baru  (bawaan) database KOSONG hasil migrate:fresh --seed,
                       untuk cucian baru: katalog awal saja, tanpa transaksi.
+                kosong database BENAR-BENAR kosong: tabelnya saja, tanpa
+                      katalog awal sama sekali (jenis kendaraan, jenis
+                      layanan, harga, upah, add-on, daftar mobil, menu).
+                      Untuk klien yang mengisi semuanya sendiri dari nol.
                 lokal database di .env laptop ini apa adanya. Isinya
                       pembukuan OTIN - JANGAN untuk cucian lain.
                 demo  database kosong + data contoh 30 hari (DemoSeeder), untuk
@@ -29,7 +33,7 @@
 
 param(
     [Parameter(Mandatory)] [string]$FolderApp,
-    [ValidateSet('baru', 'lokal', 'demo', 'tidak')] [string]$Database = 'baru',
+    [ValidateSet('baru', 'kosong', 'lokal', 'demo', 'tidak')] [string]$Database = 'baru',
     [switch]$TanpaDatabase   # nama lama untuk -Database tidak
 )
 if ($TanpaDatabase) { $Database = 'tidak' }
@@ -213,8 +217,14 @@ if ($Database -ne 'tidak') {
             $env:DB_DATABASE = $namaDb
             Push-Location $proyek
             try {
-                & php artisan migrate:fresh --seed --force
-                if ($LASTEXITCODE -ne 0) { throw "migrate:fresh --seed gagal." }
+                if ($Database -eq 'kosong') {
+                    # Tanpa seeder: daftar mobil & menu contoh tidak ikut.
+                    & php artisan migrate:fresh --force
+                    if ($LASTEXITCODE -ne 0) { throw "migrate:fresh gagal." }
+                } else {
+                    & php artisan migrate:fresh --seed --force
+                    if ($LASTEXITCODE -ne 0) { throw "migrate:fresh --seed gagal." }
+                }
                 if ($Database -eq 'demo') {
                     & php artisan db:seed --class=DemoSeeder --force
                     if ($LASTEXITCODE -ne 0) { throw "DemoSeeder gagal." }
@@ -223,6 +233,20 @@ if ($Database -ne 'tidak') {
                 Pop-Location
                 Remove-Item Env:DB_DATABASE
             }
+
+            if ($Database -eq 'kosong') {
+                # Katalog bawaan diisi oleh MIGRASI (jenis kendaraan, jenis
+                # layanan, harga, upah, add-on), bukan seeder - jadi melewati
+                # seeder saja belum mengosongkannya. Jam operasional (shifts)
+                # sengaja ditinggal: itu setelan, bukan katalog, dan tanpa
+                # baris itu layar Pengaturan > Shift mulai tanpa apa-apa.
+                $kosongkan = 'SET FOREIGN_KEY_CHECKS=0; ' +
+                    (('addons', 'wage_rates', 'wash_prices', 'wash_categories', 'wash_services', 'vehicles', 'products' |
+                        ForEach-Object { "DELETE FROM $_; ALTER TABLE $_ AUTO_INCREMENT=1;" }) -join ' ') +
+                    ' SET FOREIGN_KEY_CHECKS=1;'
+                & $mysql @koneksi $namaDb -e $kosongkan
+                if ($LASTEXITCODE -ne 0) { throw "Gagal mengosongkan katalog di $namaDb." }
+            }
         }
 
         # --no-tablespaces: user MySQL shared hosting tidak punya hak PROCESS,
@@ -230,7 +254,7 @@ if ($Database -ne 'tidak') {
         & $dump @koneksi --single-transaction --routines --no-tablespaces "--result-file=$sql" $namaDb
         if ($LASTEXITCODE -ne 0) { throw "mysqldump gagal." }
     } finally {
-        if ($Database -in @('baru', 'demo') -and $namaDb) {
+        if ($Database -in @('baru', 'kosong', 'demo') -and $namaDb) {
             & $mysql @koneksi -e "DROP DATABASE IF EXISTS $namaDb"
         }
         Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue

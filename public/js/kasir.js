@@ -580,6 +580,17 @@ function keHome(){ tampilkan("layarHome"); }
 
 /* ---------- HOME: grid + search ---------- */
 function renderGrid(){
+  // Pemasangan baru yang katalognya masih kosong: tanpa keterangan ini kasir
+  // hanya melihat judul "pilih jenis kendaraan" di atas ruang kosong.
+  if(!Object.keys(CFG.categories).length){
+    $("gridUkuran").innerHTML = '<div class="cat-kosong grid-kosong">Belum ada jenis kendaraan.<br>'
+      + (ROLE === "owner"
+          ? '<button class="btn-cetak-ulang" style="margin-top:10px"'
+            + ' onclick="pergi(\'layarMenuFnb\');setTabPengaturan(\'kendaraan\')">&#9881;&#65039; Atur di Pengaturan &rarr; Kendaraan</button>'
+          : 'Minta owner mengisinya di Pengaturan &rarr; Kendaraan.')
+      + '</div>';
+    return;
+  }
   $("gridUkuran").innerHTML = Object.entries(CFG.categories).map(([key,kt]) =>
     '<button class="btn-ukuran'+(adalahMotor(key)?" motor":"")+'" onclick="pilihManual(\''+key+'\')">'
     + siluetSVG(bentukKat(key),110)
@@ -5571,7 +5582,11 @@ function gambarDaftarKategori(){
         +   (k.used_count? ' &middot; '+k.used_count+' transaksi' : '')+'</div>'
         + aksiRk('editKategori(\''+jsStr(k.slug)+'\')', 'hapusKategori('+k.id+',\''+jsStr(k.label)+'\')'),
     });
-  }).join("");
+  }).join("")
+    // Katalog kosong: sebutkan urutan mengisinya.
+    || '<div class="cat-kosong" style="margin-bottom:10px">Belum ada jenis kendaraan.'
+       + (katalogLayanan.length ? '' : ' Mulai dari <b>Jenis layanan cuci</b> di bawah, baru tambahkan jenis kendaraannya.')
+       + '</div>';
   pasangGeserKategori();
   pasangTahanKategori();
 }
@@ -5818,13 +5833,25 @@ function gambarDaftarLayanan(){
   $("daftarLayanan").innerHTML = katalogLayanan.map(s => barisDaftar("layanan", s.id, esc(s.label),
     '<div class="rk-detail">'+(s.used_count? s.used_count+' transaksi' : 'Belum pernah dipakai')+'</div>'
     + aksiRk('editLayanan('+s.id+',\''+jsStr(s.label)+'\')', 'hapusLayanan('+s.id+',\''+jsStr(s.label)+'\')', 'Ubah nama')
-  )).join("");
+  )).join("")
+    || '<div class="cat-kosong" style="margin-bottom:10px">Belum ada jenis layanan. Tambahkan dulu, mis. Cuci Reguler.</div>';
   pasangDaftar("layanan");
 }
 
 /** Form tambah/ubah jenis kendaraan. slug null = tambah baru. */
 async function editKategori(slug){
   const k = slug ? katalogKategori.find(x=>x.slug===slug) : null;
+  // Harga & upah diisi PER LAYANAN. Tanpa satu pun jenis layanan (pemasangan
+  // baru yang katalognya dikosongkan) formulirnya kosong dan tidak bisa
+  // disimpan — arahkan ke langkah yang benar, jangan biarkan owner menebak.
+  if(!katalogLayanan.length){
+    const r = await Swal.fire({icon:"info", title:"Tambah jenis layanan dulu",
+      html:"Harga dan upah diisi per layanan cuci, mis. <b>Cuci Reguler</b>. Buat minimal satu jenis layanan, lalu tambahkan jenis kendaraannya.",
+      showCancelButton:true, confirmButtonText:"&#10133; Tambah jenis layanan", cancelButtonText:"Nanti",
+      confirmButtonColor:"#1B9E62"});
+    if(r.isConfirmed) tambahLayanan();
+    return;
+  }
   const barisLayanan = katalogLayanan.map(s => {
     const ada = k ? k.prices[s.slug]!==undefined : true;
     const nilaiHarga = k && ada ? k.prices[s.slug] : 0;
@@ -6036,9 +6063,18 @@ async function renderKendaraan(){
     // membuang pilihan yang sedang diketik owner. Pilihan pertamanya sengaja
     // kosong — kalau langsung menunjuk jenis termurah, owner yang buru-buru
     // menambah mobil tanpa menyentuh dropdown justru membuat kebocoran baru.
-    if($("inKendaraanKat").options.length===0){
-      $("inKendaraanKat").innerHTML =
-        '<option value="" selected disabled>Jenis&hellip;</option>' + opsiKategori(null);
+    // Diisi ulang HANYA bila daftar jenisnya berubah (ditambah, diganti nama,
+    // dihapus), dan pilihan yang sedang dipegang dipertahankan. Dulu cukup
+    // sekali seumur halaman: jenis yang baru dibuat tidak pernah muncul di
+    // sini sampai halaman dimuat ulang, dan pemasangan baru — yang mulai
+    // tanpa satu jenis pun — tidak bisa menambah mobil sama sekali.
+    const pilihJenis = $("inKendaraanKat");
+    const tandaJenis = Object.entries(CFG.categories).map(([slug, kt]) => slug+"="+kt.label).join("|");
+    if(pilihJenis.dataset.jenis !== tandaJenis){
+      const dipilih = pilihJenis.value;
+      pilihJenis.innerHTML = '<option value="" selected disabled>Jenis&hellip;</option>' + opsiKategori(null);
+      if(dipilih && CFG.categories[dipilih]) pilihJenis.value = dipilih;
+      pilihJenis.dataset.jenis = tandaJenis;
     }
 
     // Angkanya dari meta (seluruh katalog), bukan dari daftar yang sedang

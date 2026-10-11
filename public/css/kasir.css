@@ -76,6 +76,8 @@
   .btn-ukuran{background:var(--card);border:2.5px solid var(--line);border-radius:18px;
     padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;
     transition:transform .06s}
+  /* Katalog kosong (pemasangan baru): keterangannya membentang dua kolom. */
+  .grid-kosong{grid-column:1 / -1;text-align:center;padding:18px 8px;line-height:1.5}
   .btn-ukuran svg{max-width:100%;height:auto}   /* siluet ikut menyempit di HP kecil */
   .btn-ukuran:active{transform:scale(.97)}
   .btn-ukuran:hover{border-color:var(--water)}
