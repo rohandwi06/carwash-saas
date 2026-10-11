@@ -1,6 +1,44 @@
-<section id="layarPekerja" class="hidden">
+<section id="layarPekerja" class="hidden" data-hal="menu">
       <div class="catatan">
-        <div class="cat-blok">
+        {{-- Menu ala Pengaturan HP (permintaan owner 11/10): layar ini dulu
+             satu halaman panjang berisi semuanya. Sekarang daftar di bawah
+             membuka satu halaman per urusan; blok-blok di bawahnya ditandai
+             data-pk dan CSS menampilkan yang cocok dengan data-hal milik
+             <section> (diatur bukaPk() di kasir.js). --}}
+        <div class="cat-blok mpk-menu" id="pkMenu">
+          <button class="mpk-baris" onclick="bukaPk('karyawan')">
+            <span class="mpk-ikon">&#128119;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Data karyawan &amp; upah</span>
+              <span class="mpk-sub">Daftar pekerja, biodata, dan upah per tanggal</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          <button class="mpk-baris" onclick="bukaPk('potongan')">
+            <span class="mpk-ikon">&#10134;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Potongan upah</span>
+              <span class="mpk-sub">Potong atau koreksi upah pekerja</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          <button class="mpk-baris" onclick="bukaPk('kompensasi')">
+            <span class="mpk-ikon">&#127873;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Kompensasi</span>
+              <span class="mpk-sub">Uang makan, uang bensin, dan sangu lain dari owner</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          {{-- Hanya di cucian yang memakai deposit pekerja; dibuka bukaPk(). --}}
+          <button class="mpk-baris hidden" id="pkBarisDeposit" onclick="bukaPk('deposit')">
+            <span class="mpk-ikon">&#128176;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Deposit pekerja</span>
+              <span class="mpk-sub">Setoran pekerja ke kas</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+        </div>
+
+        <div class="mpk-kepala" id="pkKepala">
+          <button class="kembali" onclick="bukaPk(null)">&larr; Pekerja &amp; Upah</button>
+          <div class="mpk-judul-hal" id="pkJudulHal"></div>
+        </div>
+
+        <div class="cat-blok" data-pk="karyawan">
           <h3>&#128119; Pekerja</h3>
           <div class="form-keluar" style="margin-bottom:12px">
             <input id="inNamaPk" placeholder="Nama pekerja baru">
@@ -18,8 +56,10 @@
              upah maupun Catat. Kartu upah per pekerja bisa diklik: cucian +
              setiap potongan dengan keterangannya.
              Owner-only (layar ini memang khusus owner; API potongan juga). --}}
-        <div class="cat-blok hidden" id="blokPenyesuaian">
-          <h3>&#128176; Upah &amp; potongan</h3>
+        <div class="cat-blok hidden" id="blokPenyesuaian" data-pk="karyawan potongan kompensasi">
+          {{-- Kalender ini dipakai tiga halaman: upah per tanggal, potongan,
+               dan kompensasi. Judulnya diganti bukaPk() menurut halamannya. --}}
+          <h3 id="penyJudul">&#128176; Upah &amp; potongan</h3>
           <div class="kal-nav">
             <button class="kal-panah" onclick="gantiBulanPenyesuaian(-1)">&#8249;</button>
             <div class="kal-bulan" id="penyKalJudul"></div>
@@ -32,6 +72,8 @@
           </div>
           <div class="kal-info" id="penyKalInfo"></div>
 
+          {{-- Formulir potong/timpa: hanya di halaman Potongan upah. --}}
+          <div id="penyForm" data-pk="potongan">
           <div class="peny-sub">Potong / koreksi upah</div>
           <div class="peny-jenis">
             <button class="btn-jenis aktif" id="jenisPotongan" onclick="setJenisPenyesuaian('potongan')">
@@ -67,8 +109,9 @@
           <div class="peny-catatan">Uang yang tidak jadi dibayarkan otomatis
             menambah <b>laba bersih</b> hari itu &mdash; laporan memakai upah
             setelah potongan.</div>
+          </div>
 
-          <div id="daftarPenyesuaian" style="margin-top:16px"></div>
+          <div id="daftarPenyesuaian" data-pk="karyawan potongan" style="margin-top:16px"></div>
         </div>
 
         {{-- Kompensasi karyawan: "sangu" dari owner di luar upah cucian (uang
@@ -76,7 +119,7 @@
              Upah & potongan di atas. Memotong laba bersih di barisnya sendiri;
              tidak menyentuh upah, omzet, maupun setoran cash.
              Owner-only, dibuka oleh renderKompensasi() di kasir.js. --}}
-        <div class="cat-blok hidden" id="blokKompensasi">
+        <div class="cat-blok hidden" id="blokKompensasi" data-pk="kompensasi">
           <h3>&#127873; Kompensasi karyawan</h3>
           <div class="peny-ket">Uang tambahan dari owner di luar upah cucian, misalnya uang makan
             atau uang bensin. Jumlahnya berlaku <b>per orang, per tanggal</b>.</div>

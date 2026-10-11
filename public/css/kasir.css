@@ -203,6 +203,28 @@
   /* Pembukuan: ringkasan sehari dipecah jadi kartu-kartu. */
   .judul-hari{font-size:17px;font-weight:900;margin:4px 2px 10px}
   .cat-blok.blok-laba{border-color:var(--go);background:rgba(27,158,98,.06)}
+  /* Pekerja & Upah: menu ala Pengaturan HP. data-hal di <section> menentukan
+     halaman; blok bertanda data-pk hanya tampil di halaman yang disebutnya.
+     .hidden (display:none !important) tetap menang untuk blok khusus owner. */
+  #layarPekerja [data-pk], #layarPekerja .mpk-kepala{display:none}
+  #layarPekerja[data-hal="menu"] #pkMenu{display:block}
+  #layarPekerja:not([data-hal="menu"]) #pkMenu{display:none}
+  #layarPekerja:not([data-hal="menu"]) .mpk-kepala{display:block}
+  #layarPekerja[data-hal="karyawan"] [data-pk~="karyawan"],
+  #layarPekerja[data-hal="potongan"] [data-pk~="potongan"],
+  #layarPekerja[data-hal="kompensasi"] [data-pk~="kompensasi"],
+  #layarPekerja[data-hal="deposit"] [data-pk~="deposit"]{display:block}
+  .mpk-menu{padding:4px 16px}
+  .mpk-baris{display:flex;align-items:center;gap:14px;width:100%;padding:16px 0;background:none;
+    border:none;border-bottom:1px solid var(--line);text-align:left;color:var(--ink)}
+  .mpk-baris:last-child, .mpk-baris:nth-last-child(2):has(+ .hidden){border-bottom:none}
+  .mpk-ikon{flex:0 0 44px;height:44px;border-radius:12px;background:var(--mist);
+    display:flex;align-items:center;justify-content:center;font-size:22px}
+  .mpk-teks{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .mpk-judul{font-size:16px;font-weight:900}
+  .mpk-sub{font-size:13px;font-weight:600;color:var(--ink2);line-height:1.35}
+  .mpk-panah{flex:0 0 auto;font-size:26px;font-weight:700;color:var(--ink2);line-height:1}
+  .mpk-judul-hal{font-size:19px;font-weight:900;margin:6px 2px 2px}
   .stat-buka{cursor:pointer}
   .stat-buka.buka{grid-column:1/-1}
   .stat-buka.buka .trx-panah{transform:rotate(180deg)}

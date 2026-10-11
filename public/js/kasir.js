@@ -554,7 +554,7 @@ function pergi(id){
   if(id==="layarMenuFnb") renderMenuFnb(true);
   // Kalender Upah & potongan digambar renderPekerja() -> renderPenyesuaian(),
   // karena dropdown pekerjanya menumpang daftar pekerja yang dimuat di sana.
-  if(id==="layarPekerja") renderPekerja();
+  if(id==="layarPekerja"){ bukaPk(null); renderPekerja(); }   // selalu mulai dari menunya
   // Masuk layar Rekap selalu mulai dari "Semua". Penyaring yang tertinggal
   // dari kunjungan sebelumnya membuat owner membaca laba sebagian hari dan
   // mengiranya laba sehari penuh — risiko salah baca angka uang.
@@ -1185,6 +1185,30 @@ async function hapusDraft(id){
 }
 
 /* ---------- PEKERJA & UPAH ---------- */
+/* ---------- PEKERJA & UPAH: MENU ----------
+   Layar ini berbentuk menu ala Pengaturan HP (permintaan owner 11/10): daftar
+   di depan, tiap baris membuka satu halaman. Isinya tetap blok-blok yang
+   sama — yang berganti hanya data-hal di <section>, dan CSS menampilkan blok
+   bertanda data-pk yang cocok. Kalender Upah & potongan dipakai tiga halaman
+   (tanggal pilihannya ikut terbawa), jadi judulnya menyesuaikan. */
+const PK_HALAMAN = {
+  karyawan:   {judul:"Data karyawan & upah", kalender:"&#128176; Upah per tanggal"},
+  potongan:   {judul:"Potongan upah",        kalender:"&#10134; Potongan upah"},
+  kompensasi: {judul:"Kompensasi",           kalender:"&#128197; Pilih tanggal"},
+  deposit:    {judul:"Deposit pekerja",      kalender:""},
+};
+function bukaPk(hal){
+  const h = PK_HALAMAN[hal] ? hal : "menu";
+  $("layarPekerja").dataset.hal = h;
+  if(h !== "menu"){
+    $("pkJudulHal").textContent = PK_HALAMAN[h].judul;
+    if(PK_HALAMAN[h].kalender) $("penyJudul").innerHTML = PK_HALAMAN[h].kalender;
+  }
+  // Deposit pekerja hanya ada di sebagian cucian.
+  $("pkBarisDeposit").classList.toggle("hidden", !$("blokDeposit"));
+  window.scrollTo(0, 0);
+}
+
 async function renderPekerja(){
   try{
     pekerja = await api("/workers");
