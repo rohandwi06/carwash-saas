@@ -30,6 +30,10 @@ class UpdateTransactionRequest extends FormRequest
             'service'        => ['sometimes', Rule::exists('wash_services', 'slug')],
             'payment_method' => ['sometimes', Rule::in(\App\Models\Transaction::CARA_BAYAR)],
             'plate'          => ['sometimes', 'nullable', 'string', 'max:20'],
+            // Detail pelanggan (opsional): hanya dicatat di transaksinya, untuk
+            // menghubungi pemilik kendaraan. Bukan daftar pelanggan.
+            'customer_name'  => ['sometimes', 'nullable', 'string', 'max:60'],
+            'customer_phone' => ['sometimes', 'nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
             'tip'            => ['sometimes', 'integer', 'min:0', 'max:1000000'],
             'worker_ids'     => ['sometimes', 'array'],
             'worker_ids.*'   => ['integer', 'exists:workers,id'],

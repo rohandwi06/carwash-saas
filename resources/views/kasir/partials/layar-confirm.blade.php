@@ -67,6 +67,21 @@
         </div>
       </div>
 
+      {{-- Detail pelanggan: opsional, tersimpan di transaksinya saja dan
+           ikut tercetak di resi. --}}
+      <div class="baris-input" style="margin-bottom:18px">
+        <div class="field">
+          <label for="inPelanggan">Nama pelanggan</label>
+          <input id="inPelanggan" placeholder="boleh kosong" autocomplete="off"
+                 maxlength="60" autocapitalize="words" style="text-transform:none">
+        </div>
+        <div class="field">
+          <label for="inTelepon">No. telepon</label>
+          <input id="inTelepon" type="tel" inputmode="tel" placeholder="08&hellip; (boleh kosong)" autocomplete="off"
+                 maxlength="20" style="text-transform:none" oninput="rapikanTelepon(this)">
+        </div>
+      </div>
+
       <div class="total-bar" style="margin-bottom:18px">
         <div class="tb-label">TOTAL BAYAR</div>
         <div class="tb-nilai" id="totalBayar"></div>

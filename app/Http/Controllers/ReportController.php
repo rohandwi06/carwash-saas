@@ -104,13 +104,16 @@ class ReportController extends Controller
 
             fputcsv($out, ['LAPORAN HARIAN '.mb_strtoupper($usaha), $recap['date']], ';');
             fputcsv($out, [], ';');
-            fputcsv($out, ['No', 'Kendaraan', 'Jenis', 'Layanan', 'Tambahan', 'Bayar', 'Plat', 'Pekerja', 'Tip', 'Total', 'Status', 'Dicatat oleh'], ';');
+            fputcsv($out, ['No', 'Kendaraan', 'Jenis', 'Layanan', 'Tambahan', 'Bayar', 'Plat', 'Pelanggan', 'No. Telepon', 'Pekerja', 'Tip', 'Total', 'Status', 'Dicatat oleh'], ';');
 
             foreach ($trx as $t) {
                 fputcsv($out, [
                     $t->queue_no, $t->vehicle_name, $t->category, $t->service,
                     $t->addons->map(fn ($a) => $a->pivot->name.' ('.$a->pivot->price.')')->implode(', '),
                     strtoupper($t->payment_method), $t->plate ?? 'plat kosong',
+                    // Awalan petik: tanpa itu Excel membaca nomor telepon
+                    // sebagai angka dan membuang 0 di depannya.
+                    $t->customer_name ?? '', $t->customer_phone ? "'".$t->customer_phone : '',
                     $t->workers->pluck('name')->implode(' + '),
                     $t->tip ?: '',
                     $t->voided_at ? 0 : $t->total,

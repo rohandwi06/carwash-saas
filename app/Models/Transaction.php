@@ -20,7 +20,7 @@ class Transaction extends Model
     // jadi kolomnya tidak boleh diisi lagi — hanya dibaca untuk riwayat lama.
     protected $fillable = [
         'queue_no', 'vehicle_name', 'category', 'service',
-        'payment_method', 'plate', 'tip', 'total', 'date',
+        'payment_method', 'plate', 'customer_name', 'customer_phone', 'tip', 'total', 'date',
         'book_id',
         'voided_at', 'void_reason', 'voided_by', 'created_by',
         'void_requested_at', 'void_requested_by', 'void_request_reason',

@@ -58,6 +58,8 @@ class TransactionDraftController extends Controller
             'category'     => [$wajib, Rule::exists('wash_categories', 'slug')],
             'service'      => ['sometimes', Rule::exists('wash_services', 'slug')],
             'plate'        => ['nullable', 'string', 'max:20'],
+            'customer_name'  => ['nullable', 'string', 'max:60'],
+            'customer_phone' => ['nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
             'note'         => ['nullable', 'string', 'max:160'],
             'worker_ids'   => ['sometimes', 'array'],
             'worker_ids.*' => ['integer', 'exists:workers,id'],

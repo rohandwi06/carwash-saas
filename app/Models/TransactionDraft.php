@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 class TransactionDraft extends Model
 {
     protected $fillable = [
-        'vehicle_name', 'category', 'service', 'plate', 'note',
+        'vehicle_name', 'category', 'service', 'plate', 'customer_name', 'customer_phone', 'note',
         'worker_ids', 'addon_ids', 'fnb_items', 'tip', 'date', 'created_by',
     ];
 

@@ -640,6 +640,7 @@ function resetConfirm(){
   draftAktif = null;
   fnbCuciCari = ""; fnbCuciHal = 1;   // konfirmasi baru = pencarian F&B kosong lagi
   $("inPlat").value=""; $("inTip").value="";
+  $("inPelanggan").value=""; $("inTelepon").value="";
   tutupFnbModal();   // jangan sampai modal menu ikut terbawa ke cucian berikutnya
 }
 function pilihHasil(nama, kat){
@@ -867,6 +868,9 @@ function toggleAddon(id){
 }
 function pilihLayanan(id){ layananAktif=id; renderConfirm(); }
 function setBayar(m){ metode=m; renderConfirm(); }
+/* Nomor telepon: hanya angka, +, spasi, strip, dan kurung — aturan yang sama
+   dengan validasi server, supaya kasir tidak baru tahu salahnya saat simpan. */
+function rapikanTelepon(el){ el.value = el.value.replace(/[^0-9+\-\s()]/g, ""); }
 function togglePk(id){
   if(pekerjaPilih.has(id)) pekerjaPilih.delete(id); else pekerjaPilih.add(id);
   renderConfirm();
@@ -884,6 +888,8 @@ async function konfirmasi(){
       service: layananAktif,
       payment_method: metode,
       plate: formatPlat($("inPlat").value) || null,
+      customer_name: $("inPelanggan").value.trim() || null,
+      customer_phone: $("inTelepon").value.trim() || null,
       tip: Math.max(0, parseInt($("inTip").value,10)||0),
       worker_ids: Array.from(pekerjaPilih),
       addon_ids: Array.from(addonPilih),
@@ -959,6 +965,9 @@ function dataResiCucian(trx){
     waktu: trx.created_at,
     atas: barisResi("Kendaraan", esc(trx.vehicle_name))
         + barisResi("Plat", esc(trx.plate || "-"))
+        // Hanya dicetak kalau diisi — kebanyakan transaksi tidak mencatatnya.
+        + (trx.customer_name? barisResi("Pelanggan", esc(trx.customer_name)) : "")
+        + (trx.customer_phone? barisResi("Telepon", esc(trx.customer_phone)) : "")
         // Kasir yang langsung memilih jenis (tanpa mencari nama mobil) membuat
         // nama kendaraannya sama dengan jenisnya — jangan ditulis dua kali.
         + ((kt && kt.label !== trx.vehicle_name)? barisResi("Jenis", esc(kt.label)) : ""),
@@ -1112,6 +1121,8 @@ async function simpanDraft(){
     category: pilihan.kat,
     service: layananAktif,
     plate: formatPlat($("inPlat").value) || null,
+    customer_name: $("inPelanggan").value.trim() || null,
+    customer_phone: $("inTelepon").value.trim() || null,
     worker_ids: Array.from(pekerjaPilih),
     addon_ids: Array.from(addonPilih),
     // Makanan/minuman & tip ikut disimpan persis seperti saat transaksi
@@ -1147,6 +1158,8 @@ function lanjutDraft(id){
   addonPilih   = new Set(d.addon_ids || []);
   $("inPlat").value = d.plate || "";
   $("inTip").value  = d.tip ? d.tip : "";
+  $("inPelanggan").value = d.customer_name || "";
+  $("inTelepon").value   = d.customer_phone || "";
   // Menu yang sudah dihapus/dinonaktifkan sejak draft dibuat tidak bisa
   // dijual lagi — dilewati dan disebutkan, bukan diam-diam dibuang.
   // Perlakuan yang sama dengan lanjutDraftFnb().
@@ -3032,6 +3045,9 @@ function trxHTML(r, opsi){
     ["No. Nota", nomorNota("C", r.id)],
     // Di bentuk ringkas plat tidak ada di kepala baris, jadi disebut di sini.
     ...(ringkas ? [["Plat", esc(r.plate||"plat kosong")]] : []),
+    // Detail pelanggan hanya muncul kalau diisi kasir.
+    ...(r.customer_name ? [["Pelanggan", esc(r.customer_name)]] : []),
+    ...(r.customer_phone ? [["Telepon", esc(r.customer_phone)]] : []),
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
     ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
     ["Pembayaran", infoBayar(r.payment_method).panjang],
@@ -3160,6 +3176,11 @@ async function editTrx(id){
       + '<input id="swTrxNama" class="swal2-input" maxlength="100" value="'+esc(r.vehicle_name||"")+'">'
       + '<div class="sw-field-label">Plat nomor</div>'
       + '<input id="swTrxPlat" class="swal2-input" maxlength="20" placeholder="boleh kosong" value="'+esc(r.plate||"")+'">'
+      + '<div class="sw-field-label">Nama pelanggan</div>'
+      + '<input id="swTrxPelanggan" class="swal2-input" maxlength="60" placeholder="boleh kosong" value="'+esc(r.customer_name||"")+'">'
+      + '<div class="sw-field-label">No. telepon</div>'
+      + '<input id="swTrxTelepon" class="swal2-input" type="tel" inputmode="tel" maxlength="20" placeholder="boleh kosong"'
+      +   ' oninput="rapikanTelepon(this)" value="'+esc(r.customer_phone||"")+'">'
       + '<div class="sw-field-label">Jenis kendaraan *</div>'
       + '<select id="swTrxKat" class="sw-select">'
       +   Object.keys(CFG.categories).map(k => '<option value="'+esc(k)+'"'
@@ -3245,6 +3266,8 @@ async function editTrx(id){
       return {
         vehicle_name:   nama,
         plate:          ambil("swTrxPlat") || null,
+        customer_name:  ambil("swTrxPelanggan") || null,
+        customer_phone: ambil("swTrxTelepon") || null,
         category:       ambil("swTrxKat"),
         service:        ambil("swTrxSvc"),
         payment_method: ambil("swTrxBayar"),
