@@ -1,21 +1,45 @@
 <section id="layarMenuFnb" class="hidden">
       <div class="catatan">
-        {{-- Pengaturan dulunya satu gulungan panjang berisi delapan blok:
-             untuk mengubah jam shift, owner harus melewati seluruh katalog
-             kendaraan dan daftar menu dulu. Sekarang dipecah empat tab, dan
-             tab terakhir yang dibuka diingat supaya kembali ke sini tidak
-             berarti menggulir dari awal lagi. --}}
-        <div class="set-tabs" id="setTabs">
-          <button class="set-tab" data-tab="kendaraan" onclick="setTabPengaturan('kendaraan')">
-            <span class="set-tab-ikon">&#128663;</span>Kendaraan<span class="set-tab-tanda hidden" id="setTabTandaKendaraan"></span></button>
-          <button class="set-tab" data-tab="makanan" onclick="setTabPengaturan('makanan')">
-            <span class="set-tab-ikon">&#127860;</span>Makanan</button>
-          <button class="set-tab" data-tab="karyawan" onclick="setTabPengaturan('karyawan')">
-            <span class="set-tab-ikon">&#128119;</span>Karyawan</button>
-          <button class="set-tab" data-tab="shift" onclick="setTabPengaturan('shift')">
-            <span class="set-tab-ikon">&#8986;</span>Shift</button>
-          <button class="set-tab" data-tab="akun" onclick="setTabPengaturan('akun')">
-            <span class="set-tab-ikon">&#128272;</span>Akun</button>
+        {{-- Menu ala Pengaturan HP (permintaan owner 11/10), menggantikan
+             deretan lima tab: daftar di depan, tiap baris membuka halamannya
+             sendiri dengan tombol kembali. Kelompoknya tetap .set-grup di
+             bawah; yang tampil diatur setTabPengaturan() di kasir.js. --}}
+        <div class="cat-blok mpk-menu" id="setMenu">
+          <button class="mpk-baris" data-tab="kendaraan" onclick="setTabPengaturan('kendaraan')">
+            <span class="mpk-ikon">&#128663;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Kendaraan <span class="set-tab-tanda hidden" id="setTabTandaKendaraan"></span></span>
+              <span class="mpk-sub">Jenis kendaraan, daftar mobil, layanan cuci, dan add-on</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          <button class="mpk-baris" data-tab="makanan" onclick="setTabPengaturan('makanan')">
+            <span class="mpk-ikon">&#127860;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Makanan</span>
+              <span class="mpk-sub">Menu makanan &amp; minuman, stok, dan titip jual</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          <button class="mpk-baris" data-tab="karyawan" onclick="setTabPengaturan('karyawan')">
+            <span class="mpk-ikon">&#128119;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Karyawan</span>
+              <span class="mpk-sub">Bagi hasil upah, karyawan training, dan status pekerja</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          <button class="mpk-baris" data-tab="shift" onclick="setTabPengaturan('shift')">
+            <span class="mpk-ikon">&#8986;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Shift</span>
+              <span class="mpk-sub">Jam operasional kasir</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+          <button class="mpk-baris" data-tab="akun" onclick="setTabPengaturan('akun')">
+            <span class="mpk-ikon">&#128272;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Akun</span>
+              <span class="mpk-sub">Profil usaha, akun owner, dan akun kasir</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
+        </div>
+
+        <div class="mpk-kepala hidden" id="setKepala">
+          <button class="kembali" onclick="setTabPengaturan('menu')">&larr; Pengaturan</button>
+          <div class="mpk-judul-hal" id="setJudulHal"></div>
         </div>
 
         {{-- ================= KENDARAAN ================= --}}

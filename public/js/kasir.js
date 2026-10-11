@@ -551,7 +551,7 @@ function pergi(id){
   // membuka layar owner. Dibelokkan ke layar awalnya, bukan dibiarkan kosong.
   if(LAYAR_OWNER.includes(id) && ROLE!=="owner") id = layarAwal();
   if(id==="layarFnb") renderFnb();
-  if(id==="layarMenuFnb") renderMenuFnb(true);
+  if(id==="layarMenuFnb"){ halPengaturan = "menu"; renderMenuFnb(true); }   // selalu mulai dari menunya
   // Kalender Upah & potongan digambar renderPekerja() -> renderPenyesuaian(),
   // karena dropdown pekerjanya menumpang daftar pekerja yang dimuat di sana.
   if(id==="layarPekerja"){ bukaPk(null); renderPekerja(); }   // selalu mulai dari menunya
@@ -6310,15 +6310,24 @@ const TAB_PENGATURAN = ["kendaraan", "makanan", "karyawan", "shift", "akun"];
    selesai menyimpan — dan di sana melompat ke atas berarti owner yang baru
    mengubah stok menu ke-10 terlempar ke pucuk halaman dan harus menggulir
    turun lagi. */
+/* Sejak 11/10 berbentuk menu ala Pengaturan HP: "menu" = daftar di depan,
+   selain itu satu halaman kelompok dengan tombol kembali. Halaman yang
+   sedang dibuka diingat di halPengaturan (bukan localStorage lagi): masuk
+   layar Pengaturan selalu mulai dari menunya, tetapi menyimpan sesuatu —
+   yang memanggil renderMenuFnb() — tidak melempar owner keluar dari
+   halamannya. */
+let halPengaturan = "menu";
+const JUDUL_PENGATURAN = {kendaraan:"Kendaraan", makanan:"Makanan", karyawan:"Karyawan", shift:"Shift", akun:"Akun"};
 function setTabPengaturan(tab, gulirKeAtas = true){
-  if(!TAB_PENGATURAN.includes(tab)) tab = TAB_PENGATURAN[0];
-  document.querySelectorAll("#setTabs .set-tab").forEach(b =>
-    b.classList.toggle("aktif", b.dataset.tab === tab));
+  if(!TAB_PENGATURAN.includes(tab)) tab = "menu";
+  halPengaturan = tab;
+  $("setMenu").classList.toggle("hidden", tab !== "menu");
+  $("setKepala").classList.toggle("hidden", tab === "menu");
+  if(tab !== "menu") $("setJudulHal").textContent = JUDUL_PENGATURAN[tab];
   document.querySelectorAll(".set-grup").forEach(g =>
     g.classList.toggle("hidden", g.dataset.grup !== tab));
-  localStorage.setItem("kasirTabPengaturan", tab);
-  // Pindah tab = layar berganti isi; kalau posisi gulir dibiarkan, tab pendek
-  // seperti Shift terbuka di tengah-tengah halaman.
+  // Pindah halaman = layar berganti isi; kalau posisi gulir dibiarkan,
+  // halaman pendek seperti Shift terbuka di tengah-tengah.
   const layar = $("layarMenuFnb");
   if(gulirKeAtas && layar && !layar.classList.contains("hidden")) window.scrollTo({top:0, behavior:"smooth"});
 }
@@ -6364,7 +6373,7 @@ function gambarBagiHasil(){
           +   ' style="text-transform:none" oninput="bagiHasil.percent=this.value;gambarContohBagiHasil()"></div>'
           + '<div id="contohBagiHasil"></div>'
         : '<div class="cat-baris"><span>Nominal upah diatur per jenis kendaraan &amp; layanan.</span></div>'
-          + '<button class="btn-cetak-ulang" onclick="setTabPengaturan(\'kendaraan\')">&#128663; Atur di tab Kendaraan</button>')
+          + '<button class="btn-cetak-ulang" onclick="setTabPengaturan(\'kendaraan\')">&#128663; Atur di menu Kendaraan</button>')
     + '<button class="btn-catat" id="btnSimpanBagiHasil" onclick="simpanBagiHasil()"'
     +   ' style="background:var(--go);width:100%;margin-top:12px'+(berubah ? '' : ';opacity:.5')+'"'+(berubah ? '' : ' disabled')+'>'
     +   (berubah ? '&#10003; Simpan cara hitung' : '&#10003; Tersimpan')+'</button>';
@@ -6527,7 +6536,7 @@ let produkSemua = [], menuCari = "", menuFilter = "semua";
    mulai dari pucuk) dan setiap kali SELESAI MENYIMPAN sesuatu di layar itu
    (default false — posisi gulir owner dibiarkan apa adanya). */
 async function renderMenuFnb(gulirKeAtas = false){
-  setTabPengaturan(localStorage.getItem("kasirTabPengaturan") || "kendaraan", gulirKeAtas);
+  setTabPengaturan(halPengaturan, gulirKeAtas);
   try{
     renderKatalog();
     renderKendaraan();

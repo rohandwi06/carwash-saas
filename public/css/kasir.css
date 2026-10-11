@@ -222,6 +222,7 @@
     display:flex;align-items:center;justify-content:center;font-size:22px}
   .mpk-teks{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
   .mpk-judul{font-size:16px;font-weight:900}
+  .mpk-judul .set-tab-tanda{vertical-align:middle;margin-left:4px}
   .mpk-sub{font-size:13px;font-weight:600;color:var(--ink2);line-height:1.35}
   .mpk-panah{flex:0 0 auto;font-size:26px;font-weight:700;color:var(--ink2);line-height:1}
   .mpk-judul-hal{font-size:19px;font-weight:900;margin:6px 2px 2px}
