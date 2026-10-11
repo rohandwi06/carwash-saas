@@ -62,10 +62,12 @@ class DailyRuleTest extends TestCase
         ], $this->header('kasir'))->assertCreated()->json('data.id');
     }
 
+    /** Tanpa 'worker_ids' aturannya untuk semua pekerja; dengan itu, hanya untuk mereka. */
     private function aturan(array $isi): array
     {
-        return $this->postJson('/api/daily-rules', $isi + ['reason' => 'Uang makan'], $this->header())
-            ->assertCreated()->json('data');
+        $isi += ['reason' => 'Uang makan', 'all_workers' => ! isset($isi['worker_ids'])];
+
+        return $this->postJson('/api/daily-rules', $isi, $this->header())->assertCreated()->json('data');
     }
 
     private function rekap(): array
@@ -97,7 +99,7 @@ class DailyRuleTest extends TestCase
     {
         $andi = Worker::create(['name' => 'Andi']);
         $bayu = Worker::create(['name' => 'Bayu']);
-        $this->aturan(['type' => 'potongan', 'worker_id' => $andi->id, 'amount' => 5000, 'reason' => 'Cicilan kasbon']);
+        $this->aturan(['type' => 'potongan', 'worker_ids' => [$andi->id], 'amount' => 5000, 'reason' => 'Cicilan kasbon']);
 
         $id = $this->cucian($andi, $bayu);   // upah 12.000 -> 6.000 per orang
 
@@ -106,6 +108,54 @@ class DailyRuleTest extends TestCase
         $this->assertSame(WageAdjustment::POTONGAN, $potongan->type);
         $this->assertSame(Transaction::findOrFail($id)->book_id, $potongan->book_id, 'Menempel ke buku kas cuciannya.');
         $this->assertSame(12000 - 5000, $this->rekap()['wages']);
+    }
+
+    /** Koreksi owner 11/10: memilih beberapa pekerja sekaligus, bukan satu aturan per orang. */
+    public function test_satu_aturan_untuk_beberapa_pekerja_sekaligus(): void
+    {
+        $andi = Worker::create(['name' => 'Andi']);
+        $bayu = Worker::create(['name' => 'Bayu']);
+        $candra = Worker::create(['name' => 'Candra']);
+        $aturan = $this->aturan(['type' => 'kompensasi', 'worker_ids' => [$bayu->id, $andi->id], 'amount' => 10000]);
+
+        $this->assertFalse($aturan['all_workers']);
+        $this->assertSame(['Andi', 'Bayu'], array_column($aturan['workers'], 'name'));
+
+        $this->cucian($andi, $bayu, $candra);
+
+        $this->assertSame(['Andi', 'Bayu'], WorkerCompensation::orderBy('worker_id')->pluck('worker_name')->all(),
+            'Candra ikut kerja tapi tidak dipilih di aturannya.');
+        $this->assertSame(['Andi', 'Bayu'],
+            array_column($this->getJson('/api/daily-rules', $this->header())->assertOk()->json('data.0.workers'), 'name'));
+    }
+
+    public function test_mengganti_penerima_berlaku_untuk_hari_ini(): void
+    {
+        $andi = Worker::create(['name' => 'Andi']);
+        $bayu = Worker::create(['name' => 'Bayu']);
+        $aturan = $this->aturan(['type' => 'kompensasi', 'worker_ids' => [$andi->id], 'amount' => 10000]);
+        $this->cucian($andi, $bayu);
+        $this->assertSame(['Andi'], WorkerCompensation::pluck('worker_name')->all());
+
+        $this->patchJson('/api/daily-rules/'.$aturan['id'], ['all_workers' => false, 'worker_ids' => [$bayu->id]],
+            $this->header())->assertOk();
+        $this->assertSame(['Bayu'], WorkerCompensation::pluck('worker_name')->all());
+
+        $this->patchJson('/api/daily-rules/'.$aturan['id'], ['all_workers' => true], $this->header())->assertOk();
+        $this->assertSame(['Andi', 'Bayu'], WorkerCompensation::orderBy('worker_id')->pluck('worker_name')->all());
+    }
+
+    /** Aturan "potong kasbon Andi" tidak boleh jadi "potong semua orang" saat Andi dihapus. */
+    public function test_pekerja_pilihan_dihapus_tidak_melebar_ke_semua_pekerja(): void
+    {
+        $andi = Worker::create(['name' => 'Andi']);
+        $bayu = Worker::create(['name' => 'Bayu']);
+        $this->aturan(['type' => 'potongan', 'worker_ids' => [$andi->id], 'amount' => 5000, 'reason' => 'Cicilan kasbon']);
+
+        $andi->delete();
+        $this->cucian($bayu);
+
+        $this->assertSame(0, WageAdjustment::count());
     }
 
     public function test_aturan_baru_langsung_berlaku_untuk_yang_sudah_kerja_hari_ini(): void
@@ -238,13 +288,17 @@ class DailyRuleTest extends TestCase
 
     public function test_hanya_owner_dan_isian_wajib(): void
     {
-        $isi = ['type' => 'kompensasi', 'amount' => 10000, 'reason' => 'Uang makan'];
+        $isi = ['type' => 'kompensasi', 'amount' => 10000, 'reason' => 'Uang makan', 'all_workers' => true];
 
         $this->postJson('/api/daily-rules', $isi, $this->header('kasir'))->assertStatus(403);
         $this->getJson('/api/daily-rules', $this->header('kasir'))->assertStatus(403);
         $this->postJson('/api/daily-rules', ['amount' => 0] + $isi, $this->header())->assertStatus(422);
         $this->postJson('/api/daily-rules', ['reason' => ''] + $isi, $this->header())->assertStatus(422);
         $this->postJson('/api/daily-rules', ['type' => 'bonus'] + $isi, $this->header())->assertStatus(422);
+        // Bukan untuk semua, tapi tidak menyebut siapa: aturan yang tidak akan pernah mengenai siapa pun.
+        $this->postJson('/api/daily-rules', ['all_workers' => false] + $isi, $this->header())
+            ->assertStatus(422)->assertJsonValidationErrors('worker_ids');
+        $this->postJson('/api/daily-rules', ['all_workers' => false, 'worker_ids' => []] + $isi, $this->header())->assertStatus(422);
 
         $this->assertSame(0, DailyRule::count());
     }

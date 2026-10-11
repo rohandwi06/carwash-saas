@@ -15,9 +15,9 @@
 --  2. Menambah kolom nama pelanggan dan nomor telepon (boleh kosong) di
 --     `transactions` dan `transaction_drafts`.
 --  3. Membuat tabel `worker_compensations` (kompensasi karyawan).
---  4. Membuat tabel `daily_rules` dan `daily_rule_skips` (aturan otomatis
---     harian), dan menambah kolom penanda `rule_id` di `wage_adjustments`
---     dan `worker_compensations`.
+--  4. Membuat tabel `daily_rules`, `daily_rule_worker`, dan
+--     `daily_rule_skips` (aturan otomatis harian), dan menambah kolom
+--     penanda `rule_id` di `wage_adjustments` dan `worker_compensations`.
 --
 --  Tidak ada baris yang diubah atau dihapus. AMAN DIJALANKAN ULANG
 --  (IF NOT EXISTS). Sintaks khusus MariaDB.
@@ -72,22 +72,59 @@ CREATE TABLE IF NOT EXISTS `worker_compensations` (
 
 -- ---------- 4. Aturan otomatis harian ------------------------------
 -- Potongan upah / kompensasi yang dicatat sendiri tiap hari untuk pekerja
--- yang mengerjakan cucian hari itu. worker_id kosong = semua pekerja.
+-- yang mengerjakan cucian hari itu. all_workers = 1 berarti semua pekerja;
+-- 0 berarti hanya pekerja pilihan di `daily_rule_worker` (boleh beberapa).
 
 CREATE TABLE IF NOT EXISTS `daily_rules` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `type` VARCHAR(16) NOT NULL,
-  `worker_id` BIGINT UNSIGNED NULL,
+  `all_workers` TINYINT(1) NOT NULL DEFAULT '1',
   `amount` INT UNSIGNED NOT NULL,
   `reason` VARCHAR(160) NOT NULL,
   `is_active` TINYINT(1) NOT NULL DEFAULT '1',
   `start_date` DATE NOT NULL,
   `created_by` VARCHAR(255) NULL,
   `created_at` TIMESTAMP NULL,
-  `updated_at` TIMESTAMP NULL,
-  CONSTRAINT `daily_rules_worker_id_foreign`
+  `updated_at` TIMESTAMP NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `daily_rule_worker` (
+  `daily_rule_id` BIGINT UNSIGNED NOT NULL,
+  `worker_id` BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`daily_rule_id`, `worker_id`),
+  CONSTRAINT `daily_rule_worker_daily_rule_id_foreign`
+    FOREIGN KEY (`daily_rule_id`) REFERENCES `daily_rules` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `daily_rule_worker_worker_id_foreign`
     FOREIGN KEY (`worker_id`) REFERENCES `workers` (`id`) ON DELETE CASCADE
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Peralihan dari bentuk pertama tabel ini (11/10 siang: satu pekerja per
+-- aturan, di kolom `worker_id`). Hanya berpengaruh di database yang sempat
+-- menjalankan versi itu: aturannya dipindah ke bentuk baru, lalu kolom
+-- lamanya dibuang. Di database lain, semua langkah di bawah tidak mengubah
+-- apa pun.
+ALTER TABLE `daily_rules`
+  ADD COLUMN IF NOT EXISTS `all_workers` TINYINT(1) NOT NULL DEFAULT '1' AFTER `type`;
+
+SET @lama = (SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'worker_id');
+
+SET @langkah = IF(@lama > 0,
+  'INSERT IGNORE INTO `daily_rule_worker` (`daily_rule_id`, `worker_id`) SELECT `id`, `worker_id` FROM `daily_rules` WHERE `worker_id` IS NOT NULL',
+  'DO 0');
+PREPARE jalankan FROM @langkah;
+EXECUTE jalankan;
+DEALLOCATE PREPARE jalankan;
+
+SET @langkah = IF(@lama > 0,
+  'UPDATE `daily_rules` SET `all_workers` = 0 WHERE `worker_id` IS NOT NULL',
+  'DO 0');
+PREPARE jalankan FROM @langkah;
+EXECUTE jalankan;
+DEALLOCATE PREPARE jalankan;
+
+ALTER TABLE `daily_rules` DROP FOREIGN KEY IF EXISTS `daily_rules_worker_id_foreign`;
+ALTER TABLE `daily_rules` DROP COLUMN IF EXISTS `worker_id`;
 
 -- Catatan otomatis yang dihapus owner untuk satu hari: jangan dibuat lagi.
 CREATE TABLE IF NOT EXISTS `daily_rule_skips` (
@@ -130,6 +167,8 @@ FROM (
     SELECT '2026_10_11_000002_create_worker_compensations_table'
     UNION ALL
     SELECT '2026_10_11_000003_create_daily_rules_tables'
+    UNION ALL
+    SELECT '2026_10_11_000004_add_workers_to_daily_rules'
 ) m
 WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 
@@ -139,9 +178,10 @@ WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 --   1-2. cara bayar menyebut enum('cash','tf','qris')
 --   3-4. masing-masing 2 baris kolom customer_
 --   5.   10 baris kolom tabel kompensasi (termasuk rule_id)
---   6.   10 baris kolom tabel aturan harian
---   7.   1 baris kolom rule_id di wage_adjustments
---   8.   4 baris migrasi
+--   6.   10 baris kolom tabel aturan harian: ada all_workers, TIDAK ada worker_id
+--   7.   2 baris kolom tabel pekerja pilihan aturan
+--   8.   1 baris kolom rule_id di wage_adjustments
+--   9.   5 baris migrasi
 
 SHOW COLUMNS FROM `transactions` LIKE 'payment_method';
 SHOW COLUMNS FROM `fnb_sales` LIKE 'payment_method';
@@ -149,5 +189,6 @@ SHOW COLUMNS FROM `transactions` LIKE 'customer_%';
 SHOW COLUMNS FROM `transaction_drafts` LIKE 'customer_%';
 SHOW COLUMNS FROM `worker_compensations`;
 SHOW COLUMNS FROM `daily_rules`;
+SHOW COLUMNS FROM `daily_rule_worker`;
 SHOW COLUMNS FROM `wage_adjustments` LIKE 'rule_id';
 SELECT `migration`, `batch` FROM `migrations` WHERE `migration` LIKE '2026_10_1%';

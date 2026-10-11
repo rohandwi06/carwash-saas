@@ -1936,11 +1936,33 @@ async function renderAturan(){
     : '<div class="cat-kosong">Belum ada aturan otomatis.</div>';
 }
 
+/** "Semua pekerja", atau nama-nama pekerja pilihan aturan itu. */
+function siapaAturan(a){
+  if(a.all_workers) return "Semua pekerja";
+  const nama = (a.workers || []).map(w => w.name);
+  return nama.length ? nama.join(", ") : "Pekerjanya sudah dihapus";
+}
+
+/* Pilihan "Untuk siapa" di jendela aturan: ketuk untuk memilih BEBERAPA pekerja
+   sekaligus (koreksi owner 11/10 — dulu dropdown satu nama, jadi aturan yang
+   sama harus dibuat berkali-kali). "Semua pekerja" dan nama-nama saling
+   menggantikan: memilih yang satu melepas yang lain. */
+function pilihPenerimaAturan(tombol){
+  const wadah = tombol.parentElement;
+  if(tombol.dataset.id === "semua"){
+    wadah.querySelectorAll(".btn-hadir").forEach(b => b.classList.toggle("aktif", b === tombol));
+  }else{
+    tombol.classList.toggle("aktif");
+    wadah.querySelector('[data-id="semua"]').classList.remove("aktif");
+  }
+  Swal.resetValidationMessage();
+}
+
 function barisAturan(a){
   return '<div class="aturan-baris'+(a.is_active ? '' : ' mati')+'">'
     + '<div class="aturan-atas">'
     +   '<div class="aturan-isi">'
-    +     '<div class="aturan-siapa">'+(a.worker ? esc(a.worker.name) : "Semua pekerja")+'</div>'
+    +     '<div class="aturan-siapa">'+esc(siapaAturan(a))+'</div>'
     +     '<div class="aturan-jumlah">'+rp(a.amount)+' per orang, tiap hari kerja</div>'
     +     '<div class="aturan-ket">'+esc(a.reason)+'</div>'
     +   '</div>'
@@ -1964,15 +1986,20 @@ async function formAturan(id){
   if(!jenis) return;
   const lama = id ? aturanSemua.find(a => a.id === id) : null;
   const komp = jenis === "kompensasi";
+  // Aturan baru: belum ada yang terpilih, supaya "Semua pekerja" dipilih
+  // dengan sadar dan bukan karena lupa mengganti bawaannya.
+  const terpilih = new Set(lama && !lama.all_workers ? (lama.workers || []).map(w => w.id) : []);
 
   const {value: hasil} = await Swal.fire({
     title: (lama ? "Ubah" : "Tambah")+" "+(komp ? "kompensasi" : "potongan")+" otomatis",
     html:
-        '<div class="sw-field-label">Untuk siapa *</div>'
-      + '<select id="swAturanPekerja" class="sw-select">'
-      +   '<option value="">Semua pekerja yang kerja hari itu</option>'
-      +   pekerja.map(p => '<option value="'+p.id+'"'+(lama && lama.worker_id === p.id ? ' selected' : '')+'>'+esc(p.name)+'</option>').join("")
-      + '</select>'
+        '<div class="sw-field-label">Untuk siapa * <span class="waktu">boleh pilih beberapa</span></div>'
+      + '<div class="pilih-banyak" id="swAturanPekerja">'
+      +   '<button type="button" class="btn-hadir'+(lama && lama.all_workers ? ' aktif' : '')+'" data-id="semua"'
+      +     ' onclick="pilihPenerimaAturan(this)">Semua pekerja</button>'
+      +   pekerja.map(p => '<button type="button" class="btn-hadir'+(terpilih.has(p.id) ? ' aktif' : '')+'" data-id="'+p.id+'"'
+      +     ' onclick="pilihPenerimaAturan(this)">'+esc(p.name)+'</button>').join("")
+      + '</div>'
       + '<div class="sw-field-label">Jumlah per orang per hari (Rp) *</div>'
       + '<input id="swAturanJumlah" class="swal2-input" type="number" inputmode="numeric" min="1" value="'+(lama ? lama.amount : "")+'">'
       + '<div class="sw-field-label">Keterangan *</div>'
@@ -1985,11 +2012,14 @@ async function formAturan(id){
     width: 460,
     preConfirm: () => {
       const ambil = i => document.getElementById(i).value.trim();
+      const aktif = [...document.querySelectorAll("#swAturanPekerja .btn-hadir.aktif")].map(b => b.dataset.id);
       const amount = parseInt(ambil("swAturanJumlah"), 10);
       const reason = ambil("swAturanAlasan");
+      if(!aktif.length) return Swal.showValidationMessage("Pilih pekerjanya, atau Semua pekerja");
       if(!(amount > 0)) return Swal.showValidationMessage("Isi jumlahnya");
       if(!reason) return Swal.showValidationMessage("Isi keterangannya");
-      return {worker_id: ambil("swAturanPekerja") ? +ambil("swAturanPekerja") : null, amount, reason};
+      const semua = aktif.includes("semua");
+      return {all_workers: semua, worker_ids: semua ? [] : aktif.map(Number), amount, reason};
     },
   });
   if(!hasil) return;
@@ -1999,8 +2029,13 @@ async function formAturan(id){
       ? api("/daily-rules/"+id, {method:"PATCH", body:hasil})
       : api("/daily-rules", {method:"POST", body:{...hasil, type:jenis}}));
     await segarkanSesudahAturan();
-    Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2400,
-      title: lama ? "Aturan diperbarui" : "Aturan aktif mulai hari ini"});
+    // Selagi daftar dimuat ulang, owner bisa saja sudah membuka jendela lain
+    // (mis. langsung menambah aturan berikutnya) — pemberitahuan ini tidak
+    // boleh menutupnya.
+    if(!Swal.isVisible()){
+      Swal.fire({toast:true, position:"top-end", icon:"success", showConfirmButton:false, timer:2400,
+        title: lama ? "Aturan diperbarui" : "Aturan aktif mulai hari ini"});
+    }
   }catch(e){ gagal(e); }
 }
 

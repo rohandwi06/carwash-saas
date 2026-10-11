@@ -56,7 +56,8 @@ class DailyRuleService
                 return;
             }
 
-            $aturan = DailyRule::where('is_active', true)
+            $aturan = DailyRule::with('workers:workers.id')
+                ->where('is_active', true)
                 ->whereDate('start_date', '<=', $date)
                 ->orderBy('id')->get();
 
@@ -72,9 +73,11 @@ class DailyRuleService
                 $sudah = $this->modelUntuk($a)::where('rule_id', $a->id)
                     ->whereDate('date', $date)->pluck('worker_id')->flip();
 
-                $sasaran = $a->worker_id === null
+                // Aturan untuk pekerja pilihan yang semuanya sudah dihapus tidak
+                // mengenai siapa pun — bukan berubah jadi "semua pekerja".
+                $sasaran = $a->all_workers
                     ? array_keys($kerja)
-                    : (isset($kerja[$a->worker_id]) ? [$a->worker_id] : []);
+                    : array_values(array_intersect($a->workers->pluck('id')->all(), array_keys($kerja)));
 
                 foreach ($sasaran as $id) {
                     if ($sudah->has($id) || $dilewati->has($a->id.':'.$id)) {
@@ -86,22 +89,29 @@ class DailyRuleService
         });
     }
 
-    /** Aturan baru: berlaku mulai hari ini, termasuk untuk yang sudah kerja hari ini. */
+    /**
+     * Aturan baru: berlaku mulai hari ini, termasuk untuk yang sudah kerja hari
+     * ini. Satu aturan bisa untuk semua pekerja (all_workers) atau beberapa
+     * pekerja pilihan sekaligus (worker_ids).
+     */
     public function buat(array $data, ?string $oleh): DailyRule
     {
-        $aturan = DailyRule::create([
-            'type'       => $data['type'],
-            'worker_id'  => $data['worker_id'] ?? null,
-            'amount'     => $data['amount'],
-            'reason'     => $data['reason'],
-            'is_active'  => true,
-            'start_date' => now()->toDateString(),
-            'created_by' => $oleh,
-        ]);
+        return DB::transaction(function () use ($data, $oleh) {
+            $aturan = DailyRule::create([
+                'type'        => $data['type'],
+                'all_workers' => $data['all_workers'],
+                'amount'      => $data['amount'],
+                'reason'      => $data['reason'],
+                'is_active'   => true,
+                'start_date'  => now()->toDateString(),
+                'created_by'  => $oleh,
+            ]);
+            $aturan->workers()->sync($data['all_workers'] ? [] : $data['worker_ids']);
 
-        $this->sinkron(now()->toDateString());
+            $this->sinkron(now()->toDateString());
 
-        return $aturan->load('worker:id,name');
+            return $this->lengkap($aturan);
+        });
     }
 
     /**
@@ -117,16 +127,22 @@ class DailyRuleService
         return DB::transaction(function () use ($aturan, $data) {
             $dinyalakan = array_key_exists('is_active', $data) && $data['is_active'] && ! $aturan->is_active;
 
-            $aturan->fill(array_intersect_key($data, array_flip(['worker_id', 'amount', 'reason', 'is_active'])));
+            $aturan->fill(array_intersect_key($data, array_flip(['all_workers', 'amount', 'reason', 'is_active'])));
             if ($dinyalakan) {
                 $aturan->start_date = now()->toDateString();
             }
             $aturan->save();
 
+            // Penerimanya ikut diganti hanya bila dikirim (controller memastikan
+            // all_workers dan worker_ids selalu datang berpasangan).
+            if (array_key_exists('all_workers', $data)) {
+                $aturan->workers()->sync($aturan->all_workers ? [] : $data['worker_ids']);
+            }
+
             $this->tarikHariIni($aturan);
             $this->sinkron(now()->toDateString());
 
-            return $aturan->load('worker:id,name');
+            return $this->lengkap($aturan);
         });
     }
 
@@ -143,6 +159,7 @@ class DailyRuleService
             $this->modelUntuk($aturan)::where('rule_id', $aturan->id)->update(['rule_id' => null]);
             DailyRuleSkip::where('rule_id', $aturan->id)->delete();
 
+            $aturan->workers()->detach();
             $aturan->delete();
         });
     }
@@ -163,6 +180,12 @@ class DailyRuleService
             'worker_id' => $entri->worker_id,
             'date'      => $entri->date->toDateString(),
         ]);
+    }
+
+    /** Aturan beserta nama pekerja pilihannya — bentuk yang dikirim ke layar. */
+    public function lengkap(DailyRule $aturan): DailyRule
+    {
+        return $aturan->load(['workers' => fn ($q) => $q->select('workers.id', 'workers.name')->orderBy('workers.name')]);
     }
 
     /**
