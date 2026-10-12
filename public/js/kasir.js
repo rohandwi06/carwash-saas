@@ -998,6 +998,7 @@ function dataResiCucian(trx){
     kasir: trx.created_by,
     catatan: "Simpan resi untuk ambil kendaraan",
     telepon: trx.customer_phone || "",
+    jenis: "c", id: trx.id,
   };
 }
 /* Isi resi penjualan makanan/minuman tanpa cuci. */
@@ -1012,6 +1013,7 @@ function dataResiFnb(sale){
     bayar: sale.payment_method,
     kasir: sale.created_by,
     catatan: "",
+    jenis: "f", id: sale.id,
   };
 }
 /**
@@ -1061,6 +1063,7 @@ function lihatResi(data, salinan){
   $("resiJudul").textContent = "Resi "+data.nomor+(salinan? " · salinan" : "");
   $("resiWaNomor").value = data.telepon || "";
   $("resiWaPesan").textContent = "";
+  siapkanTautanResi(resiAktif);
   $("resiOverlay").classList.add("buka");
 }
 function tutupResi(){ $("resiOverlay").classList.remove("buka"); }
@@ -1070,12 +1073,15 @@ function cetakResi(){
 }
 
 /* ---------- KIRIM RESI KE WHATSAPP ----------
-   Membuka WhatsApp ke nomor pelanggan dengan isi resi sudah tertulis; kasir
-   tinggal menekan kirim di sana. Nomornya diambil dari transaksi kalau
-   dicatat, dan bisa diketik/diganti di jendela resi — hanya dipakai untuk
-   mengirim, tidak mengubah catatan transaksinya.
+   Membuka WhatsApp ke nomor pelanggan dengan pesan berisi TAUTAN resi PDF;
+   kasir tinggal menekan kirim di sana. WhatsApp tidak bisa dititipi berkas
+   lewat tautan ke nomor, jadi yang dikirim alamat PDF-nya (dibuat server,
+   bertanda tangan, bisa dibuka pelanggan tanpa login).
 
-   Nomor ditulis kasir dengan cara lokal (0812…), sedangkan wa.me hanya
+   Nomornya diambil dari transaksi kalau dicatat, dan bisa diketik/diganti di
+   jendela resi — hanya dipakai untuk mengirim, tidak mengubah catatannya. */
+
+/* Nomor ditulis kasir dengan cara lokal (0812…), sedangkan wa.me hanya
    menerima bentuk internasional tanpa tanda apa pun (62812…). */
 function nomorWa(teks){
   let d = String(teks||"").replace(/\D/g, "");
@@ -1083,37 +1089,40 @@ function nomorWa(teks){
   else if(d.startsWith("8")) d = "62"+d;
   return d.length>=10 && d.length<=15 ? d : "";
 }
-/* Teksnya dibaca dari pratinjau, bukan disusun ulang: yang diterima
-   pelanggan jadi persis yang terlihat kasir, termasuk tanda SALINAN. */
-function teksResi(){
-  const isi = el => [...el.childNodes].map(n => n.nodeName==="BR" ? "\n" : n.textContent).join("").trim();
-  const baris = [];
-  for(const el of $("resiPreview").children){
-    if(el.classList.contains("r-garis")){ baris.push("--------------------------"); continue; }
-    if(el.classList.contains("r-baris")){
-      const [kiri, kanan] = [...el.children].map(isi);
-      // Baris tanggal & jam tidak punya label — jangan diberi titik dua.
-      const t = /^\d/.test(kiri) ? kiri+" "+kanan : kiri+": "+kanan;
-      baris.push(el.classList.contains("r-besar") ? "*"+t+"*" : t);
-      continue;
-    }
-    const t = isi(el);
-    if(!t) continue;
-    baris.push(el.classList.contains("r-judul") ? "*"+t+"*"
-             : el.classList.contains("r-salinan") ? "(SALINAN)" : t);
-  }
-  return baris.join("\n");
+/* Tautannya diminta begitu resi dibuka, bukan saat tombol ditekan: browser
+   hanya mengizinkan membuka jendela baru langsung dari ketukan, dan menunggu
+   jawaban server di antaranya membuat WhatsApp diblokir sebagai pop-up. */
+async function siapkanTautanResi(r){
+  if(!r.data.id) return;
+  try{
+    const d = await api("/receipts/"+r.data.jenis+"/"+r.data.id+"/link");
+    r.tautan = d.url;
+  }catch(e){ r.galatTautan = e.message || "Tautan resi gagal dibuat."; }
 }
 function kirimResiWa(){
   if(!resiAktif) return;
+  const pesan = t => { $("resiWaPesan").textContent = t; };
   const no = nomorWa($("resiWaNomor").value);
   if(!no){
-    $("resiWaPesan").textContent = "Isi nomor WhatsApp pelanggan dulu, mis. 081234567890.";
+    pesan("Isi nomor WhatsApp pelanggan dulu, mis. 081234567890.");
     $("resiWaNomor").focus();
     return;
   }
-  $("resiWaPesan").textContent = "";
-  window.open("https://wa.me/"+no+"?text="+encodeURIComponent(teksResi()), "_blank", "noopener");
+  if(!resiAktif.tautan){
+    if(resiAktif.galatTautan){
+      pesan(resiAktif.galatTautan+" Coba tekan lagi.");
+      resiAktif.galatTautan = "";
+      siapkanTautanResi(resiAktif);
+    }else pesan("Tautan resi sedang disiapkan — tekan lagi sebentar lagi.");
+    return;
+  }
+  pesan("");
+  const d = resiAktif.data;
+  const teks = "*"+USAHA.name+"*\n"
+    + "Resi "+d.nomor+" — total "+rp(d.belanja + (d.tip||0))+"\n\n"
+    + "Lihat resi (PDF):\n"+resiAktif.tautan+"\n\n"
+    + "Terima kasih!";
+  window.open("https://wa.me/"+no+"?text="+encodeURIComponent(teks), "_blank", "noopener");
 }
 
 /* Layar Transaksi Tersimpan: resi asli, bukan salinan. */

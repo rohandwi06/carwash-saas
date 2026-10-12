@@ -13,6 +13,7 @@ use App\Http\Controllers\FnbSaleController;
 use App\Http\Controllers\OwnerAccountController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\TraineeWageController;
@@ -105,6 +106,10 @@ Route::middleware('pin.auth')->group(function () {
         // Kasir mengajukan pembatalan, owner membatalkan langsung — sama
         // seperti /transactions/{id}/void. Persetujuannya di grup owner.
         Route::post('/fnb-sales/{fnbSale}/void', [FnbSaleController::class, 'void']);
+
+        // Tautan resi PDF untuk dikirim ke WhatsApp pelanggan. Tautannya sendiri
+        // dibuka tanpa login (routes/web.php) dan dijaga tanda tangan.
+        Route::get('/receipts/{jenis}/{id}/link', [ReceiptController::class, 'link'])->whereNumber('id');
 
         // Draft F&B: catat pesanan dulu, penjualannya disimpan belakangan
         Route::get('/fnb-drafts', [FnbDraftController::class, 'index']);
