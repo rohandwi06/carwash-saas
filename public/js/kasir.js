@@ -997,6 +997,7 @@ function dataResiCucian(trx){
     bayar: trx.payment_method,
     kasir: trx.created_by,
     catatan: "Simpan resi untuk ambil kendaraan",
+    telepon: trx.customer_phone || "",
   };
 }
 /* Isi resi penjualan makanan/minuman tanpa cuci. */
@@ -1058,12 +1059,61 @@ function lihatResi(data, salinan){
   isiResi(data, salinan);
   $("resiPreview").innerHTML = $("resi").innerHTML;
   $("resiJudul").textContent = "Resi "+data.nomor+(salinan? " · salinan" : "");
+  $("resiWaNomor").value = data.telepon || "";
+  $("resiWaPesan").textContent = "";
   $("resiOverlay").classList.add("buka");
 }
 function tutupResi(){ $("resiOverlay").classList.remove("buka"); }
 function cetakResi(){
   if(resiAktif) isiResi(resiAktif.data, resiAktif.salinan);
   window.print();
+}
+
+/* ---------- KIRIM RESI KE WHATSAPP ----------
+   Membuka WhatsApp ke nomor pelanggan dengan isi resi sudah tertulis; kasir
+   tinggal menekan kirim di sana. Nomornya diambil dari transaksi kalau
+   dicatat, dan bisa diketik/diganti di jendela resi — hanya dipakai untuk
+   mengirim, tidak mengubah catatan transaksinya.
+
+   Nomor ditulis kasir dengan cara lokal (0812…), sedangkan wa.me hanya
+   menerima bentuk internasional tanpa tanda apa pun (62812…). */
+function nomorWa(teks){
+  let d = String(teks||"").replace(/\D/g, "");
+  if(d.startsWith("0")) d = "62"+d.slice(1);
+  else if(d.startsWith("8")) d = "62"+d;
+  return d.length>=10 && d.length<=15 ? d : "";
+}
+/* Teksnya dibaca dari pratinjau, bukan disusun ulang: yang diterima
+   pelanggan jadi persis yang terlihat kasir, termasuk tanda SALINAN. */
+function teksResi(){
+  const isi = el => [...el.childNodes].map(n => n.nodeName==="BR" ? "\n" : n.textContent).join("").trim();
+  const baris = [];
+  for(const el of $("resiPreview").children){
+    if(el.classList.contains("r-garis")){ baris.push("--------------------------"); continue; }
+    if(el.classList.contains("r-baris")){
+      const [kiri, kanan] = [...el.children].map(isi);
+      // Baris tanggal & jam tidak punya label — jangan diberi titik dua.
+      const t = /^\d/.test(kiri) ? kiri+" "+kanan : kiri+": "+kanan;
+      baris.push(el.classList.contains("r-besar") ? "*"+t+"*" : t);
+      continue;
+    }
+    const t = isi(el);
+    if(!t) continue;
+    baris.push(el.classList.contains("r-judul") ? "*"+t+"*"
+             : el.classList.contains("r-salinan") ? "(SALINAN)" : t);
+  }
+  return baris.join("\n");
+}
+function kirimResiWa(){
+  if(!resiAktif) return;
+  const no = nomorWa($("resiWaNomor").value);
+  if(!no){
+    $("resiWaPesan").textContent = "Isi nomor WhatsApp pelanggan dulu, mis. 081234567890.";
+    $("resiWaNomor").focus();
+    return;
+  }
+  $("resiWaPesan").textContent = "";
+  window.open("https://wa.me/"+no+"?text="+encodeURIComponent(teksResi()), "_blank", "noopener");
 }
 
 /* Layar Transaksi Tersimpan: resi asli, bukan salinan. */

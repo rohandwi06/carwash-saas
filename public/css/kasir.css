@@ -957,6 +957,14 @@
   .resi-kertas .r-baris span:last-child{text-align:right}
   .resi-kertas .r-besar{font-size:18px;font-weight:900}
   .resi-kertas .r-salinan{font-size:16px;font-weight:900;letter-spacing:3px;margin-top:6px}
+  /* Kirim resi ke WhatsApp: isian nomor + tombol, di bawah Cetak Resi. */
+  .resi-wa{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .resi-wa input{flex:1 1 150px;min-width:0;font-size:16px;font-weight:800;padding:12px 14px;
+    border:2px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);box-sizing:border-box}
+  .resi-wa input:focus{outline:none;border-color:var(--water)}
+  .resi-wa .btn-catat{flex:1 1 170px;background:#1FA855;margin:0;width:auto}
+  .resi-wa-pesan{font-size:13px;font-weight:700;color:var(--danger);margin-top:6px}
+  .resi-wa-pesan:empty{display:none}
 
   /* ---- Range Tanggal UI ---- */
   .range-inputs{display:flex;flex-direction:column;gap:10px}

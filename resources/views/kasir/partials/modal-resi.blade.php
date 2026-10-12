@@ -13,5 +13,14 @@
       <div class="resi-kertas" id="resiPreview"></div>
       <button class="btn-catat" style="background:var(--go);width:100%" onclick="cetakResi()">
         &#128424;&#65039; Cetak Resi</button>
+      {{-- Nomor terisi sendiri kalau transaksinya mencatat telepon pelanggan;
+           kalau tidak, kasir mengetiknya di sini. --}}
+      <div class="resi-wa">
+        <input id="resiWaNomor" type="tel" inputmode="tel" autocomplete="off" maxlength="20"
+               placeholder="No. WhatsApp pelanggan" aria-label="Nomor WhatsApp pelanggan"
+               oninput="rapikanTelepon(this)">
+        <button class="btn-catat" onclick="kirimResiWa()">&#128172; Kirim ke WhatsApp</button>
+      </div>
+      <div class="resi-wa-pesan" id="resiWaPesan"></div>
     </div>
   </div>
