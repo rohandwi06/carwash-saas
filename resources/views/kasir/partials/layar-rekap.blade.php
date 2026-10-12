@@ -56,8 +56,8 @@
           <div id="rekapSetoran"></div>
         </div>
         <div class="stat-grid">
-          {{-- "Omzet" bukan "Pendapatan": angkanya sudah dikurangi
-               pengeluaran, jadi bukan lagi sekadar uang yang masuk. --}}
+          {{-- Omzet = uang masuk kotor (cucian + F&B + tip), tanpa dikurangi
+               pengeluaran; sama dengan baris UANG MASUK di kartu atas. --}}
           {{-- Bisa dibuka: omzet dipecah Cash / TF / QRIS (gambarOmzetRekap
                di kasir.js). --}}
           <div class="stat masuk stat-buka" id="statOmzet" onclick="bukaTutupOmzet()">

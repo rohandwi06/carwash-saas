@@ -224,13 +224,10 @@ class BookkeepingService
                 'remaining_balance' => $b->opening_balance !== null
                     ? $b->opening_balance - $pengeluaranBuku
                     : null,
-                // Omzet bersih buku ini: uang masuk dikurangi pengeluaran yang
-                // dicatat di buku yang sama. Pengeluaran bertanggal lampau
-                // tidak punya book_id (lihat ExpenseController::store), jadi
-                // tidak menempel ke buku mana pun — itu memang disengaja.
+                // Omzet buku ini: uang masuk kotor (cucian + F&B + tip), tanpa
+                // dikurangi pengeluaran - pengeluarannya ada di 'expenses'.
                 'omzet'    => (int) $t->sum('total') + (int) $f->sum('total')
-                              + (int) $t->sum('tip') + (int) $f->sum('tip')
-                              - (int) $k->sum('amount'),
+                              + (int) $t->sum('tip') + (int) $f->sum('tip'),
                 'cashiers' => $kasir,
                 // Buku yang masih terbuka belum punya angka beku — dihitung
                 // hidup dari data yang sama seperti CashBookService::cashAmount(),
@@ -347,15 +344,17 @@ class BookkeepingService
 
         ksort($byDate);
         $days = collect(array_values($byDate))->map(function (array $d) {
-            // Omzet = uang masuk DIKURANGI pengeluaran — lihat catatan di
-            // dailyRecap(). Laba ditulis lewat omzet supaya pengeluaran tidak
-            // terpotong dua kali; hasilnya sama dengan rumus lama.
-            $d['omzet']  = $d['total'] + $d['tip'] + $d['fnb_total']
+            // Omzet = uang masuk KOTOR: cucian + F&B + tip, TANPA dikurangi
+            // pengeluaran (keputusan owner 2026-10-12). Angkanya sama dengan
+            // baris UANG MASUK di kartu Rekap dan Pembukuan.
+            $d['omzet']  = $d['total'] + $d['tip'] + $d['fnb_total'];
+            // Laba tidak berubah nilainya: yang dulu dipotong lewat omzet
+            // sekarang dipotong di sini. Kompensasi karyawan dari owner,
+            // tidak keluar dari laci, tapi tetap memotong laba.
+            $d['profit'] = $d['omzet']
                 - ($d['expenses'] - $d['consignor_payout'])   // setoran bukan biaya
-                - $d['consignor_share'];                      // hak penitip, bukan pendapatan
-            // Kompensasi karyawan memotong laba, bukan omzet: uangnya dari
-            // owner, tidak keluar dari laci.
-            $d['profit'] = $d['omzet'] - $d['wages'] - $d['compensation'];
+                - $d['consignor_share']                       // hak penitip, bukan pendapatan
+                - $d['wages'] - $d['compensation'];
             return $d;
         });
 

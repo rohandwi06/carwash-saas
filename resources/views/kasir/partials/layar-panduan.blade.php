@@ -117,8 +117,9 @@
           <details class="pd-item">
             <summary>Pengeluaran mengurangi apa?</summary>
             <div class="pd-isi">
-              <p>Pengeluaran langsung memotong <b>omzet</b>, jadi angka yang Anda lihat di Rekap
-                 sudah bersih. Tidak perlu dikurangi lagi di kepala.</p>
+              <p>Pengeluaran memotong <b>laba bersih</b>, bukan omzet. <b>Omzet</b> adalah seluruh
+                 uang masuk hari itu (cucian + F&amp;B + tip) sebelum dikurangi apa pun; angka
+                 setelah pengeluaran dan upah ada di <b>Laba Bersih</b>.</p>
               <p>Pengeluaran masuk ke tanggal yang sedang aktif di layar. Kalau Anda sedang
                  membuka tanggal lain di kalender, catatannya masuk ke tanggal <b>itu</b> —
                  bukan hari ini. Tanggalnya selalu ditulis di atas form.</p>

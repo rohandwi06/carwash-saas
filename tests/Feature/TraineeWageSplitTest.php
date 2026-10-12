@@ -57,6 +57,32 @@ class TraineeWageSplitTest extends TestCase
         $this->assertSame([7500, 7500], $h['senior']);
     }
 
+    /**
+     * Keputusan owner 2026-10-12: sisa pembagian diberikan ke pekerja pertama,
+     * supaya jumlahnya tepat sama dengan upah cuciannya (dulu Rp 100.000
+     * bertiga jadi 3 x 33.333 dan Rp 1 hilang ke laba).
+     */
+    public function test_sisa_pembagian_untuk_pekerja_pertama(): void
+    {
+        $h = $this->bagi(100000, 0, 3, 0);
+        $this->assertSame([33334, 33333, 33333], $h['senior']);
+        $this->assertSame(100000, $h['total']);
+
+        $h = $this->bagi(50000, 0, 7, 0);
+        $this->assertSame([7148, 7142, 7142, 7142, 7142, 7142, 7142], $h['senior']);
+        $this->assertSame(50000, $h['total']);
+    }
+
+    /** Dengan anak training, sisa bagian senior jatuh ke senior pertama. */
+    public function test_sisa_bagian_senior_untuk_senior_pertama(): void
+    {
+        $h = $this->bagi(50000, 3000, 3, 1);
+
+        $this->assertSame([3000], $h['training']);
+        $this->assertSame([15668, 15666, 15666], $h['senior']);
+        $this->assertSame(50000, $h['total']);
+    }
+
     /** Training sendirian tetap hanya dapat jatah training; sisanya milik owner. */
     public function test_training_sendirian_hanya_dapat_jatahnya(): void
     {

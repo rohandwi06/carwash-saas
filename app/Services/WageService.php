@@ -96,8 +96,8 @@ class WageService
      *            tidak pernah ikut: tip sudah milik pekerja, F&B bukan kerja
      *            mereka (keputusan owner 2026-10-09).
      *
-     * Pecahan rupiah dibuang (intdiv), sama seperti pembagian rata di
-     * bagiUpah(): sisanya tinggal di owner, tidak dibulatkan ke atas.
+     * Pecahan rupiah dari persenan dibuang (intdiv), tidak dibulatkan ke
+     * atas. Jatah ini lalu dibagi habis ke pekerjanya di bagiUpah().
      */
     public function jatahFor(string $category, string $service, int $totalCuci, ?string $date = null): int
     {
@@ -201,6 +201,12 @@ class WageService
      * senior tidak mungkin dapat Rp 0 pada cucian bertarif kecil (mis. motor
      * Rp 5.000 dengan jatah training Rp 5.000).
      *
+     * SISA PEMBAGIAN (keputusan owner 2026-10-12): rupiah yang tidak habis
+     * dibagi rata diberikan ke pekerja PERTAMA dalam daftar (yang pertama
+     * dipilih kasir), supaya jumlah upah semua pekerja tepat sama dengan
+     * jatahnya. Rp 100.000 bertiga = 33.334 + 33.333 + 33.333, bukan
+     * 3 x 33.333 dengan Rp 1 yang hilang ke laba.
+     *
      * @param  int         $jatah          upah cucian yang dibagikan
      * @param  int         $jatahTraining  upah SETIAP anak training utk kendaraan+layanan ini
      * @param  array<int>  $semua          id semua pekerja pada transaksi
@@ -213,20 +219,31 @@ class WageService
         $training = array_values(array_intersect($training, $semua));
         $senior = array_values(array_diff($semua, $training));
 
-        if (count($training) === 0) {
-            $rata = intdiv($jatah, max(1, count($semua)));
+        if (count($semua) === 0) {
+            return [];
+        }
 
-            return array_fill_keys($semua, $rata);
+        if (count($training) === 0) {
+            $rata = intdiv($jatah, count($semua));
+            $hasil = array_fill_keys($semua, $rata);
+            $hasil[$semua[0]] += $jatah - $rata * count($semua);
+
+            return $hasil;
         }
 
         $upahTraining = min($jatahTraining, intdiv($jatah, count($semua)));
 
-        $sisa = $jatah - ($upahTraining * count($training));
-        $upahSenior = count($senior) > 0 ? intdiv(max(0, $sisa), count($senior)) : 0;
+        $sisa = max(0, $jatah - ($upahTraining * count($training)));
+        $upahSenior = count($senior) > 0 ? intdiv($sisa, count($senior)) : 0;
 
         $hasil = [];
         foreach ($semua as $id) {
             $hasil[$id] = in_array($id, $training, true) ? $upahTraining : $upahSenior;
+        }
+        // Hanya bagian senior yang dibagi habis. Kalau semuanya training,
+        // selisihnya memang tidak dibagikan (lihat catatan di atas).
+        if (count($senior) > 0) {
+            $hasil[$senior[0]] += $sisa - $upahSenior * count($senior);
         }
 
         return $hasil;

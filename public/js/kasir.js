@@ -2780,23 +2780,25 @@ function uangMasukHari(h){
   return (h.total||0) + (h.fnb_total||0) + (h.tip||0);
 }
 
-/* Omzet yang DITAMPILKAN: uang masuk dikurangi pengeluaran. Satu arti untuk
-   semua layar — Rekap, Dashboard, dan Pembukuan sama-sama memakai angka
-   setelah pengeluaran, supaya "omzet" tidak berarti dua hal berbeda
-   tergantung layar mana yang sedang dibuka. */
+/* Omzet = uang masuk KOTOR, tanpa dikurangi pengeluaran (keputusan owner
+   12/10; sebelumnya sudah dipotong pengeluaran). Satu arti untuk semua layar
+   — Rekap, Dashboard, dan Pembukuan — dan sama dengan yang dihitung server di
+   BookkeepingService::dateRange(). */
 function omzetHari(h){
-  /* Titip jual membelokkan dua angka, dan keduanya dikoreksi di sini supaya
-     "omzet" tetap berarti sama persis dengan yang dihitung server di
-     BookkeepingService::dateRange():
+  return uangMasukHari(h);
+}
 
-       hak penitip      uang orang yang kebetulan lewat laci kita — bukan
-                        pendapatan, jadi dipotong;
-       setoran titipan  ikut terhitung di h.expenses karena uangnya memang
-                        keluar dari laci, tapi ia BUKAN biaya — hak itu sudah
-                        dipotong sejak barangnya laku, jadi dikembalikan.
+/* Uang masuk dikurangi pengeluaran hari itu — angka yang DULU disebut omzet.
+   Masih dipakai layar Pengeluaran sebagai "sisa setelah pengeluaran".
 
-     Cucian yang tidak menerima titipan: kedua angka 0, rumusnya persis
-     seperti dulu. */
+   Titip jual membelokkan dua angka, dan keduanya dikoreksi di sini:
+
+     hak penitip      uang orang yang kebetulan lewat laci kita — bukan
+                      pendapatan, jadi dipotong;
+     setoran titipan  ikut terhitung di h.expenses karena uangnya memang
+                      keluar dari laci, tapi ia BUKAN biaya — hak itu sudah
+                      dipotong sejak barangnya laku, jadi dikembalikan. */
+function sisaSetelahKeluar(h){
   return uangMasukHari(h)
     - ((h.expenses||0) - (h.consignor_payout||0))
     - (h.consignor_share||0);
@@ -2805,23 +2807,18 @@ function omzetHari(h){
 /* Kotak Omzet di Rekap bisa dibuka: omzet dipecah per cara bayar (permintaan
    owner 10/10). Tiap baris = cucian + F&B + tip yang dibayar dengan cara itu.
 
-   Pengeluaran dan hak penitip dipotong dari CASH — uangnya memang keluar dari
-   laci — jadi jumlah semua baris selalu sama dengan angka Omzet di atasnya.
-   Karena itu baris Cash bisa minus di hari yang pengeluarannya lebih besar
-   dari uang cash yang masuk. */
+   Omzet sekarang uang masuk kotor, jadi tidak ada yang dipotong dari Cash;
+   jumlah semua baris selalu sama dengan angka Omzet di atasnya. */
 let omzetBuka = false;
 function gambarOmzetRekap(h, tipRows){
   const masuk = {};
   URUTAN_BAYAR.forEach(m => { masuk[m] = h["fnb_"+m] || 0; });
   (h.by_payment||[]).forEach(p => { masuk[kodeBayar(p.method)] += p.total; });
   tipRows.forEach(t => { masuk[kodeBayar(t.bayar)] += t.tip; });
-  const potong = uangMasukHari(h) - omzetHari(h);
-  masuk.cash -= potong;
 
   $("rincianOmzet").innerHTML = URUTAN_BAYAR.map(m =>
       '<div class="cat-baris"><span>'+BAYAR[m].pendek+'</span>'
-      + '<b class="'+(masuk[m] < 0 ? "merah" : BAYAR[m].kelas)+'">'+rp(masuk[m])+'</b></div>').join("")
-    + (potong > 0 ? '<div class="waktu" style="white-space:normal">Cash sudah dikurangi pengeluaran '+rp(potong)+'.</div>' : '');
+      + '<b class="'+BAYAR[m].kelas+'">'+rp(masuk[m])+'</b></div>').join("");
   $("rincianOmzet").classList.toggle("hidden", !omzetBuka);
   $("statOmzet").classList.toggle("buka", omzetBuka);
 }
@@ -2910,20 +2907,21 @@ async function renderDetailKeluar(){
     // kasir di luar jam operasional), blok hitungannya dilewati saja, daftar
     // pengeluarannya tetap tampil.
     //
-    // Pengeluaran dipotong SEKALI, lewat omzetHari() — jangan dikurangi lagi
-    // dengan `total` di sini, karena h.expenses sudah berisi angka yang sama.
+    // Pengeluaran dipotong SEKALI, lewat sisaSetelahKeluar() — jangan
+    // dikurangi lagi dengan `total` di sini, karena h.expenses sudah berisi
+    // angka yang sama.
     let hitung = "";
     try{
       const h = await api("/reports/daily?date="+keluarTgl);
       const masuk = uangMasukHari(h);
-      const omzet = omzetHari(h);
-      hitung = '<div class="cat-baris"><span>Uang masuk<br><span class="waktu">cuci + F&amp;B + tip</span></span>'
+      const sisa = sisaSetelahKeluar(h);
+      hitung = '<div class="cat-baris"><span>Omzet<br><span class="waktu">cuci + F&amp;B + tip</span></span>'
         +   '<b style="white-space:nowrap">'+rp(masuk)+'</b></div>'
         + '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'
         +   (h.expenses? '-'+rp(h.expenses) : rp(0))+'</b></div>'
         + barisTitipanRekap(h)
-        + '<div class="cat-baris tebal"><span>OMZET</span>'
-        +   '<b class="'+(omzet>=0?"hijau":"merah")+'">'+rp(omzet)+'</b></div>';
+        + '<div class="cat-baris tebal"><span>SISA SETELAH PENGELUARAN</span>'
+        +   '<b class="'+(sisa>=0?"hijau":"merah")+'">'+rp(sisa)+'</b></div>';
     }catch(e){ /* daftar pengeluaran tetap berguna tanpa blok hitungan */ }
 
     $("keluarDetailHari").innerHTML =

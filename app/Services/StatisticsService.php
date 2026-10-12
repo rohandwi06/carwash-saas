@@ -123,15 +123,14 @@ class StatisticsService
         }
 
         return collect($ember)->map(function (array $d) {
-            // Omzet = uang masuk (cucian + F&B + tip) DIKURANGI pengeluaran.
-            // Tip ikut karena memang uang yang diterima hari itu; pengeluaran
-            // dipotong di sini supaya angka omzet di layar mana pun berarti
-            // hal yang sama. Lihat catatan lengkap di BookkeepingService.
-            $d['omzet']  = $d['wash'] + $d['fnb'] + $d['tip'] - $d['expenses'];
-            // Rumus laba TIDAK berubah hasilnya: omzet bersih dikurangi upah
-            // sama persis dengan (cuci + tip + F&B - upah - pengeluaran).
-            // Ditulis lewat omzet supaya pengeluaran tidak terpotong dua kali.
-            $d['profit'] = $d['omzet'] - $d['wages'] - $d['compensation'];
+            // Omzet = uang masuk KOTOR (cucian + F&B + tip), TANPA dikurangi
+            // pengeluaran (keputusan owner 2026-10-12; sebelumnya sudah
+            // dipotong pengeluaran dan terbaca seperti salah hitung). Satu
+            // arti di semua layar - lihat BookkeepingService::dateRange().
+            $d['omzet']  = $d['wash'] + $d['fnb'] + $d['tip'];
+            // Laba tidak berubah: pengeluaran yang dulu dipotong lewat omzet
+            // sekarang dipotong di sini.
+            $d['profit'] = $d['omzet'] - $d['expenses'] - $d['wages'] - $d['compensation'];
 
             return $d;
         })->values()->all();
