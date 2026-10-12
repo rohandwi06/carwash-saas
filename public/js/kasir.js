@@ -2596,7 +2596,6 @@ async function renderRekap(){
       api("/fnb-sales?date="+hariIni()),
     ]);
     const cuciTotal = h.total;
-    const cuciLaba = cuciTotal + h.tip - h.wages;
 
     // Transaksi hari ini, untuk isi dropdown Cash/TF di bawah (dulu blok
     // "Riwayat transaksi hari ini" tersendiri). Penyaring buku kas di sini,
@@ -2658,45 +2657,53 @@ async function renderRekap(){
         + '<b class="'+kelas+'">'+(jml ? rp(jml) : "kosong")+'</b></div>';
     };
 
+    // Empat kartu, sama dengan ringkasan sehari di Pembukuan (permintaan owner
+    // 12/10): Uang masuk - Uang keluar = Laba bersih, lalu Setoran cash
+    // sendiri. Baris dan dropdown lama tetap ada, hanya dikelompokkan ulang;
+    // yang hilang cuma "Laba Cuci" dan "Laba F&B", karena upah sekarang
+    // dihitung di kartu Uang keluar dan labanya satu, di kartu Laba bersih.
+
+    // ---- 1. Uang masuk ----
     $("rekapCuci").innerHTML =
       (trx.length
           ? barisBuka("cuci", 'Total Cuci <span class="waktu">'+trxSah.length+'x</span>', rp(cuciTotal), "",
               perJenis.map(barisJenisRekap).join("")
               + tombolDetailRekap("cuci", "Detail transaksi", "cuci "+trxSah.length+" &middot; F&amp;B "+fnb.length))
           : '<div class="cat-baris"><span>Total Cuci</span><b>'+rp(cuciTotal)+'</b></div>')
-      +(h.tip
-          ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "",
-              URUTAN_BAYAR.map(m => barisTipBayar(BAYAR[m].pendek, m, BAYAR[m].kelas)).join("")
-              + tombolDetailRekap("tip", "Detail tip", tipRows.length+"x"))
-          : '<div class="cat-baris"><span>Tip</span><b>kosong</b></div>')
       + (bayar.length
           ? bayar.map(p => barisBayar(p, perBayar[p.method] || [])).join("")
-          : '<div class="cat-kosong">Belum ada transaksi'+(rekapBukuPilih!==null? ' di buku ini':'')+'.</div>')
-      +'<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(h.wages)+'</b></div>'
-      +'<div class="cat-baris tebal"><span>Laba Cuci</span><b class="hijau">'+rp(cuciLaba)+'</b></div>';
+          : '<div class="cat-kosong">Belum ada transaksi'+(rekapBukuPilih!==null? ' di buku ini':'')+'.</div>');
 
     $("rekapFnb").innerHTML =
       '<div class="cat-baris"><span>Total F&amp;B</span><b>'+rp(h.fnb_total)+'</b></div>'
       +barisFnbBayar("cash", "Cash", h.fnb_cash, "", fnb)
       +barisFnbBayar("tf", "TF", h.fnb_tf, "biru-t", fnb)
-      +barisFnbBayar("qris", "QRIS", h.fnb_qris || 0, "qris-t", fnb)
-      +'<div class="cat-baris tebal"><span>Laba F&amp;B</span><b class="hijau">'+rp(h.fnb_total)+'</b></div>';
+      +barisFnbBayar("qris", "QRIS", h.fnb_qris || 0, "qris-t", fnb);
+
+    const masuk = uangMasukHari(h);
+    $("rekapMasukTotal").innerHTML =
+      (h.tip
+          ? barisBuka("tip", 'Tip <span class="waktu">'+tipRows.length+'x</span>', rp(h.tip), "",
+              URUTAN_BAYAR.map(m => barisTipBayar(BAYAR[m].pendek, m, BAYAR[m].kelas)).join("")
+              + tombolDetailRekap("tip", "Detail tip", tipRows.length+"x"))
+          : '<div class="cat-baris"><span>Tip</span><b>kosong</b></div>')
+      +'<div class="cat-baris tebal"><span>UANG MASUK</span><b class="hijau">'+rp(masuk)+'</b></div>';
 
     renderRekapBuku(h.books || []);
 
-    // Bagian ini cukup melaporkan pengeluarannya saja: daftar + totalnya.
-    // Angka omzet TIDAK diulang di sini — sudah ada kotak OMZET tepat di
-    // bawah kartu ini, dan menampilkannya dua kali membuat orang mengira
-    // keduanya angka yang berbeda. Barisnya SELALU ada, termasuk saat
-    // pengeluaran masih kosong, supaya letaknya tidak berpindah-pindah.
-    // Daftarnya di dalam dropdown (permintaan owner 09/10), seragam dengan
-    // Total Cuci / Cash / TF di atasnya: yang selalu tampil cukup totalnya.
+    // ---- 2. Uang keluar ----
+    // Sama dengan potongan di BookkeepingService::dailyRecap(): setoran ke
+    // penitip bukan biaya, hak penitip bukan pendapatan. Daftar pengeluaran
+    // di dalam dropdown (permintaan owner 09/10); barisnya SELALU ada,
+    // termasuk saat masih kosong, supaya letaknya tidak berpindah-pindah.
     const keluar = h.expense_list || [];
+    const uangKeluar = (h.wages||0) + (h.expenses||0) - (h.consignor_payout||0) + (h.consignor_share||0)
+      + (h.compensation||0);
     $("rekapKeluar").innerHTML =
-      (keluar.length===0
-        ? '<div class="cat-kosong">Belum ada pengeluaran hari ini.</div>'
-          + '<div class="cat-baris tebal"><span>Total Pengeluaran</span><b class="merah">'+rp(0)+'</b></div>'
-        : barisBuka("keluar", 'Total Pengeluaran <span class="waktu">'+keluar.length+'x</span>',
+      '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(h.wages)+'</b></div>'
+      + (keluar.length===0
+        ? '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(0)+'</b></div>'
+        : barisBuka("keluar", 'Pengeluaran <span class="waktu">'+keluar.length+'x</span>',
             '-'+rp(h.expenses), "merah",
             keluar.map(e =>
               '<div class="cat-baris"><span>'+esc(e.description)
@@ -2704,7 +2711,36 @@ async function renderRekap(){
               + '<b class="merah">-'+rp(e.amount)+'</b></div>').join("")))
       + barisTitipanRekap(h)
       // Dari owner, bukan dari laci: memotong Laba Bersih, bukan Omzet.
-      + barisKompensasi(h, "komp");
+      + barisKompensasi(h, "komp")
+      +'<div class="cat-baris tebal"><span>UANG KELUAR</span><b class="merah">-'+rp(uangKeluar)+'</b></div>';
+
+    // ---- 3. Laba bersih ----
+    $("rekapLaba").innerHTML =
+      '<div class="cat-baris"><span>Uang masuk</span><b>'+rp(masuk)+'</b></div>'
+      +'<div class="cat-baris"><span>Uang keluar</span><b class="merah">-'+rp(uangKeluar)+'</b></div>'
+      +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(h.profit>=0?"hijau":"merah")+'">'+rp(h.profit)+'</b></div>';
+
+    // ---- 4. Setoran cash ----
+    // Hitungan TERPISAH dari laba: hanya uang fisik di laci. Angka tiap buku
+    // dari server (yang sudah diajukan dibekukan). Saat satu buku dipilih di
+    // tab atas, yang dihitung hanya buku itu — h.books selalu memuat semuanya.
+    const buku = (h.books || []).filter(b => rekapBukuPilih===null || b.id===rekapBukuPilih);
+    const keluarBuku = buku.reduce((s,b) => s + (b.expenses||0), 0);
+    const setoran    = buku.reduce((s,b) => s + (b.amount||0), 0);
+    const diLuar     = (h.cash_total||0) - keluarBuku - setoran;
+    $("rekapSetoran").innerHTML =
+      '<div class="cat-baris"><span>Cash Total <span class="waktu">cucian + F&amp;B</span></span><b>'+rp(h.cash_total)+'</b></div>'
+      +(buku.length
+          ? '<div class="cat-baris"><span>Pengeluaran dari laci</span><b class="merah">-'+rp(keluarBuku)+'</b></div>'
+            + (diLuar !== 0
+                ? '<div class="cat-baris"><span>Di luar buku kas / dikoreksi sesudah disetor</span><b class="merah">'+(diLuar>0?"-":"+")+rp(Math.abs(diLuar))+'</b></div>'
+                : '')
+            + '<div class="cat-baris tebal"><span>SETORAN CASH</span><b>'+rp(setoran)+'</b></div>'
+            + (buku.length > 1
+                ? buku.map(b => '<div class="cat-baris"><span>'+esc(b.label)+' <span class="waktu">'+(LABEL_STATUS_BUKU[b.status]||b.status)+'</span></span><b>'+rp(b.amount||0)+'</b></div>').join("")
+                : '')
+          : '<div class="cat-kosong">Belum ada buku kas hari ini, jadi belum ada setoran.</div>')
+      +'<div class="waktu" style="white-space:normal;margin-top:8px">Hanya uang fisik di laci. Transfer, QRIS, dan tip tidak ikut disetor.</div>';
 
     $("statMasuk").textContent = rp(omzetHari(h));
     gambarOmzetRekap(h, tipRows);

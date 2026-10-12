@@ -25,27 +25,35 @@
           <div id="daftarApprovalSetoran"></div>
         </div>
 
-        {{-- Tiga laporan dalam SATU kartu, dipisah garis titik-titik.
-             Urutannya disengaja: cuci -> F&B -> pengeluaran. Dua yang pertama
-             uang masuk, yang ketiga uang keluar sekaligus penutup hitungannya
-             (uang masuk - pengeluaran = omzet), jadi angkanya terbaca
-             berurutan tanpa berpindah kartu.
-             Transaksi cucian hari ini ada di dalam dropdown Cash/TF laporan
-             cuci — dulu blok "Riwayat transaksi hari ini" tersendiri di bawah
-             (disatukan atas permintaan owner, 29/09). --}}
+        {{-- Empat kartu, sama dengan ringkasan sehari di Pembukuan:
+             Uang masuk - Uang keluar = Laba bersih, lalu Setoran cash sendiri
+             (hanya uang fisik di laci). Isinya dibuat renderRekap() di kasir.js.
+             Transaksi cucian hari ini ada di dalam dropdown Cash/TF/QRIS. --}}
         <div class="cat-blok">
-          <h3>🚗 Laporan Cuci Mobil/Motor</h3>
+          <h3>&#128176; Uang masuk</h3>
           <div id="rekapCuci"></div>
 
           <div class="sub-blok">
-            <h4>🍔 Laporan F&B</h4>
+            <h4>🍔 F&B</h4>
             <div id="rekapFnb"></div>
           </div>
 
-          <div class="sub-blok">
-            <h4>&#128184; Laporan Pengeluaran</h4>
-            <div id="rekapKeluar"></div>
-          </div>
+          <div class="sub-blok" id="rekapMasukTotal"></div>
+        </div>
+
+        <div class="cat-blok">
+          <h3>&#128184; Uang keluar</h3>
+          <div id="rekapKeluar"></div>
+        </div>
+
+        <div class="cat-blok blok-laba">
+          <h3>&#9989; Laba bersih</h3>
+          <div id="rekapLaba"></div>
+        </div>
+
+        <div class="cat-blok">
+          <h3>&#128181; Setoran cash</h3>
+          <div id="rekapSetoran"></div>
         </div>
         <div class="stat-grid">
           {{-- "Omzet" bukan "Pendapatan": angkanya sudah dikurangi
