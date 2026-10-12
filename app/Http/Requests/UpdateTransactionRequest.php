@@ -35,6 +35,9 @@ class UpdateTransactionRequest extends FormRequest
             'customer_name'  => ['sometimes', 'nullable', 'string', 'max:60'],
             'customer_phone' => ['sometimes', 'nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]+$/'],
             'tip'            => ['sometimes', 'integer', 'min:0', 'max:1000000'],
+            // Jam pencatatan (HH:MM). Tanggalnya tidak ikut: transaksi tetap
+            // milik hari dan buku kas tempat ia dicatat.
+            'time'           => ['sometimes', 'nullable', 'date_format:H:i'],
             'worker_ids'     => ['sometimes', 'array'],
             'worker_ids.*'   => ['integer', 'exists:workers,id'],
             'addon_ids'      => ['sometimes', 'array'],

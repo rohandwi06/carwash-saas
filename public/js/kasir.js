@@ -3569,6 +3569,10 @@ async function editTrx(id){
 
   const pilihPk = new Set((r.workers||[]).map(w=>w.id));
   const pilihAd = new Set((r.addons||[]).map(a=>a.id));
+  // Jam dalam bentuk isian <input type="time"> (HH:MM), dibaca dengan cara
+  // yang sama seperti jam() supaya angkanya sama dengan yang tampil di daftar.
+  const dicatat = new Date(r.created_at);
+  const jamAwal = String(dicatat.getHours()).padStart(2,"0")+":"+String(dicatat.getMinutes()).padStart(2,"0");
   const addonAktif = CFG.addons || [];
 
   // Add-on yang MENEMPEL di transaksi ini tapi sudah dinonaktifkan owner tidak
@@ -3591,6 +3595,8 @@ async function editTrx(id){
       + '<input id="swTrxNama" class="swal2-input" maxlength="100" value="'+esc(r.vehicle_name||"")+'">'
       + '<div class="sw-field-label">Plat nomor</div>'
       + '<input id="swTrxPlat" class="swal2-input" maxlength="20" placeholder="boleh kosong" value="'+esc(r.plate||"")+'">'
+      + '<div class="sw-field-label">Jam transaksi</div>'
+      + '<input id="swTrxJam" type="time" class="swal2-input" value="'+jamAwal+'">'
       + '<div class="sw-field-label">Nama pelanggan</div>'
       + '<input id="swTrxPelanggan" class="swal2-input" maxlength="60" placeholder="boleh kosong" value="'+esc(r.customer_name||"")+'">'
       + '<div class="sw-field-label">No. telepon</div>'
@@ -3615,16 +3621,16 @@ async function editTrx(id){
           ? '<div class="sw-field-label">Layanan tambahan</div>'
             + '<div class="sw-cek-grid" id="swTrxAddon">'
             + addonAktif.map(a=>'<label class="sw-cek"><input type="checkbox" value="'+a.id+'"'
-                +(pilihAd.has(a.id)?' checked':'')+'> '+esc(a.name)
-                +' <span class="waktu">'+rp(a.price)+'</span></label>').join("")
+                +(pilihAd.has(a.id)?' checked':'')+'><span class="sw-cek-nama">'+esc(a.name)+'</span>'
+                +'<span class="waktu">'+rp(a.price)+'</span></label>').join("")
             + '</div>'
           : '')
       + '<div class="sw-field-label">Pekerja &mdash; menentukan upah</div>'
       + '<div class="sw-cek-grid" id="swTrxPekerja">'
       +   (pekerja.length
             ? pekerja.map(p=>'<label class="sw-cek"><input type="checkbox" value="'+p.id+'"'
-                +(pilihPk.has(p.id)?' checked':'')+'> '+esc(p.name)
-                +(p.is_trainee?' <span class="waktu">training</span>':'')+'</label>').join("")
+                +(pilihPk.has(p.id)?' checked':'')+'><span class="sw-cek-nama">'+esc(p.name)+'</span>'
+                +(p.is_trainee?'<span class="waktu">training</span>':'')+'</label>').join("")
             : '<div class="cat-kosong">Tidak ada pekerja terdaftar.</div>')
       + '</div>'
       + '<div class="sw-total-pratinjau" id="swTrxTotal"></div>'
@@ -3677,8 +3683,12 @@ async function editTrx(id){
 
       const tip = parseInt(ambil("swTrxTip"), 10);
       const tercentang = sel => [...document.querySelectorAll(sel)].map(c => +c.value);
+      // Jam hanya dikirim kalau memang diganti: koreksi lain (nama, pekerja)
+      // tidak boleh ikut menggeser detik pencatatannya.
+      const jamBaru = ambil("swTrxJam");
 
       return {
+        ...(jamBaru && jamBaru !== jamAwal ? {time: jamBaru} : {}),
         vehicle_name:   nama,
         plate:          ambil("swTrxPlat") || null,
         customer_name:  ambil("swTrxPelanggan") || null,

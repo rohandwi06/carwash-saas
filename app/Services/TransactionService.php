@@ -172,6 +172,14 @@ class TransactionService
                 'edit_count'     => $trx->edit_count + 1,
             ]);
 
+            // Jam yang tampil di daftar dan resi adalah created_at. Hanya
+            // jam-menitnya yang diganti; tanggalnya tetap tanggal transaksi.
+            if (! empty($data['time'])) {
+                $trx->created_at = Carbon::createFromFormat('Y-m-d H:i', $trx->date->toDateString().' '.$data['time'])
+                    ->setSecond($trx->created_at?->second ?? 0);
+                $trx->save();
+            }
+
             $trx->addons()->sync(
                 $addons->mapWithKeys(fn ($a) => [
                     $a['id'] => ['name' => $a['name'], 'price' => $a['price']],
