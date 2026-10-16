@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\FailedSearch;
+use App\Models\VehicleAlias;
+use App\Services\VehicleMemoryService;
 use App\Models\Transaction;
 use App\Models\Vehicle;
 use App\Services\VehicleSearchService;
@@ -106,9 +108,15 @@ class VehicleController extends Controller
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:100', Rule::unique('vehicles', 'name')],
             'category' => ['required', Rule::exists('wash_categories', 'slug')],
+            // Ditambahkan dari Koreksi transaksi: jenis yang dulu tercatat
+            // salah, jadi mobil ini ikut jadi contoh untuk AI.
+            'dari_koreksi' => ['sometimes', 'boolean'],
         ]);
 
-        $vehicle = Vehicle::create($data + ['needs_review' => false]);
+        $vehicle = Vehicle::create([
+            'name' => $data['name'], 'category' => $data['category'], 'needs_review' => false,
+            'corrected_at' => ! empty($data['dari_koreksi']) ? now() : null,
+        ]);
 
         return response()->json(['data' => $vehicle], 201);
     }
@@ -128,7 +136,9 @@ class VehicleController extends Controller
         ]);
 
         // Owner menyentuhnya = owner sudah memutuskan: tanda "perlu dicek" lunas.
-        $vehicle->update($data + ['needs_review' => false]);
+        // Jenisnya diganti = koreksi, yang jadi contoh untuk AI.
+        $jenisBerubah = isset($data['category']) && $data['category'] !== $vehicle->category;
+        $vehicle->update($data + ['needs_review' => false] + ($jenisBerubah ? ['corrected_at' => now()] : []));
 
         $lampau = Transaction::where('vehicle_name', $vehicle->name)
             ->where('category', '!=', $vehicle->category)
@@ -168,10 +178,14 @@ class VehicleController extends Controller
             return response()->json(['message' => 'Belum ada mobil yang dipilih.'], 422);
         }
 
-        $jumlah = $data['aksi'] === 'hapus'
-            ? $query->delete()
+        if ($data['aksi'] === 'hapus') {
+            $jumlah = $query->delete();
+        } else {
+            // Yang jenisnya benar-benar berganti = koreksi, contoh untuk AI.
+            (clone $query)->where('category', '!=', $data['category'])->update(['corrected_at' => now()]);
             // Owner menyentuhnya = owner sudah memutuskan: tanda "perlu dicek" lunas.
-            : $query->update(['category' => $data['category'], 'needs_review' => false]);
+            $jumlah = $query->update(['category' => $data['category'], 'needs_review' => false]);
+        }
 
         return response()->json(['data' => ['jumlah' => $jumlah]]);
     }
@@ -181,6 +195,31 @@ class VehicleController extends Controller
     {
         return Vehicle::query()
             ->when($q !== '', fn ($b) => $b->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower($q).'%']));
+    }
+
+    /**
+     * GET /api/vehicle-aliases — ejaan kasir yang diingat (owner). Yang belum
+     * aktif baru dipakai sekali; aktif setelah dipakai dua kali.
+     */
+    public function aliases(): JsonResponse
+    {
+        return response()->json(['data' => VehicleAlias::with('vehicle:id,name')
+            ->orderByDesc('updated_at')->limit(300)->get()
+            ->map(fn (VehicleAlias $a) => [
+                'id'      => $a->id,
+                'alias'   => $a->alias,
+                'hits'    => $a->hits,
+                'aktif'   => $a->hits >= VehicleMemoryService::HITS_AKTIF,
+                'vehicle' => $a->vehicle?->name,
+            ])]);
+    }
+
+    /** DELETE /api/vehicle-aliases/{vehicleAlias} — lupakan satu ejaan (owner) */
+    public function destroyAlias(VehicleAlias $vehicleAlias): JsonResponse
+    {
+        $vehicleAlias->delete();
+
+        return response()->json(['data' => true]);
     }
 
     /** DELETE /api/vehicles/{vehicle} — buang baris sampah (owner) */

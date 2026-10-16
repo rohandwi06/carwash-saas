@@ -38,6 +38,10 @@ class StoreTransactionRequest extends FormRequest
             // Kasir memilih memakai promo pelanggan setia. Hanya permintaan:
             // berhak atau tidaknya, dan besar potongannya, diputuskan server.
             'pakai_promo'    => ['sometimes', 'boolean'],
+            // Yang diketik kasir di kolom cari sebelum memilih mobil ini —
+            // bahan belajar ejaan (VehicleMemoryService). Tidak disimpan di
+            // transaksinya.
+            'search_query'   => ['nullable', 'string', 'max:60'],
             // Perhatikan: TIDAK ADA field "total" — server yang menghitung.
         ];
     }

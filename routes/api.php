@@ -240,6 +240,9 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/vehicles/massal', [VehicleController::class, 'massal']);
         Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update']);
         Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
+        // Ejaan kasir yang dipelajari aplikasi (VehicleMemoryService)
+        Route::get('/vehicle-aliases', [VehicleController::class, 'aliases']);
+        Route::delete('/vehicle-aliases/{vehicleAlias}', [VehicleController::class, 'destroyAlias']);
 
         Route::get('/wash-services', [WashServiceController::class, 'index']);
         Route::post('/wash-services', [WashServiceController::class, 'store']);

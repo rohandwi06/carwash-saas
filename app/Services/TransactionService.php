@@ -24,6 +24,7 @@ class TransactionService
         private CashBookService $books,
         private DailyRuleService $aturan,
         private PromoService $promo,
+        private VehicleMemoryService $ingatan,
     ) {}
 
     /**
@@ -104,6 +105,14 @@ class TransactionService
 
             $this->wages->attachWorkers($transaction, $data['worker_ids'] ?? []);
             $this->sinkronAturan($date);
+
+            // Ejaan yang diketik kasir untuk mobil ini diingat. Gagal mengingat
+            // tidak boleh menggagalkan cucian yang sudah dibayar.
+            try {
+                $this->ingatan->ingatEjaan($data['search_query'] ?? null, $transaction->vehicle_name);
+            } catch (\Throwable $e) {
+                report($e);
+            }
 
             // Makanan/minuman yang dipesan bersamaan: tetap disimpan sebagai
             // penjualan F&B (stok & laporan F&B ikut aturan yang sama),

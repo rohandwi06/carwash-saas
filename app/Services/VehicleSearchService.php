@@ -29,7 +29,7 @@ class VehicleSearchService
         // kategorinya sudah tidak ada di /api/config.
         $kategoriValid = WashCategory::pluck('slug')->all();
 
-        return Vehicle::whereIn('category', $kategoriValid)->get()
+        $hasil = Vehicle::whereIn('category', $kategoriValid)->get()
             ->map(function (Vehicle $v) use ($query) {
                 $v->score = $this->score($query, strtolower($v->name));
                 return $v;
@@ -38,6 +38,18 @@ class VehicleSearchService
             ->sortByDesc('score')
             ->take($limit)
             ->values();
+
+        // Ejaan yang sudah dipelajari dari kasir ("raise" -> Toyota Raize)
+        // menang: ditaruh paling atas dengan skor yakin, sehingga AI tidak
+        // ikut ditanya untuk ketikan yang jawabannya sudah diketahui.
+        $dipelajari = app(VehicleMemoryService::class)->cariEjaan($query);
+        if ($dipelajari && in_array($dipelajari->category, $kategoriValid, true)) {
+            $dipelajari->score = 2.0;
+            $hasil = $hasil->reject(fn (Vehicle $v) => $v->id === $dipelajari->id)
+                ->prepend($dipelajari)->take($limit)->values();
+        }
+
+        return $hasil;
     }
 
     private function score(string $query, string $name): float

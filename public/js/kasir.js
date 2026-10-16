@@ -657,12 +657,18 @@ function resetConfirm(){
   fnbCuciCari = ""; fnbCuciHal = 1;   // konfirmasi baru = pencarian F&B kosong lagi
   $("inPlat").value=""; $("inTip").value="";
   $("inPelanggan").value=""; $("inTelepon").value="";
+  cariDipakai = "";
   clearTimeout(promoTimer); promoCek = null; promoPakai = false; gambarPromo();
   tutupFnbModal();   // jangan sampai modal menu ikut terbawa ke cucian berikutnya
 }
+/* Yang diketik kasir sebelum memilih mobil dari hasil cari — dikirim bersama
+   transaksinya supaya server mengingat ejaan itu (VehicleMemoryService). */
+let cariDipakai = "";
 function pilihHasil(nama, kat){
   pilihan = { nama, kat };
-  resetConfirm(); renderConfirm(); tampilkan("layarConfirm");
+  resetConfirm();
+  cariDipakai = $("inputCari").value.trim();
+  renderConfirm(); tampilkan("layarConfirm");
 }
 async function pilihManual(kat){
   const q = $("inputCari").value.trim();
@@ -986,6 +992,7 @@ async function konfirmasi(){
       addon_ids: Array.from(addonPilih),
       fnb_items: Object.entries(fnbCuci).map(([id,qty])=>({product_id:+id, qty})),
       pakai_promo: !!(promoPakai && promoCek && promoCek.berhak),
+      search_query: cariDipakai || null,
     };
     if(draftAktif) body.draft_id = draftAktif; // draft ikut terhapus di server
     const trx = await api("/transactions", { method:"POST", body });
@@ -3823,10 +3830,52 @@ async function editTrx(id){
   try{
     await api("/transactions/"+id,{method:"PATCH",body:hasil});
     await muatUlangTrx();
+    // Jenis kendaraannya dibetulkan: tawarkan supaya Daftar mobil (dan AI)
+    // ikut belajar, bukan cuma transaksi ini.
+    if(hasil.category !== r.category && await tawarkanUbahKatalog(hasil.vehicle_name, hasil.category)) return;
     Swal.fire({toast:true, position:"top-end", icon:"success",
       title:"Transaksi dikoreksi", text:hasil.vehicle_name,
       showConfirmButton:false, timer:2000});
   }catch(e){ gagal(e); }
+}
+
+/* Sesudah owner mengganti jenis kendaraan di sebuah transaksi: tanya apakah
+   Daftar mobil ikut dibetulkan (atau mobilnya ditambahkan), supaya cucian
+   berikutnya tidak salah lagi dan AI memakainya sebagai contoh. Owner yang
+   memutuskan — koreksi satu transaksi bisa saja kasus khusus.
+   true = pertanyaannya sudah tampil (pemanggil tidak perlu toast sendiri). */
+async function tawarkanUbahKatalog(nama, kat){
+  const label = labelKat(kat);
+  let v = null;
+  try{
+    const d = await api("/vehicles?q="+encodeURIComponent(nama)+"&per_page=100", {penuh:true});
+    v = (d.data||[]).find(x => x.name.toLowerCase() === nama.toLowerCase()) || null;
+  }catch(e){ return false; }
+  if(v && v.category === kat) return false;
+  // Nama yang sama dengan nama jenis ("Mobil Kecil") bukan mobil — kasir
+  // langsung memilih jenis tanpa mengetik nama kendaraan.
+  if(!v && Object.values(CFG.categories).some(c => c.label.toLowerCase() === nama.toLowerCase())) return false;
+
+  const {isConfirmed} = await Swal.fire({
+    icon:"question", title:"Transaksi dikoreksi",
+    html: v
+      ? 'Di Daftar mobil, <b>'+esc(v.name)+'</b> masih tercatat <b>'+esc(labelKat(v.category))+'</b>. '
+        + 'Ubah jadi <b>'+esc(label)+'</b> supaya cucian berikutnya tidak salah lagi?'
+      : '<b>'+esc(nama)+'</b> belum ada di Daftar mobil. Tambahkan sebagai <b>'+esc(label)+'</b> '
+        + 'supaya cucian berikutnya langsung benar?',
+    showCancelButton:true,
+    confirmButtonText: v ? "Ubah Daftar mobil" : "Tambahkan",
+    cancelButtonText:"Transaksi ini saja",
+    confirmButtonColor:"#1B9E62",
+  });
+  if(!isConfirmed) return true;
+  try{
+    if(v) await api("/vehicles/"+v.id, {method:"PATCH", body:{category:kat}});
+    else  await api("/vehicles", {method:"POST", body:{name:nama, category:kat, dari_koreksi:true}});
+    Swal.fire({toast:true, position:"top-end", icon:"success", title:"Daftar mobil diperbarui",
+      text:"AI juga memakai koreksi ini sebagai contoh.", showConfirmButton:false, timer:2500});
+  }catch(e){ gagal(e); }
+  return true;
 }
 
 /* Sama alasannya dengan muatUlangKeluar: yang berubah bukan cuma baris itu —
@@ -5139,10 +5188,12 @@ async function simpanGemini(){
     if(!aiUsulan.already_exists){
       await api("/ai/save-vehicle",{method:"POST",body:{name:aiUsulan.name, category:aiUsulan.category}});
     }
+    const ketikan = $("inputCari").value.trim();
     $("inputCari").value = "";
     $("hasilCari").innerHTML = "";
     $("hasilAi").innerHTML = "";
     pilihHasil(aiUsulan.name, aiUsulan.category); // langsung lanjut ke layar konfirmasi transaksi
+    cariDipakai = ketikan;   // kolom cari sudah dikosongkan di atas
   }catch(e){ gagal(e); }
 }
 
@@ -6734,6 +6785,29 @@ function setTabPengaturan(tab, gulirKeAtas = true){
   if(gulirKeAtas && layar && !layar.classList.contains("hidden")) window.scrollTo({top:0, behavior:"smooth"});
 }
 
+/* ---------- PENGATURAN: EJAAN YANG DIINGAT (khusus owner) ----------
+   Ejaan kasir yang dipelajari aplikasi ("raise" -> Toyota Raize). Owner bisa
+   melupakan ejaan yang salah pasang; mobilnya sendiri tidak tersentuh. */
+async function renderEjaanDiingat(){
+  const w = $("ejaanDiingat");
+  if(!w || ROLE !== "owner") return;
+  try{
+    const d = await api("/vehicle-aliases");
+    w.innerHTML = d.length === 0
+      ? '<div class="cat-kosong">Belum ada. Ejaan kasir yang tidak cocok dengan nama di Daftar mobil '
+        + 'akan muncul di sini setelah dipakai untuk mencatat cucian.</div>'
+      : d.map(a =>
+          '<div class="cat-baris"><span><b>'+esc(a.alias)+'</b> &rarr; '+esc(a.vehicle || "-")
+          + ' <span class="waktu">'+(a.aktif ? 'dipakai '+a.hits+'x' : 'baru sekali, belum dipakai')+'</span></span>'
+          + '<button class="btn-hapus-pk" title="Lupakan ejaan ini" onclick="lupakanEjaan('+a.id+')">&#10005;</button></div>'
+        ).join("");
+  }catch(e){ w.innerHTML = '<div class="cat-kosong">Daftar ejaan gagal dimuat.</div>'; }
+}
+async function lupakanEjaan(id){
+  try{ await api("/vehicle-aliases/"+id, {method:"DELETE"}); renderEjaanDiingat(); }
+  catch(e){ gagal(e); }
+}
+
 /* ---------- PENGATURAN: PROMO PELANGGAN SETIA (khusus owner) ----------
    Satu aturan untuk seluruh cucian: setiap kedatangan ke-N, hadiahnya, dan
    upah pekerja untuk cucian promo. Hitungannya di server (PromoService). */
@@ -7125,6 +7199,7 @@ async function renderMenuFnb(gulirKeAtas = false){
     renderKaryawanTraining();
     renderShiftPengaturan();
     renderPromoPengaturan();
+    renderEjaanDiingat();
     produkSemua = await api("/products");
     renderDaftarProduk();
   }catch(e){ gagal(e); }

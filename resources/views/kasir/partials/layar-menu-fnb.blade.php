@@ -109,6 +109,15 @@
             </div>
             <div id="daftarAddon"></div>
           </div>
+
+          {{-- Ejaan kasir yang dipelajari aplikasi: "raise" -> Toyota Raize.
+               Aktif setelah dipakai dua kali; owner bisa melupakannya. --}}
+          <div class="cat-blok">
+            <h3>&#129504; Ejaan yang diingat</h3>
+            <div class="peny-ket">Ketikan kasir yang berbeda dari nama di Daftar mobil. Setelah dipakai dua kali
+              untuk mobil yang sama, pencarian langsung menemukannya tanpa bertanya ke AI.</div>
+            <div id="ejaanDiingat"></div>
+          </div>
         </div>
 
         {{-- ================= MAKANAN & MINUMAN ================= --}}
@@ -195,7 +204,6 @@
           </div>
         </div>
 
-        {{-- ================= SHIFT ================= --}}
         {{-- ================= PROMO ================= --}}
         <div class="set-grup" data-grup="promo">
           <div class="cat-blok">
@@ -204,6 +212,7 @@
           </div>
         </div>
 
+        {{-- ================= SHIFT ================= --}}
         <div class="set-grup" data-grup="shift">
           <div class="cat-blok" id="blokShift">
             <h3>&#8986; Jam operasional (shift)</h3>

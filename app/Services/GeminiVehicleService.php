@@ -29,23 +29,29 @@ class GeminiVehicleService
      * Kunci cache memuat sidik jari daftar kategori: begitu owner menambah atau
      * menghapus kategori kendaraan, seluruh jawaban lama otomatis tidak terpakai
      * lagi — sebab jawaban itu dulu dipilih dari daftar yang sudah berbeda.
+     *
+     * Sidik jarinya juga memuat koreksi owner (VehicleMemoryService): begitu
+     * owner membetulkan jenis sebuah mobil, AI ditanya ulang dengan contoh
+     * yang baru, bukan dijawab dari ingatan lama yang belum tahu koreksinya.
      */
     public function classify(string $query): array
     {
         $rows = \App\Models\WashCategory::urut()->get();
+        $contoh = app(VehicleMemoryService::class)->contohKoreksi($rows->pluck('slug')->all());
 
         // Normalkan: "  AvAnza  " dan "avanza" satu ingatan yang sama.
         $normal = mb_strtolower(trim(preg_replace('/\s+/', ' ', $query)));
-        $sidik  = md5($rows->pluck('slug')->implode(','));
+        $sidik  = md5($rows->pluck('slug')->implode(',').'|'
+            .$contoh->map(fn ($v) => $v->name.'='.$v->category)->implode(','));
 
         return Cache::remember(
             "ai-vehicle:{$sidik}:".md5($normal),
             now()->addDays(self::CACHE_HARI),
-            fn () => $this->tanyaGemini($query, $rows),
+            fn () => $this->tanyaGemini($query, $rows, $contoh),
         );
     }
 
-    private function tanyaGemini(string $query, $rows): array
+    private function tanyaGemini(string $query, $rows, $contoh = null): array
     {
         $key = config('carwash.gemini.key');
 
@@ -61,6 +67,18 @@ class GeminiVehicleService
 
         $pilihan = $rows->pluck('slug')->implode('|');
 
+        // Koreksi owner sebagai contoh: penggolongan tiap cucian berbeda
+        // (Raize "mobil kecil" di satu tempat, "mobil" di tempat lain), dan
+        // inilah satu-satunya cara AI tahu kebiasaan cucian INI. Nama dibersihkan
+        // dari tanda kutip & baris baru supaya tidak merusak susunan prompt.
+        $koreksi = '';
+        if ($contoh && $contoh->isNotEmpty()) {
+            $koreksi = "\nPenggolongan di cucian ini bisa berbeda dari kebiasaan umum. Ini koreksi dari pemiliknya;\n"
+                ."ikuti polanya untuk kendaraan yang mirip:\n"
+                .$contoh->map(fn ($v) => '   - '.trim(str_replace(['"', "\n", "\r"], ' ', $v->name))
+                    .' = "'.$v->category.'"')->implode("\n")."\n";
+        }
+
         $prompt = <<<PROMPT
 Kamu adalah asisten kasir cuci kendaraan di Indonesia.
 Kasir mengetik nama kendaraan: "{$query}"
@@ -69,7 +87,7 @@ Tugasmu:
 1. Tebak kendaraan apa yang dimaksud (perbaiki salah eja, lengkapi merek).
 2. Klasifikasikan ke SATU kategori berikut:
 {$daftar}
-
+{$koreksi}
 Jawab HANYA dengan JSON valid, tanpa teks lain:
 {"name": "Nama Resmi Kendaraan", "category": "{$pilihan}", "reason": "maksimal 8 kata", "recognized": true}
 
