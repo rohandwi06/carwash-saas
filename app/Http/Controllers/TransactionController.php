@@ -20,7 +20,7 @@ class TransactionController extends Controller
         $date = $request->query('date', now()->toDateString());
 
         return response()->json([
-            'data' => Transaction::with('workers:id,name', 'addons', 'fnbSales.items')
+            'data' => Transaction::with('workers:id,name', 'addons', 'fnbSales.items', 'photos:id,transaction_id')
                 ->whereDate('date', $date)
                 ->orderByDesc('queue_no')
                 ->get(),

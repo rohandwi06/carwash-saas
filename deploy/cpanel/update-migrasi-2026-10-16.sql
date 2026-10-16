@@ -1,5 +1,5 @@
 -- ===================================================================
---  Migrasi 16 Oktober 2026: promo pelanggan setia & AI yang belajar
+--  Migrasi 16 Oktober 2026: promo pelanggan setia, AI yang belajar, foto kendaraan
 --  cPanel -> phpMyAdmin -> pilih database -> tab SQL -> tempel SEMUA -> Go
 --
 --  WAJIB BACKUP DULU: phpMyAdmin -> database yang sama -> tab Export -> Go.
@@ -14,14 +14,18 @@
 --    tabel `vehicle_aliases`   ejaan kasir yang diingat ("raise" -> Toyota Raize)
 --    kolom `vehicles.corrected_at`  kapan owner terakhir mengganti jenis mobil
 --
+--  Lalu, untuk foto kondisi kendaraan:
+--    tabel `vehicle_photos`    daftar foto per transaksi (berkasnya sendiri
+--                              disimpan aplikasi di storage/app/private/photos)
+--
 --  Tidak ada baris yang diubah atau dihapus. AMAN DIJALANKAN ULANG
 --  (IF NOT EXISTS). Sintaks khusus MariaDB.
 --
 --  Situs yang belum menjalankan update-migrasi-2026-10-11.sql harus
 --  menjalankan berkas itu DULU, baru berkas ini.
 --
---  Kode baru tanpa SQL ini GAGAL mencari kendaraan di layar kasir dan
---  menambah mobil di Daftar mobil.
+--  Kode baru tanpa SQL ini GAGAL mencari kendaraan di layar kasir,
+--  menambah mobil di Daftar mobil, dan membuka Rekap & Pembukuan.
 --  Jalankan SEBELUM mengunggah paket kodenya.
 --
 --  SQL diambil dari `php artisan migrate --pretend`.
@@ -47,6 +51,19 @@ CREATE TABLE IF NOT EXISTS `vehicle_aliases` (
 ALTER TABLE `vehicles`
   ADD COLUMN IF NOT EXISTS `corrected_at` TIMESTAMP NULL AFTER `needs_review`;
 
+CREATE TABLE IF NOT EXISTS `vehicle_photos` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `transaction_id` BIGINT UNSIGNED NOT NULL,
+  `path` VARCHAR(120) NOT NULL,
+  `size` INT UNSIGNED NOT NULL DEFAULT '0',
+  `created_by` VARCHAR(255) NULL,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL,
+  INDEX `vehicle_photos_created_at_index` (`created_at`),
+  CONSTRAINT `vehicle_photos_transaction_id_foreign`
+    FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`) ON DELETE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Tandai migrasi sudah jalan
 SET @batch = (SELECT MAX(`batch`) + 1 FROM `migrations`);
 
@@ -56,6 +73,8 @@ FROM (
     SELECT '2026_10_16_000001_add_promo_to_transactions' AS nama
     UNION ALL
     SELECT '2026_10_16_000002_create_vehicle_aliases_table'
+    UNION ALL
+    SELECT '2026_10_16_000003_create_vehicle_photos_table'
 ) m
 WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 
@@ -63,8 +82,10 @@ WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 --   1. tiga baris kolom promo_
 --   2. enam baris kolom tabel ejaan (id, vehicle_id, alias, hits, created_at, updated_at)
 --   3. satu baris kolom corrected_at
---   4. dua baris migrasi 2026_10_16
+--   4. tujuh baris kolom tabel foto
+--   5. tiga baris migrasi 2026_10_16
 SHOW COLUMNS FROM `transactions` LIKE 'promo_%';
 SHOW COLUMNS FROM `vehicle_aliases`;
 SHOW COLUMNS FROM `vehicles` LIKE 'corrected_at';
+SHOW COLUMNS FROM `vehicle_photos`;
 SELECT `migration`, `batch` FROM `migrations` WHERE `migration` LIKE '2026_10_16%';

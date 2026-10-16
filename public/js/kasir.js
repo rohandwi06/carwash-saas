@@ -658,6 +658,7 @@ function resetConfirm(){
   $("inPlat").value=""; $("inTip").value="";
   $("inPelanggan").value=""; $("inTelepon").value="";
   cariDipakai = "";
+  fotoCuci = []; aiDariFoto = null; gambarFotoCuci();
   clearTimeout(promoTimer); promoCek = null; promoPakai = false; gambarPromo();
   tutupFnbModal();   // jangan sampai modal menu ikut terbawa ke cucian berikutnya
 }
@@ -896,6 +897,127 @@ function setBayar(m){ metode=m; renderConfirm(); }
    dengan validasi server, supaya kasir tidak baru tahu salahnya saat simpan. */
 function rapikanTelepon(el){ el.value = el.value.replace(/[^0-9+\-\s()]/g, ""); }
 
+/* ---------- FOTO KENDARAAN ----------
+   Foto kondisi saat kendaraan masuk (bukti kalau ada komplain lecet) dan
+   "kenali dari foto" (AI menebak mobil, jenis, dan plat). Foto diperkecil di
+   sini sebelum dikirim: kamera HP menghasilkan 3–8 MB, sedangkan yang perlu
+   disimpan cukup ±150 KB. */
+const FOTO_MAKS = 6;
+let fotoCuci = [];        // data URL foto kondisi untuk cucian yang sedang dicatat
+let aiDariFoto = null;    // {foto, plate} dari "Kenali dari foto" — dipakai simpanGemini()
+
+async function kecilkanFoto(file, sisiMaks = 1280){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((ok, gagal) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => gagal(new Error("Foto tidak terbaca. Coba potret ulang."));
+      i.src = url;
+    });
+    const skala = Math.min(1, sisiMaks / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * skala);
+    c.height = Math.round(img.naturalHeight * skala);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.72);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function gambarFotoCuci(){
+  const w = $("fotoCuci");
+  if(!w) return;
+  w.innerHTML = fotoCuci.map((f, i) =>
+      '<div class="foto-kotak"><img src="'+f+'" alt="Foto kondisi '+(i+1)+'">'
+      + '<button class="foto-hapus" aria-label="Hapus foto" onclick="hapusFotoCuci('+i+')">&#10005;</button></div>'
+    ).join("")
+    + (fotoCuci.length < FOTO_MAKS
+        ? '<label class="foto-tambah" for="inFotoCuci"><span>&#128247;</span><span>'
+          + (fotoCuci.length ? 'Tambah' : 'Potret') + '</span></label>'
+        : '');
+}
+async function tambahFotoCuci(input){
+  const file = input.files && input.files[0];
+  input.value = "";
+  if(!file) return;
+  try{
+    fotoCuci.push(await kecilkanFoto(file));
+    gambarFotoCuci();
+  }catch(e){ gagal(e); }
+}
+function hapusFotoCuci(i){ fotoCuci.splice(i, 1); gambarFotoCuci(); }
+
+/* Diunggah satu per satu SESUDAH transaksinya tersimpan. Foto yang gagal
+   tidak membatalkan cucian yang sudah dibayar — kasir cukup diberi tahu. */
+async function unggahFotoCuci(trxId){
+  let ok = 0, gagalN = 0;
+  for(const f of fotoCuci){
+    try{ await api("/transactions/"+trxId+"/photos", {method:"POST", body:{image:f}}); ok++; }
+    catch(e){ gagalN++; }
+  }
+  return {ok, gagal:gagalN};
+}
+
+async function kenaliDariFoto(input){
+  const file = input.files && input.files[0];
+  input.value = "";
+  if(!file) return;
+  batalTanyaAi();
+  aiUsulan = null; aiDariFoto = null;
+  $("inputCari").value = "";
+  $("hasilCari").innerHTML = "";
+  $("hasilAi").innerHTML = '<div class="ai-loading">&#10024; Mengenali kendaraan dari foto&hellip;</div>';
+  try{
+    const foto = await kecilkanFoto(file);
+    const r = await api("/ai/classify-photo", {method:"POST", body:{image:foto}});
+    if(!r.recognized){
+      $("hasilAi").innerHTML = '<div class="gagal">AI tidak yakin ini kendaraan apa.'
+        + '<br>Ketik namanya atau pilih jenisnya di bawah &#128071;</div>';
+      return;
+    }
+    aiDariFoto = {foto, plate: r.plate || ""};
+    gambarJawabanAi("", {status:"ada", data:r});
+    const kartu = $("hasilAi").querySelector(".ai-hasil");
+    if(kartu) kartu.insertAdjacentHTML("afterbegin",
+      '<img class="ai-foto" src="'+foto+'" alt="Foto kendaraan">'
+      + (r.plate ? '<div class="ai-plat">Plat terbaca: <b>'+esc(r.plate)+'</b></div>' : ''));
+  }catch(e){
+    $("hasilAi").innerHTML = '<div class="gagal">Foto gagal dikenali:<br>&#9888; '+esc(e.message)+'</div>';
+  }
+}
+
+/* Foto di detail transaksi (Rekap & Pembukuan): diambil saat diketuk saja,
+   bukan saat daftar digambar — puluhan transaksi x beberapa foto akan
+   menghabiskan kuota data HP owner. Butuh token, jadi lewat fetch + blob. */
+async function lihatFoto(id){
+  try{
+    const res = await fetch(API+"/photos/"+id, {headers:{Authorization:"Bearer "+TOKEN}});
+    if(!res.ok) throw new Error(res.status===404 ? "Foto sudah dihapus (disimpan 60 hari)." : "Foto gagal dibuka ("+res.status+")");
+    const url = URL.createObjectURL(await res.blob());
+    const {isDenied} = await Swal.fire({
+      imageUrl:url, imageAlt:"Foto kondisi kendaraan", showCloseButton:true,
+      confirmButtonText:"Tutup", confirmButtonColor:"#1B9E62",
+      showDenyButton: ROLE==="owner", denyButtonText:"Hapus foto",
+      customClass:{image:"foto-besar"},
+    });
+    URL.revokeObjectURL(url);
+    if(isDenied){
+      const {isConfirmed} = await Swal.fire({icon:"warning", title:"Hapus foto ini?",
+        text:"Foto yang dihapus tidak bisa dikembalikan.", showCancelButton:true,
+        confirmButtonText:"Hapus", cancelButtonText:"Batal", confirmButtonColor:"#d33"});
+      if(!isConfirmed) return;
+      await api("/photos/"+id, {method:"DELETE"});
+      document.querySelectorAll('[data-foto="'+id+'"]').forEach(b => b.remove());
+      trxTampil.forEach(r => { if(r.photos) r.photos = r.photos.filter(p => p.id !== id); });
+    }
+  }catch(e){ gagal(e); }
+}
+function tombolFoto(r){
+  return (r.photos||[]).map((p, i) =>
+    '<button class="btn-foto-mini" data-foto="'+p.id+'" onclick="event.stopPropagation();lihatFoto('+p.id+')">'
+    + '&#128247; '+(i+1)+'</button>').join(" ");
+}
+
 /* ---------- PROMO PELANGGAN SETIA ----------
    Saat plat atau nomor telepon diketik, layar menanyakan server berapa kali
    pelanggan ini sudah datang dan apakah ia berhak promo. Harga baru berubah
@@ -998,6 +1120,7 @@ async function konfirmasi(){
     const trx = await api("/transactions", { method:"POST", body });
     draftAktif = null; // draftnya sudah tidak ada — jangan dipakai lagi
     trxTerakhir = trx;
+    const foto = fotoCuci.length ? await unggahFotoCuci(trx.id) : null;
     const namaAddon = (trx.addons||[]).map(a=>esc(a.pivot? a.pivot.name : a.name)).join(", ");
     const totalSemua = totalTrx(trx);
     $("doneRingkas").innerHTML =
@@ -1005,7 +1128,9 @@ async function konfirmasi(){
       + infoBayar(trx.payment_method).panjang+" &mdash; <b>"+rp(totalSemua)+"</b>"
       + (trx.tip? " + tip "+rp(trx.tip) : "")
       + (namaAddon? "<br><span class='waktu'>+ "+namaAddon+"</span>" : "")
-      + (itemFnb(trx).length? "<br><span class='waktu'>&#127860; "+itemFnb(trx).map(i=>esc(i.product_name)+" x"+i.qty).join(", ")+"</span>" : "");
+      + (itemFnb(trx).length? "<br><span class='waktu'>&#127860; "+itemFnb(trx).map(i=>esc(i.product_name)+" x"+i.qty).join(", ")+"</span>" : "")
+      + (foto && foto.ok ? "<br><span class='waktu'>&#128247; "+foto.ok+" foto tersimpan</span>" : "")
+      + (foto && foto.gagal ? "<br><b class='merah'>&#9888; "+foto.gagal+" foto gagal diunggah</b>" : "");
     tampilkan("layarDone");
     produk = await api("/products?active=1"); // stok sudah berkurang di server
   }catch(e){ gagal(e); }
@@ -3586,6 +3711,7 @@ function trxHTML(r, opsi){
     ...(r.customer_phone ? [["Telepon", esc(r.customer_phone)]] : []),
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
     ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
+    ...((r.photos||[]).length ? [["Foto kondisi", tombolFoto(r)]] : []),
     ...(r.promo_discount ? [["Promo pelanggan setia", esc(labelPromo(r.promo_rule))+" &middot; -"+rp(r.promo_discount)]] : []),
     ["Pembayaran", infoBayar(r.payment_method).panjang],
     ["Tip", r.tip? rp(r.tip) : "&mdash;"],
@@ -5159,6 +5285,7 @@ function gambarJawabanAi(q, ingatan){
 async function tanyaAiOtomatis(q){
   aiTimer  = null;
   aiUsulan = null;
+  aiDariFoto = null;   // tebakan dari teks menggantikan tebakan dari foto
   $("hasilAi").innerHTML = '<div class="ai-loading">&#10024; Menanyakan ke AI&hellip;</div>';
   const kunci = q.toLowerCase();
   try{
@@ -5192,8 +5319,15 @@ async function simpanGemini(){
     $("inputCari").value = "";
     $("hasilCari").innerHTML = "";
     $("hasilAi").innerHTML = "";
+    const dariFoto = aiDariFoto;
     pilihHasil(aiUsulan.name, aiUsulan.category); // langsung lanjut ke layar konfirmasi transaksi
     cariDipakai = ketikan;   // kolom cari sudah dikosongkan di atas
+    // Dikenali dari foto: fotonya jadi foto kondisi pertama, platnya terisi.
+    if(dariFoto){
+      fotoCuci = [dariFoto.foto];
+      gambarFotoCuci();
+      if(dariFoto.plate){ $("inPlat").value = formatPlat(dariFoto.plate); jadwalCekPromo(); }
+    }
   }catch(e){ gagal(e); }
 }
 

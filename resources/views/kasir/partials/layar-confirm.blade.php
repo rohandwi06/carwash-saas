@@ -46,6 +46,16 @@
         <div class="fnb-mini-total hidden" id="totalFnbCuci"></div>
       </div>
 
+      {{-- Foto kondisi kendaraan: bukti saat ada komplain lecet. Opsional;
+           diperkecil di layar lalu diunggah sesudah transaksinya tersimpan.
+           Disimpan 60 hari. --}}
+      <div style="margin-bottom:18px">
+        <div class="sec-label">Foto kondisi kendaraan (opsional)</div>
+        <div class="foto-grid" id="fotoCuci"></div>
+        <input type="file" id="inFotoCuci" accept="image/*" capture="environment" class="hidden"
+               onchange="tambahFotoCuci(this)">
+      </div>
+
       <div style="margin-bottom:18px">
         <div class="sec-label">Pembayaran</div>
         <div class="bayar-grid bayar-3">

@@ -15,6 +15,11 @@
              di tanda hubungnya jadi "RX-" / "7." --}}
         <div class="hint">Contoh: <span style="white-space:nowrap"><b>penter</b> &rarr; <b>Panther</b></span>,
           <span style="white-space:nowrap"><b>mazdarx7</b> &rarr; <b>Mazda RX-7</b></span>.</div>
+        {{-- Kenali dari foto: AI menebak mobil, jenis, dan platnya. Fotonya
+             ikut jadi foto kondisi pertama di transaksi. --}}
+        <label class="btn-foto-ai" for="inFotoAi">&#128247; Kenali mobil dari foto</label>
+        <input type="file" id="inFotoAi" accept="image/*" capture="environment" class="hidden"
+               onchange="kenaliDariFoto(this)">
       </div>
 
       <div id="hasilCari" class="hasil" style="margin-bottom:18px"></div>

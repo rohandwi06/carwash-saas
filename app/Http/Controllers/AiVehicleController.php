@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Vehicle;
+use App\Services\FotoKendaraanService;
 use App\Services\GeminiVehicleService;
 use App\Services\PricingService;
 use Illuminate\Http\JsonResponse;
@@ -37,8 +38,26 @@ class AiVehicleController extends Controller
     {
         $data = $request->validate(['query' => ['required', 'string', 'max:60']]);
 
-        $result = $this->gemini->classify($data['query']);
+        return $this->jawab($this->gemini->classify($data['query']));
+    }
 
+    /**
+     * POST /api/ai/classify-photo {image: data URL}
+     * Kenali kendaraan dari foto: nama, jenis, dan plat bila terbaca.
+     * Aturannya sama dengan classify(): katalog menang atas AI, dan tidak ada
+     * yang disimpan sebelum kasir menekan Pakai.
+     */
+    public function classifyPhoto(Request $request): JsonResponse
+    {
+        $data = $request->validate(['image' => ['required', 'string', 'max:6000000']]);
+        $gambar = FotoKendaraanService::urai($data['image']);
+
+        return $this->jawab($this->gemini->classifyPhoto(base64_encode($gambar['byte']), $gambar['mime']));
+    }
+
+    /** Tebakan AI -> jawaban untuk layar kasir, dengan katalog sebagai penentu. */
+    private function jawab(array $result): JsonResponse
+    {
         if (! $result['recognized']) {
             return response()->json(['data' => ['recognized' => false]]);
         }
@@ -75,6 +94,8 @@ class AiVehicleController extends Controller
             'ai_category_label' => $daftar[$result['category']]['label'] ?? $result['category'],
             'ai_price'          => $daftar[$result['category']]['price'] ?? null,
             'dikoreksi_katalog' => $slug !== $result['category'],
+            // Hanya ada pada tebakan dari foto; kosong = tidak terbaca.
+            'plate'             => $result['plate'] ?? null,
         ]]);
     }
 

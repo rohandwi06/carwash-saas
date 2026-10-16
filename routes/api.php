@@ -10,6 +10,7 @@ use App\Http\Controllers\ConsignorController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FnbDraftController;
 use App\Http\Controllers\FnbSaleController;
+use App\Http\Controllers\FotoKendaraanController;
 use App\Http\Controllers\OwnerAccountController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ProductController;
@@ -138,6 +139,14 @@ Route::middleware('pin.auth')->group(function () {
         // BARU dalam satu menit.
         Route::post('/ai/classify-vehicle', [AiVehicleController::class, 'classify'])
             ->middleware('throttle:20,1');
+        // Kenali dari foto: tanpa cache (tiap foto berbeda), jadi batasnya lebih ketat.
+        Route::post('/ai/classify-photo', [AiVehicleController::class, 'classifyPhoto'])
+            ->middleware('throttle:10,1');
+
+        // Foto kondisi kendaraan: diunggah sesudah transaksinya tersimpan.
+        Route::post('/transactions/{transaction}/photos', [FotoKendaraanController::class, 'store'])
+            ->middleware('throttle:60,1');
+        Route::get('/photos/{vehiclePhoto}', [FotoKendaraanController::class, 'show']);
         Route::post('/ai/save-vehicle', [AiVehicleController::class, 'save']);
 
         // Laporan / pembukuan
@@ -242,6 +251,7 @@ Route::middleware('pin.auth')->group(function () {
         Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
         // Ejaan kasir yang dipelajari aplikasi (VehicleMemoryService)
         Route::get('/vehicle-aliases', [VehicleController::class, 'aliases']);
+        Route::delete('/photos/{vehiclePhoto}', [FotoKendaraanController::class, 'destroy']);
         Route::delete('/vehicle-aliases/{vehicleAlias}', [VehicleController::class, 'destroyAlias']);
 
         Route::get('/wash-services', [WashServiceController::class, 'index']);

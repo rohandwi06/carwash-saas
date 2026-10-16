@@ -53,12 +53,89 @@ class GeminiVehicleService
 
     private function tanyaGemini(string $query, $rows, $contoh = null): array
     {
-        $key = config('carwash.gemini.key');
+        [$daftar, $pilihan, $koreksi] = $this->bahanPrompt($rows, $contoh);
 
-        if (! $key) {
-            throw new RuntimeException('GEMINI_API_KEY belum diatur di .env');
+        $prompt = <<<PROMPT
+Kamu adalah asisten kasir cuci kendaraan di Indonesia.
+Kasir mengetik nama kendaraan: "{$query}"
+
+Tugasmu:
+1. Tebak kendaraan apa yang dimaksud (perbaiki salah eja, lengkapi merek).
+2. Klasifikasikan ke SATU kategori berikut:
+{$daftar}
+{$koreksi}
+Jawab HANYA dengan JSON valid, tanpa teks lain:
+{"name": "Nama Resmi Kendaraan", "category": "{$pilihan}", "reason": "maksimal 8 kata", "recognized": true}
+
+Jika input bukan nama kendaraan atau kamu tidak yakin kendaraan apa itu, set "recognized": false.
+PROMPT;
+
+        $data = $this->kirim([['text' => $prompt]]);
+
+        return $this->sahkan($data, $rows);
+    }
+
+    /**
+     * Kenali kendaraan dari FOTO (permintaan owner 16/10): nama, jenis, dan
+     * plat nomor bila terbaca. Jawabannya tidak disimpan di cache — setiap
+     * foto berbeda — jadi throttle di routes/api.php yang menjaga kuota.
+     *
+     * @return array{recognized:bool, name?:string, category?:string, reason?:string, plate?:string}
+     */
+    public function classifyPhoto(string $base64, string $mime): array
+    {
+        $rows = \App\Models\WashCategory::urut()->get();
+        $contoh = app(VehicleMemoryService::class)->contohKoreksi($rows->pluck('slug')->all());
+        [$daftar, $pilihan, $koreksi] = $this->bahanPrompt($rows, $contoh);
+
+        $prompt = <<<PROMPT
+Kamu adalah asisten kasir cuci kendaraan di Indonesia.
+Foto ini dipotret kasir dari kendaraan yang akan dicuci.
+
+Tugasmu:
+1. Kenali kendaraan di foto: merek dan modelnya (mis. "Toyota Avanza").
+2. Klasifikasikan ke SATU kategori berikut:
+{$daftar}
+{$koreksi}
+3. Baca plat nomornya bila terlihat jelas (format Indonesia, mis. "B 1234 XYZ").
+   Kosongkan bila tidak terbaca — jangan menebak.
+
+Jawab HANYA dengan JSON valid, tanpa teks lain:
+{"name": "Nama Resmi Kendaraan", "category": "{$pilihan}", "plate": "", "reason": "maksimal 8 kata", "recognized": true}
+
+Jika foto bukan kendaraan atau kamu tidak yakin kendaraan apa itu, set "recognized": false.
+PROMPT;
+
+        $data = $this->kirim([
+            ['text' => $prompt],
+            ['inline_data' => ['mime_type' => $mime, 'data' => $base64]],
+        ]);
+        $hasil = $this->sahkan($data, $rows);
+        if ($hasil['recognized']) {
+            $hasil['plate'] = self::platSah((string) ($data['plate'] ?? ''));
         }
 
+        return $hasil;
+    }
+
+    /**
+     * Plat hasil bacaan AI hanya dipakai bila bentuknya plat Indonesia
+     * (1–2 huruf, 1–4 angka, 0–3 huruf). Selain itu dikosongkan: plat salah
+     * baca yang diterima mentah-mentah lebih merepotkan daripada kolom kosong.
+     */
+    public static function platSah(string $plat): string
+    {
+        $rapat = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $plat));
+        if (! preg_match('/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/', $rapat, $m)) {
+            return '';
+        }
+
+        return trim($m[1].' '.$m[2].' '.$m[3]);
+    }
+
+    /** Daftar kategori, pilihan slug, dan contoh koreksi owner untuk prompt. */
+    private function bahanPrompt($rows, $contoh): array
+    {
         $daftar = $rows->map(function ($c) {
             $contoh = $c->examples ? " (contoh: {$c->examples})" : '';
 
@@ -79,20 +156,17 @@ class GeminiVehicleService
                     .' = "'.$v->category.'"')->implode("\n")."\n";
         }
 
-        $prompt = <<<PROMPT
-Kamu adalah asisten kasir cuci kendaraan di Indonesia.
-Kasir mengetik nama kendaraan: "{$query}"
+        return [$daftar, $pilihan, $koreksi];
+    }
 
-Tugasmu:
-1. Tebak kendaraan apa yang dimaksud (perbaiki salah eja, lengkapi merek).
-2. Klasifikasikan ke SATU kategori berikut:
-{$daftar}
-{$koreksi}
-Jawab HANYA dengan JSON valid, tanpa teks lain:
-{"name": "Nama Resmi Kendaraan", "category": "{$pilihan}", "reason": "maksimal 8 kata", "recognized": true}
+    /** Kirim ke Gemini dan kembalikan JSON jawabannya (null bila bukan JSON). */
+    private function kirim(array $parts): ?array
+    {
+        $key = config('carwash.gemini.key');
 
-Jika input bukan nama kendaraan atau kamu tidak yakin kendaraan apa itu, set "recognized": false.
-PROMPT;
+        if (! $key) {
+            throw new RuntimeException('GEMINI_API_KEY belum diatur di .env');
+        }
 
         $model = config('carwash.gemini.model');
 
@@ -102,7 +176,7 @@ PROMPT;
                 ->withOptions(['force_ip_resolve' => 'v4']) // hindari macet resolusi IPv6 di Windows
                 ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$key}", [
                     'contents' => [
-                        ['parts' => [['text' => $prompt]]],
+                        ['parts' => $parts],
                     ],
                     'generationConfig' => [
                         'responseMimeType' => 'application/json',
@@ -148,6 +222,12 @@ PROMPT;
         $text = data_get($response->json(), 'candidates.0.content.parts.0.text');
         $data = json_decode((string) $text, true);
 
+        return is_array($data) ? $data : null;
+    }
+
+    /** Jawaban AI tidak pernah dipercaya mentah-mentah. */
+    private function sahkan(?array $data, $rows): array
+    {
         // Validasi ketat: jawaban AI tidak pernah dipercaya mentah-mentah
         $validCategories = $rows->pluck('slug')->all();
 

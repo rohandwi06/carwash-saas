@@ -91,6 +91,12 @@ class Transaction extends Model
         return $this->belongsToMany(Addon::class)->withPivot('name', 'price');
     }
 
+    /** Foto kondisi kendaraan saat masuk (FotoKendaraanService). */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(VehiclePhoto::class);
+    }
+
     /** Makanan/minuman yang dipesan bersamaan dengan cucian ini. */
     public function fnbSales(): HasMany
     {
