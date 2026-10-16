@@ -154,14 +154,17 @@ class _LayarLoginState extends ConsumerState<LayarLogin> {
                       : const Text('Masuk'),
                 ),
                 const SizedBox(height: 18),
-                TextButton.icon(
+                // Alamat server sengaja tidak ditampilkan (permintaan owner
+                // 16/10): pengguna cukup tahu nama cuciannya di atas. Tombol
+                // ini satu-satunya jalan kembali ke layar kode cucian bila
+                // salah pilih, jadi tetap ada.
+                TextButton(
                   onPressed: _kirim
                       ? null
                       : () => ref.read(sesiProvider.notifier).setServer(''),
-                  icon: const Icon(Icons.dns_outlined, size: 18),
-                  label: Text(
-                    'Server: ${ref.watch(sesiProvider).baseUrl}',
-                    style: const TextStyle(fontSize: 12),
+                  child: const Text(
+                    'Ganti cucian',
+                    style: TextStyle(fontSize: 12.5, color: Warna.redup),
                   ),
                 ),
               ],

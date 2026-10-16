@@ -1051,8 +1051,8 @@ class _TabTabletState extends ConsumerState<_TabTablet> {
               Text(sesi.baseUrl, style: Teks.label),
               const SizedBox(height: 6),
               const Text(
-                'Alamat server cucian ini. Ganti hanya kalau tablet dipindah '
-                'ke cabang lain — semua data ikut pindah ke server baru.',
+                'Alamat server cucian ini. Ganti hanya kalau perangkat ini '
+                'dipindah ke cucian lain — semua data ikut pindah ke server baru.',
                 style: Teks.kecil,
               ),
               const SizedBox(height: 12),
@@ -1060,9 +1060,9 @@ class _TabTabletState extends ConsumerState<_TabTablet> {
                 onPressed: () async {
                   final yakin = await konfirmasi(
                     context,
-                    judul: 'Ganti server?',
+                    judul: 'Ganti cucian?',
                     pesan: 'Kamu akan keluar dari akun dan harus mengisi '
-                        'alamat server lagi.',
+                        'kode cucian lagi.',
                     tombolYa: 'Ganti',
                   );
                   if (!yakin) return;
@@ -1070,7 +1070,7 @@ class _TabTabletState extends ConsumerState<_TabTablet> {
                   await ref.read(sesiProvider.notifier).setServer('');
                 },
                 icon: const Icon(Icons.dns_outlined),
-                label: const Text('Ganti server'),
+                label: const Text('Ganti cucian'),
               ),
             ],
           ),
