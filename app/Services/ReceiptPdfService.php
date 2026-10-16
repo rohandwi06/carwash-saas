@@ -57,8 +57,13 @@ class ReceiptPdfService
 
         // Harga cucian dasar tidak disimpan terpisah: total = cucian + add-on.
         $hargaAddon = $trx->addons->sum(fn ($a) => (int) $a->pivot->price);
+        // Dengan promo, layanan ditulis dengan harga aslinya lalu potongannya
+        // di baris sendiri — pelanggan melihat apa yang ia hemat.
         $rincian = [['baris', $motor ? 'Cuci Motor' : ($layanan?->label ?? (string) $trx->service),
-            $this->rp($trx->total - $hargaAddon)]];
+            $this->rp($trx->total + (int) $trx->promo_discount - $hargaAddon)]];
+        if ((int) $trx->promo_discount > 0) {
+            $rincian[] = ['baris', 'Promo setia', '-'.$this->rp((int) $trx->promo_discount)];
+        }
         foreach ($trx->addons as $a) {
             $rincian[] = ['baris', '+ '.$a->pivot->name, $this->rp((int) $a->pivot->price)];
         }

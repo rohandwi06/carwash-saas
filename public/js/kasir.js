@@ -657,6 +657,7 @@ function resetConfirm(){
   fnbCuciCari = ""; fnbCuciHal = 1;   // konfirmasi baru = pencarian F&B kosong lagi
   $("inPlat").value=""; $("inTip").value="";
   $("inPelanggan").value=""; $("inTelepon").value="";
+  clearTimeout(promoTimer); promoCek = null; promoPakai = false; gambarPromo();
   tutupFnbModal();   // jangan sampai modal menu ikut terbawa ke cucian berikutnya
 }
 function pilihHasil(nama, kat){
@@ -700,7 +701,7 @@ function totalFnbCuci(){
 }
 function hitungTotalPreview(){
   // angka resmi tetap dihitung server; ini cuma supaya kasir lihat perkiraan
-  return (hargaLayanan(pilihan.kat, layananAktif) || 0) + totalAddon() + totalFnbCuci();
+  return (hargaLayanan(pilihan.kat, layananAktif) || 0) - potonganPromoPreview() + totalAddon() + totalFnbCuci();
 }
 function renderConfirm(){
   const kt = CFG.categories[pilihan.kat];
@@ -751,6 +752,7 @@ function renderConfirm(){
   $("btnTf").classList.toggle("aktif", metode==="tf");
   $("btnQris").classList.toggle("aktif", metode==="qris");
 
+  gambarPromo();
   $("totalBayar").textContent = rp(hitungTotalPreview());
 }
 
@@ -887,6 +889,79 @@ function setBayar(m){ metode=m; renderConfirm(); }
 /* Nomor telepon: hanya angka, +, spasi, strip, dan kurung — aturan yang sama
    dengan validasi server, supaya kasir tidak baru tahu salahnya saat simpan. */
 function rapikanTelepon(el){ el.value = el.value.replace(/[^0-9+\-\s()]/g, ""); }
+
+/* ---------- PROMO PELANGGAN SETIA ----------
+   Saat plat atau nomor telepon diketik, layar menanyakan server berapa kali
+   pelanggan ini sudah datang dan apakah ia berhak promo. Harga baru berubah
+   setelah kasir menekan "Pakai promo"; berhak atau tidaknya, dan besar
+   potongannya, tetap diputuskan server waktu transaksi disimpan
+   (PromoService). Pelanggan yang tidak memakai haknya hari ini tidak
+   kehilangannya — hak itu masih ada di kedatangan berikutnya. */
+let promoCek = null;      // jawaban /promo/check untuk plat + telepon yang sedang diketik
+let promoPakai = false;   // kasir sudah menekan "Pakai promo"
+let promoTimer = null;
+
+function jadwalCekPromo(){
+  clearTimeout(promoTimer);
+  promoTimer = setTimeout(cekPromo, 400);   // jangan tanya server tiap huruf
+}
+async function cekPromo(){
+  const kunci = () => formatPlat($("inPlat").value)+"|"+$("inTelepon").value.trim();
+  const awal = kunci();
+  const [plat, telp] = awal.split("|");
+  if(!plat && !telp){ promoCek = null; promoPakai = false; segarkanPromo(); return; }
+  try{
+    const d = await api("/promo/check?plate="+encodeURIComponent(plat)+"&phone="+encodeURIComponent(telp));
+    if(kunci() !== awal) return;            // sudah diketik lagi — jawaban ini basi
+    promoCek = d;
+  }catch(e){ promoCek = null; }             // promo gagal dicek: cucian tetap bisa dicatat
+  if(!promoCek || !promoCek.berhak) promoPakai = false;
+  segarkanPromo();
+}
+function segarkanPromo(){
+  gambarPromo();
+  if(pilihan) $("totalBayar").textContent = rp(hitungTotalPreview());
+}
+/** Teks singkat aturan promo — sama dengan PromoService::label(). */
+function labelPromo(aturan){
+  if(aturan === "gratis") return "Cuci gratis";
+  const [jenis, nilai] = String(aturan||"").split(":");
+  if(jenis === "persen") return "Potongan "+(+nilai||0)+"%";
+  if(jenis === "rupiah") return "Potongan "+rp(+nilai||0);
+  return "Promo";
+}
+/** Perkiraan potongan untuk layar — sama dengan PromoService::potongan(). */
+function potonganPromo(aturan, harga){
+  harga = Math.max(0, harga||0);
+  if(aturan === "gratis") return harga;
+  const [jenis, nilai] = String(aturan||"").split(":");
+  if(jenis === "persen") return Math.min(harga, Math.floor(harga * Math.min(100, +nilai||0) / 100));
+  if(jenis === "rupiah") return Math.min(harga, +nilai||0);
+  return 0;
+}
+function potonganPromoPreview(){
+  if(!promoPakai || !promoCek || !promoCek.berhak || !pilihan) return 0;
+  return potonganPromo(promoCek.aturan, hargaLayanan(pilihan.kat, layananAktif) || 0);
+}
+function gambarPromo(){
+  const el = $("promoKotak");
+  if(!el) return;
+  const d = promoCek;
+  if(!d || !d.aktif || !d.dikenali){ el.classList.add("hidden"); el.innerHTML = ""; return; }
+  el.classList.remove("hidden");
+  el.classList.toggle("berhak", d.berhak);
+  el.innerHTML = d.berhak
+    ? '<div class="promo-judul">&#11088; Pelanggan setia &middot; kedatangan ke-'+d.kunjungan+'</div>'
+      + '<div class="promo-isi">Berhak <b>'+esc(d.label)+'</b>'
+      +   (d.hak > 1 ? ' &middot; '+d.hak+' kali belum dipakai' : '')+'</div>'
+      + (promoPakai ? '<div class="promo-isi">Harga layanan dipotong <b>'+rp(potonganPromoPreview())+'</b></div>' : '')
+      + '<button class="btn-promo'+(promoPakai ? ' aktif' : '')+'" onclick="togglePromo()">'
+      +   (promoPakai ? '&#10003; Promo dipakai &middot; tap untuk batal' : 'Pakai promo')+'</button>'
+    : '<div class="promo-judul">&#11088; Kedatangan ke-'+d.kunjungan+'</div>'
+      + '<div class="promo-isi">'+d.sisa+' kedatangan lagi dapat <b>'+esc(d.label)+'</b>'
+      +   ' (setiap kedatangan ke-'+d.setiap+').</div>';
+}
+function togglePromo(){ promoPakai = !promoPakai; segarkanPromo(); }
 function togglePk(id){
   if(pekerjaPilih.has(id)) pekerjaPilih.delete(id); else pekerjaPilih.add(id);
   renderConfirm();
@@ -910,6 +985,7 @@ async function konfirmasi(){
       worker_ids: Array.from(pekerjaPilih),
       addon_ids: Array.from(addonPilih),
       fnb_items: Object.entries(fnbCuci).map(([id,qty])=>({product_id:+id, qty})),
+      pakai_promo: !!(promoPakai && promoCek && promoCek.berhak),
     };
     if(draftAktif) body.draft_id = draftAktif; // draft ikut terhapus di server
     const trx = await api("/transactions", { method:"POST", body });
@@ -975,7 +1051,9 @@ function dataResiCucian(trx){
   const layanan = adalahMotor(trx.category) ? "Cuci Motor" : (sv? sv.label : trx.service);
   const addons = trx.addons || [];
   const hargaAddon = a => a.pivot? a.pivot.price : a.price;
-  const cuci = (trx.total||0) - addons.reduce((t,a)=>t+hargaAddon(a), 0);
+  // Dengan promo, layanan ditulis dengan harga aslinya lalu potongannya di
+  // baris sendiri (sama dengan resi PDF, ReceiptPdfService).
+  const cuci = (trx.total||0) + (trx.promo_discount||0) - addons.reduce((t,a)=>t+hargaAddon(a), 0);
   return {
     nomor: nomorNota("C", trx.id),
     waktu: trx.created_at,
@@ -988,6 +1066,7 @@ function dataResiCucian(trx){
         // nama kendaraannya sama dengan jenisnya — jangan ditulis dua kali.
         + ((kt && kt.label !== trx.vehicle_name)? barisResi("Jenis", esc(kt.label)) : ""),
     rincian: barisResi(esc(layanan), rp(cuci))
+        + (trx.promo_discount ? barisResi("Promo setia", "-"+rp(trx.promo_discount)) : "")
         + addons.map(a=>barisResi("+ "+esc(a.pivot?a.pivot.name:a.name), rp(hargaAddon(a)))).join("")
         + itemFnb(trx).map(i=>barisResi(esc(i.product_name)+" x"+i.qty, rp(i.subtotal))).join(""),
     belanja: totalTrx(trx),
@@ -1235,6 +1314,7 @@ function lanjutDraft(id){
   $("inTip").value  = d.tip ? d.tip : "";
   $("inPelanggan").value = d.customer_name || "";
   $("inTelepon").value   = d.customer_phone || "";
+  jadwalCekPromo();   // draft pelanggan setia: haknya langsung terlihat
   // Menu yang sudah dihapus/dinonaktifkan sejak draft dibuat tidak bisa
   // dijual lagi — dilewati dan disebutkan, bukan diam-diam dibuang.
   // Perlakuan yang sama dengan lanjutDraftFnb().
@@ -3499,6 +3579,7 @@ function trxHTML(r, opsi){
     ...(r.customer_phone ? [["Telepon", esc(r.customer_phone)]] : []),
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
     ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
+    ...(r.promo_discount ? [["Promo pelanggan setia", esc(labelPromo(r.promo_rule))+" &middot; -"+rp(r.promo_discount)]] : []),
     ["Pembayaran", infoBayar(r.payment_method).panjang],
     ["Tip", r.tip? rp(r.tip) : "&mdash;"],
     ["Pekerja", pk || "&mdash;"],
@@ -6623,7 +6704,7 @@ async function editAkunKasir(id, namaLama, usernameLama){
    dan bergantian tampil. Pilihan terakhir diingat: owner yang sedang menyetel
    shift biasanya bolak-balik ke sana, dan mengembalikannya ke tab pertama tiap
    kali berarti menggulir melewati seluruh katalog lagi. */
-const TAB_PENGATURAN = ["kendaraan", "makanan", "karyawan", "shift", "akun"];
+const TAB_PENGATURAN = ["kendaraan", "makanan", "karyawan", "promo", "shift", "akun"];
 
 /* `gulirKeAtas` sengaja jadi pilihan, bukan selalu: fungsi ini dipakai dua
    macam pemanggil. Menekan tab (atau baru masuk layar Pengaturan) memang
@@ -6638,7 +6719,7 @@ const TAB_PENGATURAN = ["kendaraan", "makanan", "karyawan", "shift", "akun"];
    yang memanggil renderMenuFnb() — tidak melempar owner keluar dari
    halamannya. */
 let halPengaturan = "menu";
-const JUDUL_PENGATURAN = {kendaraan:"Kendaraan", makanan:"Makanan", karyawan:"Karyawan", shift:"Shift", akun:"Akun"};
+const JUDUL_PENGATURAN = {kendaraan:"Kendaraan", makanan:"Makanan", karyawan:"Karyawan", promo:"Promo pelanggan setia", shift:"Shift", akun:"Akun"};
 function setTabPengaturan(tab, gulirKeAtas = true){
   if(!TAB_PENGATURAN.includes(tab)) tab = "menu";
   halPengaturan = tab;
@@ -6651,6 +6732,102 @@ function setTabPengaturan(tab, gulirKeAtas = true){
   // halaman pendek seperti Shift terbuka di tengah-tengah.
   const layar = $("layarMenuFnb");
   if(gulirKeAtas && layar && !layar.classList.contains("hidden")) window.scrollTo({top:0, behavior:"smooth"});
+}
+
+/* ---------- PENGATURAN: PROMO PELANGGAN SETIA (khusus owner) ----------
+   Satu aturan untuk seluruh cucian: setiap kedatangan ke-N, hadiahnya, dan
+   upah pekerja untuk cucian promo. Hitungannya di server (PromoService). */
+let promoAtur = null;   // {tersimpan, aktif, jenis, nilai, setiap, upah}
+// Nomor muatan: jawaban /promo yang datang SESUDAH owner menyimpan (server
+// lokal melayani satu per satu, Pengaturan memuat banyak hal sekaligus) tidak
+// boleh menimpa isian yang baru disimpan.
+let promoMuat = 0;
+
+const JENIS_PROMO = [
+  {jenis:"gratis", judul:"Cuci gratis",     sub:"Harga layanan jadi Rp 0"},
+  {jenis:"persen", judul:"Potongan persen", sub:"Sekian persen dari harga layanan"},
+  {jenis:"rupiah", judul:"Potongan rupiah", sub:"Sekian rupiah dari harga layanan"},
+];
+const UPAH_PROMO = [
+  {upah:"penuh", judul:"Upah tetap penuh",      sub:"Pekerja dibayar seperti cucian biasa; potongannya ditanggung owner"},
+  {upah:"ikut",  judul:"Upah ikut harga promo", sub:"Upah turun sebesar potongannya; cuci gratis berarti upah Rp 0"},
+];
+
+async function renderPromoPengaturan(){
+  if(ROLE !== "owner" || !$("promoPengaturan")) return;
+  const no = ++promoMuat;
+  try{
+    const d = await api("/promo");
+    if(no !== promoMuat) return;
+    promoAtur = {...d, tersimpan: d};
+    gambarPromoPengaturan();
+  }catch(e){ if(no === promoMuat) $("promoPengaturan").innerHTML = '<div class="cat-kosong">Pengaturan promo gagal dimuat.</div>'; }
+}
+
+function gambarPromoPengaturan(){
+  const w = $("promoPengaturan");
+  if(!w || !promoAtur) return;
+  const a = promoAtur;
+  const tombol = (aktif, judul, sub, klik) =>
+    '<button class="btn-cara'+(aktif ? ' aktif' : '')+'" onclick="'+klik+'">'
+    + '<span class="radio"></span>'
+    + '<span class="btn-cara-teks"><span class="btn-cara-judul">'+judul+'</span>'
+    +   '<span class="btn-cara-sub">'+esc(sub)+'</span></span></button>';
+
+  w.innerHTML =
+      '<div class="peny-ket">Pelanggan dikenali dari <b>plat atau nomor telepon</b>. Di kedatangan yang berhak, '
+    +   'kasir diberi tahu dan harga baru berubah setelah kasir menekan <b>Pakai promo</b>. '
+    +   'Potongan hanya untuk harga layanan; add-on dan makanan tetap dibayar.</div>'
+    + '<div class="pilih-cara">'
+    +   tombol(a.aktif,  "Promo nyala", "Kasir melihat hitungan kedatangan pelanggan", "ubahPromo('aktif',true)")
+    +   tombol(!a.aktif, "Promo mati",  "Tidak ada promo; hak yang belum dipakai tidak bisa dipakai", "ubahPromo('aktif',false)")
+    + '</div>'
+    + '<div class="field" style="margin:12px 0"><label for="inPromoSetiap">Setiap kedatangan ke-</label>'
+    +   '<input id="inPromoSetiap" type="number" inputmode="numeric" min="2" max="100" value="'+esc(a.setiap)+'"'
+    +   ' style="text-transform:none" oninput="promoAtur.setiap=this.value"></div>'
+    + '<div class="sec-label">Hadiahnya</div>'
+    + '<div class="pilih-cara">'
+    +   JENIS_PROMO.map(j => tombol(a.jenis === j.jenis, j.judul, j.sub, "ubahPromo('jenis','"+j.jenis+"')")).join("")
+    + '</div>'
+    + (a.jenis === "gratis" ? '' :
+        '<div class="field" style="margin:12px 0"><label for="inPromoNilai">'
+        + (a.jenis === "persen" ? 'Besar potongan (%)' : 'Besar potongan (Rp)')+'</label>'
+        + '<input id="inPromoNilai" type="number" inputmode="numeric" min="1" value="'+(a.nilai || "")+'"'
+        + ' style="text-transform:none" oninput="promoAtur.nilai=this.value"></div>')
+    + '<div class="sec-label" style="margin-top:12px">Upah pekerja untuk cucian promo</div>'
+    + '<div class="pilih-cara">'
+    +   UPAH_PROMO.map(u => tombol(a.upah === u.upah, u.judul, u.sub, "ubahPromo('upah','"+u.upah+"')")).join("")
+    + '</div>'
+    + '<div class="peny-ket" style="margin-top:10px">'
+    +   (a.tersimpan.aktif && a.tersimpan.mulai
+          ? 'Kedatangan dihitung sejak <b>'+fmtTgl(a.tersimpan.mulai)+'</b>, hari promo dinyalakan.'
+          : 'Kedatangan dihitung mulai hari promo dinyalakan; cucian sebelumnya tidak ikut.')
+    +   ' Upah per bulan tidak terpengaruh promo.</div>'
+    + '<button class="btn-catat" onclick="simpanPromo()" style="background:var(--go);width:100%;margin-top:12px">'
+    +   '&#128190; Simpan pengaturan promo</button>';
+}
+
+function ubahPromo(kunci, nilai){
+  // Angka yang sedang diketik ikut diamankan sebelum digambar ulang.
+  const s = $("inPromoSetiap"), n = $("inPromoNilai");
+  if(s) promoAtur.setiap = s.value;
+  if(n) promoAtur.nilai = n.value;
+  promoAtur[kunci] = nilai;
+  gambarPromoPengaturan();
+}
+
+async function simpanPromo(){
+  const a = promoAtur;
+  const body = {aktif: !!a.aktif, jenis: a.jenis, setiap: parseInt(a.setiap, 10) || 0, upah: a.upah};
+  if(a.jenis !== "gratis") body.nilai = parseInt(a.nilai, 10) || 0;
+  promoMuat++;   // muatan yang masih di jalan sudah basi
+  try{
+    const d = await api("/promo", {method:"PUT", body});
+    promoAtur = {...d, tersimpan: d};
+    gambarPromoPengaturan();
+    Swal.fire({toast:true, position:"top-end", icon:"success", title:"Pengaturan promo tersimpan",
+      showConfirmButton:false, timer:2000});
+  }catch(e){ gagal(e); }
 }
 
 /* ---------- PENGATURAN: CARA HITUNG UPAH (khusus owner) ----------
@@ -6947,6 +7124,7 @@ async function renderMenuFnb(gulirKeAtas = false){
     renderAkunKasir();
     renderKaryawanTraining();
     renderShiftPengaturan();
+    renderPromoPengaturan();
     produkSemua = await api("/products");
     renderDaftarProduk();
   }catch(e){ gagal(e); }

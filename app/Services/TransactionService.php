@@ -23,6 +23,7 @@ class TransactionService
         private FnbService $fnb,
         private CashBookService $books,
         private DailyRuleService $aturan,
+        private PromoService $promo,
     ) {}
 
     /**
@@ -58,7 +59,26 @@ class TransactionService
             $totalCuci  = $this->pricing->total($data['category'], $data['service'] ?? 'reguler');
             $totalAddon = (int) $addons->sum('price');
 
-            $transaction = Transaction::create([
+            // Promo pelanggan setia: hanya kalau kasir memilihnya DAN server
+            // sendiri mendapati pelanggan ini berhak. Potongannya untuk harga
+            // layanan saja; add-on dan F&B tetap dibayar.
+            $promo = [];
+            if (! empty($data['pakai_promo'])) {
+                $cek = $this->promo->cek($data['plate'] ?? null, $data['customer_phone'] ?? null);
+                if (! $cek['berhak']) {
+                    throw new RuntimeException('Pelanggan ini belum berhak promo. Periksa plat atau nomor teleponnya.');
+                }
+                // Kolom promo hanya ditulis kalau promonya dipakai, supaya
+                // situs yang kodenya sudah baru tapi SQL-nya belum dijalankan
+                // tetap bisa mencatat cucian biasa.
+                $promo = [
+                    'promo_discount' => PromoService::potongan($cek['aturan'], $totalCuci),
+                    'promo_rule'     => $cek['aturan'],
+                    'promo_wage'     => $cek['upah'],
+                ];
+            }
+
+            $transaction = Transaction::create($promo + [
                 'queue_no'       => $this->nextQueueNo($date),
                 'vehicle_name'   => $data['vehicle_name'],
                 'category'       => $data['category'],
@@ -68,7 +88,7 @@ class TransactionService
                 'customer_name'  => $data['customer_name'] ?? null,
                 'customer_phone' => $data['customer_phone'] ?? null,
                 'tip'            => $data['tip'] ?? 0,
-                'total'          => $totalCuci + $totalAddon,
+                'total'          => $totalCuci - ($promo['promo_discount'] ?? 0) + $totalAddon,
                 'date'           => $date,
                 'book_id'        => $book->id,
                 'created_by'     => $data['created_by'] ?? null,
@@ -156,7 +176,15 @@ class TransactionService
                 : $trx->addons->pluck('id')->all();
             $addons = $this->pricing->resolveAddons($addonIds);
 
-            $trx->update([
+            // Promo yang sudah dipakai tetap melekat dan dihitung ulang dari
+            // aturan salinannya: cuci gratis tetap gratis walau layanannya
+            // dikoreksi ke yang lebih mahal.
+            $hargaLayanan = $this->pricing->total($kategori, $layanan);
+            $promo = $trx->promo_rule !== null
+                ? ['promo_discount' => PromoService::potongan($trx->promo_rule, $hargaLayanan)]
+                : [];
+
+            $trx->update($promo + [
                 'vehicle_name'   => $data['vehicle_name']   ?? $trx->vehicle_name,
                 'category'       => $kategori,
                 'service'        => $layanan,
@@ -165,7 +193,7 @@ class TransactionService
                 'customer_name'  => array_key_exists('customer_name', $data) ? $data['customer_name'] : $trx->customer_name,
                 'customer_phone' => array_key_exists('customer_phone', $data) ? $data['customer_phone'] : $trx->customer_phone,
                 'tip'            => $data['tip'] ?? $trx->tip,
-                'total'          => $this->pricing->total($kategori, $layanan) + (int) $addons->sum('price'),
+                'total'          => $hargaLayanan - ($promo['promo_discount'] ?? 0) + (int) $addons->sum('price'),
                 'edited_at'      => now(),
                 'edited_by'      => $by,
                 'edit_reason'    => $data['edit_reason'] ?? null,

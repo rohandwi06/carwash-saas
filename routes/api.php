@@ -13,6 +13,7 @@ use App\Http\Controllers\FnbSaleController;
 use App\Http\Controllers\OwnerAccountController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PromoController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ShiftController;
@@ -111,6 +112,9 @@ Route::middleware('pin.auth')->group(function () {
         // dibuka tanpa login (routes/web.php) dan dijaga tanda tangan.
         Route::get('/receipts/{jenis}/{id}/link', [ReceiptController::class, 'link'])->whereNumber('id');
 
+        // Promo pelanggan setia: status satu pelanggan (plat/telepon) di layar kasir.
+        Route::get('/promo/check', [PromoController::class, 'check']);
+
         // Draft F&B: catat pesanan dulu, penjualannya disimpan belakangan
         Route::get('/fnb-drafts', [FnbDraftController::class, 'index']);
         Route::post('/fnb-drafts', [FnbDraftController::class, 'store']);
@@ -167,6 +171,10 @@ Route::middleware('pin.auth')->group(function () {
         // Cara hitung upah: bagi hasil persenan atau upah per mobil
         Route::get('/wage-sharing', [WageSharingController::class, 'index']);
         Route::put('/wage-sharing', [WageSharingController::class, 'update']);
+
+        // Pengaturan promo pelanggan setia
+        Route::get('/promo', [PromoController::class, 'index']);
+        Route::put('/promo', [PromoController::class, 'update']);
 
         // Pekerja: tambah/ubah/hapus + biodata (NIK, alamat, tanggal lahir)
         Route::post('/workers', [WorkerController::class, 'store']);

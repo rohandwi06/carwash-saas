@@ -21,6 +21,7 @@ class Transaction extends Model
     protected $fillable = [
         'queue_no', 'vehicle_name', 'category', 'service',
         'payment_method', 'plate', 'customer_name', 'customer_phone', 'tip', 'total', 'date',
+        'promo_discount', 'promo_rule', 'promo_wage',
         'book_id',
         'voided_at', 'void_reason', 'voided_by', 'created_by',
         'void_requested_at', 'void_requested_by', 'void_request_reason',
@@ -30,6 +31,7 @@ class Transaction extends Model
 
     protected $casts = [
         'is_bonus'          => 'boolean', // hanya untuk membaca transaksi lama
+        'promo_discount'    => 'integer',
         // ':Y-m-d' mencegah tanggal mundur satu hari saat dibaca frontend —
         // lihat catatan lengkap di App\Models\CashBook.
         'date'              => 'date:Y-m-d',

@@ -160,8 +160,18 @@ class WageService
 
         // total = harga cuci + add-on; sudah tersimpan sebelum fungsi ini
         // dipanggil, baik saat transaksi dibuat maupun dikoreksi.
-        $jatah = $this->jatahFor($transaction->category, $transaction->service, (int) $transaction->total,
+        //
+        // Promo pelanggan setia: upah dihitung dari harga SEBELUM potongan,
+        // kecuali owner memilih upah ikut harga promo — jatahnya lalu turun
+        // sebanding dengan bagian yang dibayar (cuci gratis = Rp 0). Pilihan
+        // itu disalin ke transaksinya, jadi mengubah pengaturan promo tidak
+        // menggeser upah cucian yang sudah lewat.
+        $kotor = (int) $transaction->total + (int) $transaction->promo_discount;
+        $jatah = $this->jatahFor($transaction->category, $transaction->service, $kotor,
             $transaction->date?->toDateString());
+        if ((int) $transaction->promo_discount > 0 && $transaction->promo_wage === 'ikut' && $kotor > 0) {
+            $jatah = intdiv($jatah * (int) $transaction->total, $kotor);
+        }
         $upahTraining = $this->traineeWageFor($transaction->category, $transaction->service);
         $training = Worker::whereIn('id', $workerIds)->where('is_trainee', true)->pluck('id')->all();
 

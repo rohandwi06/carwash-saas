@@ -35,6 +35,9 @@ class StoreTransactionRequest extends FormRequest
             'fnb_items.*.qty'        => ['required', 'integer', 'min:1', 'max:100'],
             // Draft yang dipakai; dihapus otomatis setelah transaksi tersimpan.
             'draft_id'       => ['sometimes', 'integer', 'exists:transaction_drafts,id'],
+            // Kasir memilih memakai promo pelanggan setia. Hanya permintaan:
+            // berhak atau tidaknya, dan besar potongannya, diputuskan server.
+            'pakai_promo'    => ['sometimes', 'boolean'],
             // Perhatikan: TIDAK ADA field "total" — server yang menghitung.
         ];
     }

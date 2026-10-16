@@ -59,7 +59,7 @@
         <div class="field">
           <label for="inPlat">Plat nomor</label>
           <input id="inPlat" placeholder="n1234ab (boleh kosong)" autocomplete="off"
-                 maxlength="20" autocapitalize="characters" oninput="rapikanPlat(this)">
+                 maxlength="20" autocapitalize="characters" oninput="rapikanPlat(this);jadwalCekPromo()">
         </div>
         <div class="field">
           <label for="inTip">Tip (Rp)</label>
@@ -78,9 +78,13 @@
         <div class="field">
           <label for="inTelepon">No. telepon</label>
           <input id="inTelepon" type="tel" inputmode="tel" placeholder="08&hellip; (boleh kosong)" autocomplete="off"
-                 maxlength="20" style="text-transform:none" oninput="rapikanTelepon(this)">
+                 maxlength="20" style="text-transform:none" oninput="rapikanTelepon(this);jadwalCekPromo()">
         </div>
       </div>
+
+      {{-- Promo pelanggan setia: muncul setelah plat atau nomor telepon
+           diketik, kalau owner menyalakan promo. Diisi gambarPromo(). --}}
+      <div class="promo-kotak hidden" id="promoKotak"></div>
 
       <div class="total-bar" style="margin-bottom:18px">
         <div class="tb-label">TOTAL BAYAR</div>

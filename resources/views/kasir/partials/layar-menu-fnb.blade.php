@@ -23,6 +23,12 @@
               <span class="mpk-sub">Cara hitung upah, karyawan training, dan status pekerja</span></span>
             <span class="mpk-panah">&#8250;</span>
           </button>
+          <button class="mpk-baris" data-tab="promo" onclick="setTabPengaturan('promo')">
+            <span class="mpk-ikon">&#11088;</span>
+            <span class="mpk-teks"><span class="mpk-judul">Promo pelanggan setia</span>
+              <span class="mpk-sub">Cuci gratis atau potongan untuk pelanggan yang sering datang</span></span>
+            <span class="mpk-panah">&#8250;</span>
+          </button>
           <button class="mpk-baris" data-tab="shift" onclick="setTabPengaturan('shift')">
             <span class="mpk-ikon">&#8986;</span>
             <span class="mpk-teks"><span class="mpk-judul">Shift</span>
@@ -190,6 +196,14 @@
         </div>
 
         {{-- ================= SHIFT ================= --}}
+        {{-- ================= PROMO ================= --}}
+        <div class="set-grup" data-grup="promo">
+          <div class="cat-blok">
+            <h3>&#11088; Promo pelanggan setia</h3>
+            <div id="promoPengaturan"></div>
+          </div>
+        </div>
+
         <div class="set-grup" data-grup="shift">
           <div class="cat-blok" id="blokShift">
             <h3>&#8986; Jam operasional (shift)</h3>
