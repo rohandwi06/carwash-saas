@@ -1,3 +1,15 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Kunci tanda tangan rilis (Play Store / APK). Isinya di android/key.properties
+// yang TIDAK pernah masuk git (lihat android/.gitignore) — cara membuatnya ada
+// di deploy/play-store/PANDUAN-PLAY-STORE.md di repo server. Tanpa berkas itu,
+// build rilis jatuh ke kunci debug: cukup untuk mencoba, DITOLAK Play Store.
+val kunciRilis = Properties().apply {
+    val berkas = rootProject.file("key.properties")
+    if (berkas.exists()) load(FileInputStream(berkas))
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -15,7 +27,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // ID aplikasi di Play Store. TIDAK BISA diganti setelah rilis pertama.
         applicationId = "id.rapiin.kasir_carwash"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -29,11 +41,24 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (!kunciRilis.isEmpty) {
+            create("rilis") {
+                keyAlias = kunciRilis["keyAlias"] as String
+                keyPassword = kunciRilis["keyPassword"] as String
+                storeFile = file(kunciRilis["storeFile"] as String)
+                storePassword = kunciRilis["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (kunciRilis.isEmpty) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("rilis")
+            }
         }
     }
 }

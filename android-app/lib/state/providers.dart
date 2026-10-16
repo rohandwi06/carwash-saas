@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/distribusi.dart';
 import '../core/format.dart';
 import '../core/pembaruan.dart';
 import '../data/api_client.dart';
@@ -179,8 +180,11 @@ final setoranMenungguProvider = FutureProvider<List<BukuKas>>(
 
 /// null = sudah versi terbaru, atau servernya belum punya endpoint ini.
 /// Tidak pernah gagal — lihat [Pembaruan.cek].
+///
+/// Build Play Store tidak pernah bertanya: pembaruannya hanya lewat Play
+/// (lihat lib/core/distribusi.dart).
 final pembaruanProvider = FutureProvider<Pembaruan?>(
-  (ref) => Pembaruan.cek(ref.watch(apiProvider)),
+  (ref) async => dariPlayStore ? null : Pembaruan.cek(ref.watch(apiProvider)),
 );
 
 /// Menu berdasarkan id. Sengaja tidak memakai `firstOrNull` dari

@@ -103,14 +103,15 @@ class SesiStore {
 
   /// Membuang alamat server sekalian — dipakai tombol "Ganti server" di
   /// Pengaturan, mis. saat tablet dipindah ke cabang lain.
-  Future<void> setBaseUrl(String url) => _prefs.setString(_kBase, _rapikan(url));
+  Future<void> setBaseUrl(String url) => _prefs.setString(_kBase, rapikan(url));
 
   Future<void> simpanHalaman(String id) => _prefs.setString(_kHalaman, id);
 
   /// Owner mengetik "budi.rapiin.id" atau "192.168.1.5:8000"; keduanya harus
   /// jadi URL yang sah. Tanpa skema dianggap https, kecuali alamat IP LAN yang
   /// hampir pasti http — server di dalam toko jarang punya sertifikat.
-  static String _rapikan(String mentah) {
+  /// Dipakai juga oleh [Direktori] untuk alamat dari daftar kode cucian.
+  static String rapikan(String mentah) {
     var s = mentah.trim().replaceAll(RegExp(r'/+$'), '');
     if (s.isEmpty) return '';
     if (!s.startsWith('http://') && !s.startsWith('https://')) {

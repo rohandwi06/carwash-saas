@@ -1,0 +1,25 @@
+{
+  "versi": 1,
+  "cucian": {
+    "otin": {
+      "nama": "OTIN CARWASH",
+      "url": "https://otincarwash-pos.my.id"
+    },
+    "kembar99": {
+      "nama": "KEMBAR 99 CARWASH",
+      "url": "https://kembar99-carwash.byrapiin.my.id"
+    },
+    "thamrin": {
+      "nama": "THAMRIN CARWASH",
+      "url": "https://thamrin-carwash.byrapiin.my.id"
+    },
+    "roni": {
+      "nama": "RONI CARWASH",
+      "url": "https://roni-carwash.byrapiin.my.id"
+    },
+    "demo": {
+      "nama": "DEMO CARWASH",
+      "url": "https://demo.byrapiin.my.id"
+    }
+  }
+}
