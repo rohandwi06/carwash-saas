@@ -16,7 +16,6 @@ nama, alamat, dan telepon diatur owner di Pengaturan → Akun → Profil usaha.
 | `app/`, `config/`, `database/`, `resources/`, `routes/`, `public/` | aplikasi Laravel 12 |
 | `deploy/cpanel/` | membuat paket zip untuk dipasang/diperbarui di cPanel |
 | `ops/` | mengurus banyak cucian: daftar cucian, `.env` tiap cucian, provisioning |
-| `android-app/` | aplikasi Android (Flutter) untuk tablet kasir dengan printer Bluetooth |
 | `docs/` | rancangan, audit, model bisnis, catatan lapangan |
 
 ## Menjalankan di laptop
@@ -115,3 +114,9 @@ mengonfirmasi tebakannya, lalu kendaraan itu masuk katalog dan berikutnya
 ditemukan tanpa AI. Kendaraan hasil tebakan ditandai "perlu dicek" di
 Pengaturan sampai owner membenarkan jenisnya. Tanpa `GEMINI_API_KEY` fitur
 lain tetap berjalan; key hanya hidup di server.
+
+## Aplikasi Android
+
+Aplikasi Android (Flutter, untuk Play Store dan tablet kasir) ada di repo terpisah
+`android-app` (dulu folder `android-app/` di repo ini; dipisah 16 Oktober 2026). Ia hanya
+tampilan yang memakai API server ini.
