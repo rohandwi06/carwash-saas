@@ -21,10 +21,11 @@ use RuntimeException;
  * beberapa bulan kalau foto disimpan selamanya.
  *
  * Berkasnya ditulis dengan fungsi berkas PHP biasa, BUKAN Storage (Flysystem):
- * per 16/10 folder vendor/ di laptop — dan karena itu juga paket server —
- * kehilangan league/flysystem/src/Config.php, sehingga Storage mati begitu
- * dipakai. Folder dasarnya bisa diganti lewat config('carwash.foto_dir')
- * (dipakai tes).
+ * sejak 30/08 vendor/ di server kehilangan league/flysystem/src/Config.php,
+ * sehingga Storage mati begitu dipakai. Laptop sudah dipulihkan 16/10 dan
+ * zip perbaikannya ada di deploy/cpanel/paket/perbaikan-vendor/, tapi fitur
+ * foto tidak boleh bergantung pada apakah zip itu sudah diunggah ke server.
+ * Folder dasarnya bisa diganti lewat config('carwash.foto_dir') (dipakai tes).
  */
 class FotoKendaraanService
 {
