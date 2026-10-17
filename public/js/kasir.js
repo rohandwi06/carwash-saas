@@ -3958,7 +3958,7 @@ async function editTrx(id){
     await muatUlangTrx();
     // Jenis kendaraannya dibetulkan: tawarkan supaya Daftar mobil (dan AI)
     // ikut belajar, bukan cuma transaksi ini.
-    if(hasil.category !== r.category && await tawarkanUbahKatalog(hasil.vehicle_name, hasil.category)) return;
+    if(hasil.category !== r.category && await tawarkanUbahKatalog(hasil.vehicle_name, hasil.category, r.category)) return;
     Swal.fire({toast:true, position:"top-end", icon:"success",
       title:"Transaksi dikoreksi", text:hasil.vehicle_name,
       showConfirmButton:false, timer:2000});
@@ -3970,7 +3970,7 @@ async function editTrx(id){
    berikutnya tidak salah lagi dan AI memakainya sebagai contoh. Owner yang
    memutuskan — koreksi satu transaksi bisa saja kasus khusus.
    true = pertanyaannya sudah tampil (pemanggil tidak perlu toast sendiri). */
-async function tawarkanUbahKatalog(nama, kat){
+async function tawarkanUbahKatalog(nama, kat, katTrxLama){
   const label = labelKat(kat);
   let v = null;
   try{
@@ -3996,8 +3996,14 @@ async function tawarkanUbahKatalog(nama, kat){
   });
   if(!isConfirmed) return true;
   try{
-    if(v) await api("/vehicles/"+v.id, {method:"PATCH", body:{category:kat}});
-    else  await api("/vehicles", {method:"POST", body:{name:nama, category:kat, dari_koreksi:true}});
+    const baru = v ? await api("/vehicles/"+v.id, {method:"PATCH", body:{category:kat}})
+                   : await api("/vehicles", {method:"POST", body:{name:nama, category:kat, dari_koreksi:true}});
+    // Lalu AI mencari mobil sejenis yang juga masih salah jenis. Jenis asal:
+    // jenis lama mobil itu di Daftar mobil, atau (mobil baru) jenis lama
+    // transaksinya.
+    const dari = v ? v.category : katTrxLama;
+    const id = v ? v.id : (baru && baru.id);
+    if(id && dari && dari !== kat && await tawarkanSejenis(id, dari)){ await muatUlangTrx(); return true; }
     Swal.fire({toast:true, position:"top-end", icon:"success", title:"Daftar mobil diperbarui",
       text:"AI juga memakai koreksi ini sebagai contoh.", showConfirmButton:false, timer:2500});
   }catch(e){ gagal(e); }
@@ -6517,7 +6523,7 @@ function barisKendaraan(v){
     isi: '<div class="rk-detail">'+(v.used_count? v.used_count+'x dicuci' : 'Belum pernah dicuci')+'</div>'
       + '<div class="item-bawah">'
       +   '<label class="mini-field"><span class="mini-label">Jenis &amp; harga</span>'
-      +     '<select onchange="ubahKategoriKendaraan('+v.id+', this.value)">'+opsiKategori(v.category)+'</select></label>'
+      +     '<select onchange="ubahKategoriKendaraan('+v.id+', this.value, \''+v.category+'\')">'+opsiKategori(v.category)+'</select></label>'
       + '</div>'
       + aksiRk('editNamaKendaraan('+v.id+',\''+jsStr(v.name)+'\')', 'hapusKendaraan('+v.id+',\''+jsStr(v.name)+'\')', 'Ubah nama'),
   });
@@ -6631,22 +6637,70 @@ async function tambahKendaraan(){
   }catch(e){ gagal(e); }
 }
 
-/* Mengubah jenis = mengubah harga cucian BERIKUTNYA. Transaksi lampau sengaja
-   tidak ikut berubah (itu uang yang sudah diterima, bukan daftar harga) —
-   tapi jumlahnya dikatakan, supaya owner tahu ada yang bisa diperiksa. */
-async function ubahKategoriKendaraan(id, category){
+/* Mengubah jenis = mengubah harga cucian berikutnya. Sesudahnya AI menebak
+   alasan perubahan itu dan mengusulkan mobil sejenis yang masih salah jenis;
+   owner yang memilih, dan transaksi lama mobil-mobil itu ikut dibetulkan
+   (permintaan owner 17/10). Lihat tawarkanSejenis(). */
+async function ubahKategoriKendaraan(id, category, lama){
   try{
-    const r = await api("/vehicles/"+id,{method:"PATCH",body:{category}, penuh:true});
+    await api("/vehicles/"+id,{method:"PATCH",body:{category}});
     await segarkanKatalogKendaraan();
-    const n = (r.meta && r.meta.transaksi_beda_kategori) || 0;
-    if(n>0){
-      Swal.fire({icon:"info", title:"Tersimpan", html:
-        '<b>'+esc(r.data.name)+'</b> sekarang '+esc(labelKat(r.data.category))
-        + ' untuk cucian berikutnya.<br><br>'
-        + '<b>'+n+' transaksi lampau</b> masih tercatat dengan jenis yang lama. '
-        + 'Angkanya tidak ikut berubah &mdash; kalau perlu dibetulkan, ubah satu per satu di Pembukuan.'});
-    }
+    if(lama && lama !== category && await tawarkanSejenis(id, lama)) await segarkanKatalogKendaraan();
   }catch(e){ gagal(e); }
+}
+
+/* AI belajar dari satu koreksi jenis: tebak alasannya (bodi, panjang,
+   ukuran), lalu usulkan mobil lain yang masih di jenis [dari] tapi menurut
+   alasan yang sama seharusnya ikut pindah. Hanya usulan: owner mencentang.
+   Yang dipilih dipindah, dan transaksi lamanya dikoreksi (harga & upah
+   dihitung ulang, tercatat sebagai koreksi). true = ada yang dipindah. */
+async function tawarkanSejenis(idMobil, dari){
+  let s;
+  Swal.fire({title:"AI mencari mobil sejenis…", allowOutsideClick:false, didOpen:() => Swal.showLoading()});
+  try{ s = await api("/vehicles/"+idMobil+"/sejenis", {method:"POST", body:{dari}}); }
+  catch(e){ Swal.close(); return false; }   // AI gagal: perubahan satu mobil tetap tersimpan
+  Swal.close();
+  const usulan = s.usulan || [];
+  const acuan = s.acuan || {};
+  if(!usulan.length && !acuan.transaksi) return false;
+
+  const baris = usulan.map(u =>
+    '<label class="sw-cek" style="display:flex;gap:8px;align-items:flex-start;text-align:left;margin:6px 0">'
+    + '<input type="checkbox" class="cekSejenis" value="'+u.id+'" checked>'
+    + '<span><b>'+esc(u.name)+'</b>'
+    + (u.alasan ? '<br><span class="waktu" style="white-space:normal">'+esc(u.alasan)+'</span>' : '')
+    + (u.transaksi ? '<br><span class="waktu" style="white-space:normal">'+u.transaksi+' transaksi lama ikut dibetulkan</span>' : '')
+    + '</span></label>').join("");
+
+  const {isConfirmed, value: dipilih} = await Swal.fire({
+    icon:"question",
+    title: usulan.length ? "Mobil sejenis ikut pindah ke "+labelKat(s.ke)+"?" : "Betulkan transaksi lama?",
+    html: (s.aturan ? '<div style="margin-bottom:10px">Tebakan AI: <b>'+esc(s.aturan)+'</b></div>' : '')
+      + (usulan.length ? '<div style="max-height:45vh;overflow:auto">'+baris+'</div>' : '')
+      + (acuan.transaksi ? '<div class="waktu" style="margin-top:10px;white-space:normal">'+acuan.transaksi+' transaksi lama <b>'
+          + esc(acuan.name)+'</b> juga ikut dibetulkan.</div>' : '')
+      + '<div class="waktu" style="margin-top:10px;white-space:normal">Harga & upah transaksi lama dihitung ulang dan tercatat sebagai koreksi.</div>',
+    showCancelButton:true,
+    confirmButtonText: usulan.length ? "Pindahkan" : "Betulkan",
+    cancelButtonText:"Lewati",
+    confirmButtonColor:"#1B9E62",
+    // Dibaca selagi dialog masih terbuka; sesudah ditutup isinya dibuang.
+    preConfirm: () => [...Swal.getPopup().querySelectorAll(".cekSejenis:checked")].map(c => +c.value),
+  });
+  if(!isConfirmed) return false;
+
+  const ids = [...(dipilih || [])];
+  if(acuan.transaksi) ids.push(acuan.id);
+  if(!ids.length) return false;
+  try{
+    const h = await api("/vehicles/pindah-sejenis", {method:"POST",
+      body:{ids, category: s.ke, alasan: s.aturan || ""}});
+    Swal.fire({icon:"success", title: h.mobil+" mobil dipindah",
+      text: h.transaksi+" transaksi lama dibetulkan"
+        + (h.dilewati ? " · "+h.dilewati+" dilewati (layanannya tidak ada di jenis baru / menunggu keputusan batal)" : ""),
+      confirmButtonColor:"#1B9E62"});
+    return true;
+  }catch(e){ gagal(e); return false; }
 }
 
 async function editNamaKendaraan(id, lama){

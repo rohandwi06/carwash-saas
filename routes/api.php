@@ -247,6 +247,9 @@ Route::middleware('pin.auth')->group(function () {
         Route::get('/vehicles', [VehicleController::class, 'index']);
         Route::post('/vehicles', [VehicleController::class, 'store']);
         Route::post('/vehicles/massal', [VehicleController::class, 'massal']);
+        // Owner membetulkan jenis satu mobil -> AI usulkan mobil sejenis (17/10).
+        Route::post('/vehicles/pindah-sejenis', [VehicleController::class, 'pindahSejenis']);
+        Route::post('/vehicles/{vehicle}/sejenis', [VehicleController::class, 'sejenis']);
         Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update']);
         Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
         // Ejaan kasir yang dipelajari aplikasi (VehicleMemoryService)

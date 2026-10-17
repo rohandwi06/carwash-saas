@@ -222,6 +222,47 @@ class VehicleController extends Controller
         return response()->json(['data' => true]);
     }
 
+    /**
+     * POST /api/vehicles/{vehicle}/sejenis {"dari":"sedang"} — owner baru
+     * memindahkan mobil ini dari jenis [dari]; AI mengusulkan mobil sejenis
+     * yang juga sebaiknya pindah. Hanya usulan, tidak mengubah apa pun.
+     */
+    public function sejenis(Request $request, Vehicle $vehicle, \App\Services\KendaraanSejenisService $sejenis): JsonResponse
+    {
+        $data = $request->validate([
+            'dari' => ['required', 'string', Rule::exists('wash_categories', 'slug')],
+        ]);
+
+        try {
+            return response()->json(['data' => $sejenis->usulan($vehicle, $data['dari'])]);
+        } catch (\RuntimeException $e) {
+            // Pesan dari GeminiVehicleService sudah aman ditampilkan (tanpa key).
+            return response()->json(['message' => $e->getMessage()], 503);
+        }
+    }
+
+    /**
+     * POST /api/vehicles/pindah-sejenis {"ids":[..], "category":"kecil",
+     * "alasan":"hatchback < 4 m"} — pindahkan mobil yang dicentang owner dan
+     * betulkan transaksi lamanya (harga & upah dihitung ulang).
+     */
+    public function pindahSejenis(Request $request, \App\Services\KendaraanSejenisService $sejenis): JsonResponse
+    {
+        $data = $request->validate([
+            'ids'      => ['required', 'array', 'min:1', 'max:300'],
+            'ids.*'    => ['integer', 'exists:vehicles,id'],
+            'category' => ['required', Rule::exists('wash_categories', 'slug')],
+            'alasan'   => ['nullable', 'string', 'max:160'],
+        ]);
+
+        return response()->json(['data' => $sejenis->terapkan(
+            $data['ids'],
+            $data['category'],
+            $data['alasan'] ?? 'mobil sejenis',
+            $request->attributes->get('auth_name'),
+        )]);
+    }
+
     /** DELETE /api/vehicles/{vehicle} — buang baris sampah (owner) */
     public function destroy(Vehicle $vehicle): JsonResponse
     {

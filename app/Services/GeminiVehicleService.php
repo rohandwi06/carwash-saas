@@ -133,6 +133,63 @@ PROMPT;
         return trim($m[1].' '.$m[2].' '.$m[3]);
     }
 
+    /**
+     * Owner memindahkan [$acuan] dari jenis [$dari] ke [$ke]. AI menebak
+     * ALASANNYA dari ciri fisik (bodi, panjang, ukuran, kapasitas), lalu
+     * memilih — dari [$calon] yang masih di [$dari] — mana yang menurut alasan
+     * yang sama juga seharusnya [$ke]. Permintaan owner 17/10.
+     *
+     * Hanya USULAN: owner yang memutuskan (KendaraanSejenisService). Id yang
+     * tidak ada di daftar calon dibuang; AI tidak bisa memindahkan mobil yang
+     * tidak ditanyakan.
+     *
+     * @param  array<int,string>  $calon  id => nama
+     * @return array{aturan:string, usulan:array<int,string>}  usulan: id => alasan singkat
+     */
+    public function usulSejenis(string $acuan, string $dari, string $ke, array $calon): array
+    {
+        $rows = \App\Models\WashCategory::urut()->get();
+        [$daftar] = $this->bahanPrompt($rows, null);
+        $label = $rows->pluck('label', 'slug');
+        $bersih = fn (string $s) => trim(str_replace(['"', "\n", "\r"], ' ', $s));
+
+        $baris = collect($calon)->map(fn ($nama, $id) => "   - [{$id}] ".$bersih($nama))->implode("\n");
+        $acuan = $bersih($acuan);
+        $dariL = $label[$dari] ?? $dari;
+        $keL   = $label[$ke] ?? $ke;
+
+        $prompt = <<<PROMPT
+Kamu membantu pemilik cucian kendaraan di Indonesia merapikan daftar jenis kendaraannya.
+Jenis kendaraan di cucian ini:
+{$daftar}
+
+Pemilik baru saja memindahkan "{$acuan}" dari "{$dariL}" ke "{$keL}".
+
+Tugasmu:
+1. Tebak ALASAN pemindahan itu dari ciri fisik kendaraan: jenis bodi, panjang, ukuran, atau kapasitas penumpang. Maksimal 15 kata.
+2. Dari daftar berikut (semuanya masih "{$dariL}"), pilih yang menurut alasan YANG SAMA seharusnya juga "{$keL}". Pilih hanya yang kamu yakin; jangan pilih kalau ragu.
+{$baris}
+
+Jawab HANYA dengan JSON valid, tanpa teks lain:
+{"aturan": "alasan pemindahan", "pindah": [{"id": 0, "alasan": "maksimal 8 kata"}]}
+PROMPT;
+
+        $data = $this->kirim([['text' => $prompt]]);
+
+        $usulan = [];
+        foreach ((array) ($data['pindah'] ?? []) as $u) {
+            $id = (int) ($u['id'] ?? 0);
+            if (isset($calon[$id]) && ! isset($usulan[$id])) {
+                $usulan[$id] = mb_substr(trim((string) ($u['alasan'] ?? '')), 0, 80);
+            }
+        }
+
+        return [
+            'aturan' => mb_substr(trim((string) ($data['aturan'] ?? '')), 0, 160),
+            'usulan' => $usulan,
+        ];
+    }
+
     /** Daftar kategori, pilihan slug, dan contoh koreksi owner untuk prompt. */
     private function bahanPrompt($rows, $contoh): array
     {
