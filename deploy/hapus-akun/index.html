@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hapus Akun — Kasir Carwash</title>
+<style>
+  :root { --ink:#141414; --ink2:#57503E; --mist:#F6F5F0; --kartu:#fff; --garis:#E5E0D2;
+          --kuning:#FFC229; --merah:#C0442B; --merahPudar:#F7E4E0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--mist); color:var(--ink);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background:var(--ink); color:#fff; padding:22px 16px 18px; border-bottom:4px solid var(--kuning); }
+  header .isi { max-width:560px; margin:0 auto; }
+  header h1 { margin:6px 0 4px; font-size:24px; font-weight:900; }
+  header p { margin:0; color:#cfc8b6; font-size:14.5px; }
+  main { max-width:560px; margin:0 auto; padding:18px 16px 48px; }
+  .kartu { background:var(--kartu); border:2px solid var(--garis); border-radius:16px; padding:18px; margin-bottom:14px; }
+  .kartu h2 { margin:0 0 8px; font-size:17px; }
+  .kartu ul { margin:6px 0 0; padding-left:20px; }
+  .peringatan { background:var(--merahPudar); border-color:#E9B9AE; }
+  label { display:block; font-weight:800; font-size:14.5px; margin:14px 0 6px; }
+  label small { font-weight:600; color:var(--ink2); }
+  input, textarea { width:100%; font:inherit; padding:12px 14px; border:2px solid var(--garis);
+         border-radius:12px; background:#fff; color:var(--ink); }
+  input:focus, textarea:focus { outline:none; border-color:var(--kuning); }
+  textarea { min-height:84px; resize:vertical; }
+  .centang { display:flex; gap:10px; align-items:flex-start; font-weight:700; margin-top:16px; }
+  .centang input { width:22px; height:22px; flex:none; margin-top:2px; }
+  button { width:100%; margin-top:20px; padding:14px; border:0; border-radius:14px; font:inherit;
+           font-weight:900; background:var(--merah); color:#fff; cursor:pointer; }
+  button[disabled] { opacity:.6; }
+  .catatan { color:var(--ink2); font-size:13.5px; margin-top:12px; }
+  .galat { color:var(--merah); font-weight:800; margin-top:12px; }
+  .selesai { text-align:center; padding:28px 18px; }
+  .sembunyi { display:none; }
+  .madu { position:absolute; left:-9999px; }
+  a { color:#8F6B00; }
+</style>
+</head>
+<body>
+<header><div class="isi">
+  <div style="font-size:28px">💧</div>
+  <h1>Hapus akun &amp; data cucian</h1>
+  <p>Aplikasi Kasir Carwash — untuk pemilik usaha (owner).</p>
+</div></header>
+<main>
+  <div class="kartu peringatan">
+    <h2>Yang akan dihapus permanen</h2>
+    <ul>
+      <li>Akun owner dan semua akun kasir cucian ini.</li>
+      <li>Seluruh data: transaksi, buku kas, pengeluaran, F&amp;B, pekerja &amp; upah, data pelanggan, foto kendaraan.</li>
+      <li>Server cucian dan email owner di buku alamat login.</li>
+    </ul>
+    <p class="catatan">Kami mengonfirmasi lewat email owner dulu, lalu menghapus paling lambat 30 hari
+      setelahnya. Salinan cadangan ikut terhapus saat masa simpannya habis. Data yang sudah dihapus
+      tidak bisa dikembalikan — unduh laporan yang Anda perlukan sebelum mengajukan.</p>
+  </div>
+
+  <form id="form" class="kartu" novalidate>
+    <label for="email">Email owner <small>(yang dipakai masuk aplikasi)</small></label>
+    <input id="email" name="email" type="email" maxlength="120" required autocomplete="email" autocapitalize="none">
+
+    <label for="cucian">Nama cucian</label>
+    <input id="cucian" name="cucian" maxlength="80" required>
+
+    <label for="alasan">Alasan <small>(boleh kosong)</small></label>
+    <textarea id="alasan" name="alasan" maxlength="500"></textarea>
+
+    <input class="madu" name="situs" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+    <label class="centang"><input id="paham" name="paham" type="checkbox">
+      <span>Saya mengerti seluruh data cucian ini akan terhapus permanen.</span></label>
+
+    <div id="galat" class="galat sembunyi"></div>
+    <button id="kirim" type="submit">Ajukan penghapusan</button>
+    <p class="catatan">Pertanyaan: <a href="mailto:rohan.dwi01@gmail.com">rohan.dwi01@gmail.com</a> ·
+      <a href="/privasi.html">Kebijakan privasi</a></p>
+  </form>
+
+  <div id="selesai" class="kartu selesai sembunyi">
+    <div style="font-size:44px">📨</div>
+    <h2>Permintaan diterima</h2>
+    <p>Kami kirim konfirmasi ke email owner. Penghapusan dikerjakan setelah Anda membalas email itu.</p>
+  </div>
+</main>
+<script>
+const form = document.getElementById('form');
+const galat = document.getElementById('galat');
+const tombol = document.getElementById('kirim');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  galat.classList.add('sembunyi');
+  const data = Object.fromEntries(new FormData(form).entries());
+  data.paham = document.getElementById('paham').checked;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.email || '').trim())) return tampilGalat('Email owner belum benar.', 'email');
+  if (!String(data.cucian || '').trim()) return tampilGalat('Nama cucian wajib diisi.', 'cucian');
+  if (!data.paham) return tampilGalat('Centang dulu pernyataan bahwa data akan terhapus permanen.', 'paham');
+  tombol.disabled = true; tombol.textContent = 'Mengirim…';
+  try {
+    const r = await fetch('kirim.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.pesan || 'Gagal mengirim. Coba lagi.');
+    form.classList.add('sembunyi');
+    document.getElementById('selesai').classList.remove('sembunyi');
+    window.scrollTo(0, 0);
+  } catch (err) {
+    tampilGalat(err.message || 'Gagal mengirim. Periksa koneksi lalu coba lagi.');
+  } finally {
+    tombol.disabled = false; tombol.textContent = 'Ajukan penghapusan';
+  }
+});
+function tampilGalat(pesan, id) {
+  galat.textContent = pesan; galat.classList.remove('sembunyi');
+  if (id) document.getElementById(id).focus();
+}
+</script>
+</body>
+</html>

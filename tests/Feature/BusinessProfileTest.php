@@ -79,6 +79,14 @@ class BusinessProfileTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_situs_demo_tidak_boleh_mengubah_profil(): void
+    {
+        $this->app['env'] = 'demo';
+        $this->putJson('/api/business-profile', ['name' => 'Iseng'], $this->header('owner'))
+            ->assertForbidden();
+        $this->app['env'] = 'testing';
+    }
+
     public function test_nama_wajib_diisi(): void
     {
         $this->putJson('/api/business-profile', ['name' => '  '], $this->header('owner'))

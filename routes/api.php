@@ -286,7 +286,9 @@ Route::middleware('pin.auth')->group(function () {
         Route::put('/owner-account', [OwnerAccountController::class, 'update'])->middleware('bukan.demo');
 
         // Profil usaha: nama di header/login/resi/CSV, alamat & telepon di resi
-        Route::put('/business-profile', [BusinessProfileController::class, 'update']);
+        // Situs demo: nama/alamat/telepon dilihat semua pengunjung (dan
+        // peninjau Play Store) - tidak boleh diganti pengunjung, lihat BukanDemo.
+        Route::put('/business-profile', [BusinessProfileController::class, 'update'])->middleware('bukan.demo');
 
         // Penyesuaian upah: potongan (hukuman) & timpa angka upah. Owner-only
         // karena menentukan uang yang diterima orang lain sekaligus mengubah
