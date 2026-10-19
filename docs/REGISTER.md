@@ -1,6 +1,6 @@
 # Rancangan: daftar sendiri & langsung jalan
 
-Status: **rancangan** (19-10-2026). Kode menunggu prasyarat di bagian 7.
+Status: **rancangan** (19-10-2026). Bayar di website (diputuskan). Kode menunggu prasyarat di bagian 7.
 
 ## 1. Yang diminta Rohan
 
@@ -20,7 +20,7 @@ mengarahkan pengguna ke pembayaran di luar. Pembayaran gateway (Midtrans/
 Xendit) di dalam aplikasi berisiko ditolak. *Periksa ulang di Play Console →
 Kebijakan Pembayaran sebelum rilis.*
 
-**Rekomendasi:** pendaftaran + pembayaran di **website** (`rapiin.id/daftar`,
+**Keputusan Rohan 19-10: pembayaran di website dulu.** Pendaftaran + pembayaran di **website** (`rapiin.id/daftar`,
 juga bisa dibuka dari HP), aplikasi hanya untuk **masuk** (email/password
 atau Google). Ini pola umum software bisnis dan tanpa potongan Google.
 Di aplikasi boleh ada tulisan netral "Belum punya akun? Hubungi kami" tanpa
