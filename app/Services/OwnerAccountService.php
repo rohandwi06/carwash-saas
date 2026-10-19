@@ -23,6 +23,19 @@ class OwnerAccountService
     private const KEY_USERNAME = 'owner_username';
     private const KEY_PASSWORD = 'owner_password_hash';
 
+    /** Email owner untuk login aplikasi (buku alamat di byrapiin, 19/10). */
+    private const KEY_EMAIL = 'owner_email';
+
+    public function email(): string
+    {
+        return mb_strtolower(trim((string) Setting::get(self::KEY_EMAIL)));
+    }
+
+    public function simpanEmail(?string $email): void
+    {
+        Setting::put(self::KEY_EMAIL, mb_strtolower(trim((string) $email)));
+    }
+
     /** Username owner yang BERLAKU sekarang (simpanan aplikasi, jatuh ke .env). */
     public function username(): string
     {
@@ -53,7 +66,10 @@ class OwnerAccountService
             return false;
         }
 
-        if (! hash_equals($this->username(), $username)) {
+        // Username, atau email owner (tanpa beda huruf besar-kecil).
+        $email = $this->email();
+        $pakaiEmail = $email !== '' && hash_equals($email, mb_strtolower(trim($username)));
+        if (! $pakaiEmail && ! hash_equals($this->username(), $username)) {
             return false;
         }
 

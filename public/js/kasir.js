@@ -6824,6 +6824,7 @@ async function renderAkunOwner(){
   try{
     const a = await api("/owner-account");
     $("inOwnerUsername").value = a.username || "";
+    $("inOwnerEmail").value = a.email || "";
     // Diringkas jadi satu baris status. Ini satu-satunya tanda bahwa password
     // owner masih teks polos di .env, jadi tidak dihapus — hanya dipendekkan.
     $("akunOwnerInfo").innerHTML = a.dari_aplikasi
@@ -6840,7 +6841,12 @@ async function simpanAkunOwner(){
   if(password && password.length < 6){ alert("Password baru minimal 6 karakter"); $("inOwnerPasswordBaru").focus(); return; }
   if(!current_password){ alert("Isi password owner sekarang untuk memastikan ini benar Anda"); $("inOwnerPasswordLama").focus(); return; }
 
-  const body = {username, current_password};
+  const email = $("inOwnerEmail").value.trim();
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ alert("Email belum benar"); $("inOwnerEmail").focus(); return; }
+
+  // Email ikut dikirim: diisi/diganti = didaftarkan ke buku alamat supaya
+  // aplikasi HP bisa login dengan email ini (19/10).
+  const body = {username, current_password, email};
   if(password) body.password = password;
   try{
     const r = await api("/owner-account",{method:"PUT",body});
@@ -6851,7 +6857,8 @@ async function simpanAkunOwner(){
     Swal.fire({icon:"success", title:"Akun owner tersimpan",
       html: "Login berikutnya pakai username <b>"+esc(r.username)+"</b>"
         + (r.password_diganti ? " dan password baru." : " dengan password yang sama.")
-        + "<br><small>Sesi yang sedang berjalan tidak terputus.</small>"});
+        + "<br><small>Sesi yang sedang berjalan tidak terputus.</small>"
+        + (r.direktori ? "<br><br>" + (r.direktori.ok ? "&#9989; " : "&#9888;&#65039; ") + esc(r.direktori.pesan) : "")});
   }catch(e){ gagal(e); }
 }
 

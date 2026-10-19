@@ -1,0 +1,11 @@
+# Hanya daftar.php dan temukan.php yang boleh dibuka dari luar.
+Options -Indexes
+<FilesMatch "^(inti|izin)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

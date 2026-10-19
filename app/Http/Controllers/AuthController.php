@@ -26,7 +26,8 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'username' => ['required', 'string', 'max:64'],
+            // Boleh berisi email owner (login aplikasi lewat buku alamat).
+            'username' => ['required', 'string', 'max:120'],
             'password' => ['required', 'string', 'max:255'],
         ]);
 

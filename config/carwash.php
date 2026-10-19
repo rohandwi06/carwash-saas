@@ -63,6 +63,11 @@ return [
         'password' => env('OWNER_PASSWORD', ''),
     ],
 
+    // Buku alamat email -> server untuk login aplikasi (deploy/direktori/).
+    'direktori' => [
+        'url' => env('DIREKTORI_URL', 'https://byrapiin.my.id/direktori'),
+    ],
+
     // Integrasi Gemini (untuk kendaraan yang tidak ada di database)
     'gemini' => [
         'key'   => env('GEMINI_API_KEY'),

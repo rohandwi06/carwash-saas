@@ -278,6 +278,11 @@
                      autocapitalize="none" style="text-transform:none" placeholder="owner">
             </div>
             <div class="range-input-group" style="margin-bottom:6px">
+              <label for="inOwnerEmail">Email owner (untuk login aplikasi HP)</label>
+              <input id="inOwnerEmail" type="email" class="inp-range" maxlength="120"
+                     autocapitalize="none" style="text-transform:none" placeholder="nama@email.com">
+            </div>
+            <div class="range-input-group" style="margin-bottom:6px">
               <label for="inOwnerPasswordBaru">Password baru (kosongkan bila tidak diganti)</label>
               <input id="inOwnerPasswordBaru" type="password" class="inp-range"
                      maxlength="255" placeholder="min. 6 karakter">
