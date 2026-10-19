@@ -1,7 +1,7 @@
 {
   "daftar": {
-    "tampil": false,
+    "tampil": true,
     "teks": "Belum punya akun? Daftar",
-    "url": "https://rapiin.id/daftar"
+    "url": "https://byrapiin.my.id/daftar/"
   }
 }

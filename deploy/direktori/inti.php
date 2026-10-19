@@ -15,6 +15,9 @@
 
 declare(strict_types=1);
 
+// Waktu tercatat dalam WIB (server hosting memakai UTC).
+date_default_timezone_set('Asia/Jakarta');
+
 const DIREKTORI_DATA = __DIR__ . '/data';
 
 /**
