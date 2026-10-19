@@ -11,6 +11,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\FnbDraftController;
 use App\Http\Controllers\FnbSaleController;
 use App\Http\Controllers\FotoKendaraanController;
+use App\Http\Controllers\LanggananController;
 use App\Http\Controllers\OwnerAccountController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\ProductController;
@@ -43,6 +44,8 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10
 Route::post('/demo-login', [AuthController::class, 'demoLogin'])->middleware('throttle:30,1');
 // Buku alamat email -> server (byrapiin.my.id) memastikan email owner (19/10).
 Route::get('/direktori/cek', [OwnerAccountController::class, 'cekDirektori'])->middleware('throttle:30,1');
+// Pusat pendaftaran mengaktifkan langganan setelah bayar (ditandatangani HMAC).
+Route::post('/langganan/perpanjang', [LanggananController::class, 'perpanjang'])->middleware('throttle:30,1');
 
 // Nama, keterangan, alamat, telepon usaha. Publik karena layar login (web
 // maupun tablet Android) sudah harus menampilkan nama cucian sebelum ada
@@ -61,6 +64,8 @@ Route::middleware('pin.auth')->group(function () {
     // Status jam operasional — sengaja DI LUAR 'shift' supaya kasir yang
     // terkunci masih bisa tahu jam berapa ia boleh masuk lagi.
     Route::get('/shift', [ShiftController::class, 'show']);
+    // Status langganan (pita "belum aktif" di aplikasi & web).
+    Route::get('/langganan', [LanggananController::class, 'show']);
 
     /*
     |----------------------------------------------------------------------
@@ -77,20 +82,20 @@ Route::middleware('pin.auth')->group(function () {
 
         // Transaksi kasir
         Route::get('/transactions', [TransactionController::class, 'index']);
-        Route::post('/transactions', [TransactionController::class, 'store']);
+        Route::post('/transactions', [TransactionController::class, 'store'])->middleware('langganan');
         Route::post('/transactions/{transaction}/void', [TransactionController::class, 'void']);
 
         // Buku kas — kasir menutup buku yang sedang berjalan & mengajukan
         // setoran. Persetujuan/penolakannya ada di grup owner di bawah.
-        Route::post('/cash-books/{cashBook}/request-deposit', [CashBookController::class, 'requestDeposit']);
+        Route::post('/cash-books/{cashBook}/request-deposit', [CashBookController::class, 'requestDeposit'])->middleware('langganan');
         // Saldo kas kecil: dicatat manual tiap buku baru dibuka (biasanya
         // pagi). Murni informasi kasir, tidak menyentuh omzet/laba.
-        Route::put('/cash-books/{cashBook}/opening-balance', [CashBookController::class, 'setOpeningBalance']);
+        Route::put('/cash-books/{cashBook}/opening-balance', [CashBookController::class, 'setOpeningBalance'])->middleware('langganan');
 
         // Draft cucian (catat kendaraan dulu, bayar belakangan)
         Route::get('/drafts', [TransactionDraftController::class, 'index']);
-        Route::post('/drafts', [TransactionDraftController::class, 'store']);
-        Route::patch('/drafts/{draft}', [TransactionDraftController::class, 'update']);
+        Route::post('/drafts', [TransactionDraftController::class, 'store'])->middleware('langganan');
+        Route::patch('/drafts/{draft}', [TransactionDraftController::class, 'update'])->middleware('langganan');
         Route::delete('/drafts/{draft}', [TransactionDraftController::class, 'destroy']);
 
         // Pekerja & upah. Kasir hanya MELIHAT daftarnya (untuk memilih siapa
@@ -106,7 +111,7 @@ Route::middleware('pin.auth')->group(function () {
         // Makanan & minuman
         Route::get('/products', [ProductController::class, 'index']);
         Route::get('/fnb-sales', [FnbSaleController::class, 'index']);
-        Route::post('/fnb-sales', [FnbSaleController::class, 'store']);
+        Route::post('/fnb-sales', [FnbSaleController::class, 'store'])->middleware('langganan');
         // Kasir mengajukan pembatalan, owner membatalkan langsung — sama
         // seperti /transactions/{id}/void. Persetujuannya di grup owner.
         Route::post('/fnb-sales/{fnbSale}/void', [FnbSaleController::class, 'void']);
@@ -120,13 +125,13 @@ Route::middleware('pin.auth')->group(function () {
 
         // Draft F&B: catat pesanan dulu, penjualannya disimpan belakangan
         Route::get('/fnb-drafts', [FnbDraftController::class, 'index']);
-        Route::post('/fnb-drafts', [FnbDraftController::class, 'store']);
-        Route::patch('/fnb-drafts/{fnbDraft}', [FnbDraftController::class, 'update']);
+        Route::post('/fnb-drafts', [FnbDraftController::class, 'store'])->middleware('langganan');
+        Route::patch('/fnb-drafts/{fnbDraft}', [FnbDraftController::class, 'update'])->middleware('langganan');
         Route::delete('/fnb-drafts/{fnbDraft}', [FnbDraftController::class, 'destroy']);
 
         // Pengeluaran — kasir boleh mencatat (belanja sabun dll), hapus/ubah owner
         Route::get('/expenses', [ExpenseController::class, 'index']);
-        Route::post('/expenses', [ExpenseController::class, 'store']);
+        Route::post('/expenses', [ExpenseController::class, 'store'])->middleware('langganan');
 
         // AI (Gemini) — hanya untuk kendaraan yang tidak ditemukan search lokal.
         //
@@ -202,7 +207,7 @@ Route::middleware('pin.auth')->group(function () {
         // alasannya dengan wage-adjustments di bawah.
         Route::patch('/transactions/{transaction}', [TransactionController::class, 'update']);
         // Cucian tanggal lampau (isi banyak baris dari Pembukuan)
-        Route::post('/transactions/backdated', [TransactionController::class, 'storeBackdated']);
+        Route::post('/transactions/backdated', [TransactionController::class, 'storeBackdated'])->middleware('langganan');
 
         // Persetujuan pembatalan transaksi yang diajukan kasir
         Route::get('/transactions/void-requests', [TransactionController::class, 'voidRequests']);
@@ -238,8 +243,8 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/consignors', [ConsignorController::class, 'store']);
         Route::patch('/consignors/{consignor}', [ConsignorController::class, 'update']);
         Route::delete('/consignors/{consignor}', [ConsignorController::class, 'destroy']);
-        Route::post('/consignors/{consignor}/payouts', [ConsignorController::class, 'bayar']);
-        Route::post('/consignment-movements', [ConsignorController::class, 'gerakBarang']);
+        Route::post('/consignors/{consignor}/payouts', [ConsignorController::class, 'bayar'])->middleware('langganan');
+        Route::post('/consignment-movements', [ConsignorController::class, 'gerakBarang'])->middleware('langganan');
 
         // Katalog KENDARAAN: mobil apa masuk jenis yang mana. Ini yang
         // dipakai pencarian kasir untuk menentukan harga, jadi hanya owner

@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'owner'    => \App\Http\Middleware\OwnerOnly::class,
             'shift'    => \App\Http\Middleware\ShiftGuard::class,
             'bukan.demo' => \App\Http\Middleware\BukanDemo::class,
+            'langganan' => \App\Http\Middleware\LanggananAktif::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

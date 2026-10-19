@@ -11,5 +11,9 @@
   </div>
 </header>
 
+{{-- Langganan belum aktif (cucian yang mendaftar sendiri). Pesan netral dari
+     server, tanpa harga/tautan; diisi JS lewat muatLangganan(). --}}
+<div class="pita-langganan hidden" id="pitaLangganan" role="status"></div>
+
 {{-- Nama halaman yang sedang dibuka — diisi JS lewat tampilkan() --}}
 <div class="judul-halaman"><span id="judulHalaman"></span></div>

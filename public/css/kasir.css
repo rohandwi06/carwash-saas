@@ -29,6 +29,12 @@
     button, .trx-panah, .app, .drawer, .overlay{transition:none}
   }
 
+  /* Langganan belum aktif: pita netral di bawah header */
+  .pita-langganan{width:100%;max-width:860px;margin:10px auto 0;padding:10px 14px;
+    background:#FFF4D6;border:2px solid #FFC229;border-radius:12px;color:#4A3400;
+    font-size:14px;font-weight:700;line-height:1.4;overflow-wrap:anywhere}
+  @media (max-width:900px){ .pita-langganan{width:calc(100% - 32px)} }
+
   /* Nama halaman yang sedang dibuka, di bawah header */
   .judul-halaman{width:100%;max-width:860px;margin:0 auto;padding:12px 20px 0;
     font-size:17px;font-weight:900;letter-spacing:.3px;

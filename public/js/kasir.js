@@ -7910,11 +7910,25 @@ async function hapusProduk(id){
 }
 
 /* ---------- INIT ---------- */
+/* Langganan cucian yang mendaftar sendiri: sebelum aktif, server menolak
+   pencatatan (HTTP 402) tapi pengaturan tetap boleh. Pita ini hanya
+   memberi tahu; pesannya dari server dan sengaja netral. Server lama tanpa
+   rute /langganan = 404 = tidak ada pita. */
+async function muatLangganan(){
+  const pita = $("pitaLangganan");
+  if (!pita) return;
+  try{
+    const s = await api("/langganan");
+    pita.textContent = s && !s.aktif ? (s.pesan || "Langganan cucian ini belum aktif.") : "";
+    pita.classList.toggle("hidden", !(s && !s.aktif));
+  }catch(e){ pita.classList.add("hidden"); }
+}
 async function mulaiAplikasi(){
   try{
     // Status shift diambil DULU: kalau kasir di luar jam operasional, layar
     // terkunci muncul sebelum layar lain sempat memuat data.
     await muatShift();
+    muatLangganan();
 
     // Layar dibuka DULUAN supaya tidak ada layar kosong selama data dimuat —
     // isinya terisi sendiri begitu siap. pergi() yang membelokkan kalau

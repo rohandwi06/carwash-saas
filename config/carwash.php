@@ -68,6 +68,13 @@ return [
         'url' => env('DIREKTORI_URL', 'https://byrapiin.my.id/direktori'),
     ],
 
+    // Langganan cucian yang mendaftar sendiri (LanggananService). Kunci HMAC
+    // dipakai pusat pendaftaran untuk mengaktifkan langganan setelah bayar;
+    // kosong = rute aktivasi dimatikan.
+    'langganan' => [
+        'kunci' => env('LANGGANAN_KUNCI', ''),
+    ],
+
     // Integrasi Gemini (untuk kendaraan yang tidak ada di database)
     'gemini' => [
         'key'   => env('GEMINI_API_KEY'),
