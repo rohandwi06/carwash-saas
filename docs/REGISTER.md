@@ -23,8 +23,10 @@ Kebijakan Pembayaran sebelum rilis.*
 **Keputusan Rohan 19-10: pembayaran di website dulu.** Pendaftaran + pembayaran di **website** (`rapiin.id/daftar`,
 juga bisa dibuka dari HP), aplikasi hanya untuk **masuk** (email/password
 atau Google). Ini pola umum software bisnis dan tanpa potongan Google.
-Di aplikasi boleh ada tulisan netral "Belum punya akun? Hubungi kami" tanpa
-tautan/harga pembayaran.
+Keputusan Rohan 19-10: tombol **"Belum punya akun? Daftar"** di aplikasi membuka
+halaman daftar di website. Risiko kebijakan (tautan ke pembayaran luar) diredam:
+tombolnya diatur dari `direktori/aplikasi.json` (tampil/teks/url) dan bisa
+dimatikan tanpa rilis ulang. Bawaan: mati sampai website pendaftaran jadi.
 
 ## 3. Alur
 
