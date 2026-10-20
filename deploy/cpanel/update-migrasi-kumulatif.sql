@@ -243,77 +243,83 @@ WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 
 -- ================= E. Pemeriksaan akhir =================
 -- Satu tabel, 24 baris. Semua kolom kedua harus OK.
+-- Nama database & jumlah migrasi dicatat ke variabel DULU: phpMyAdmin
+-- menjalankan SELECT yang diawali information_schema DI DALAM database
+-- information_schema, sehingga DATABASE() dan tabel `migrations` di
+-- kueri itu sendiri menunjuk ke tempat yang salah (#1109, 20-10).
+
+SET @db = DATABASE();
+SET @mig = (SELECT COUNT(*) FROM `migrations` WHERE `migration` IN ('2026_10_09_000001_add_track_stock_to_products_table', '2026_10_10_000001_add_qris_to_payment_methods', '2026_10_11_000001_add_customer_to_transactions', '2026_10_11_000002_create_worker_compensations_table', '2026_10_11_000003_create_daily_rules_tables', '2026_10_11_000004_add_workers_to_daily_rules', '2026_10_11_000005_create_monthly_wage_tables', '2026_10_16_000001_add_promo_to_transactions', '2026_10_16_000002_create_vehicle_aliases_table', '2026_10_16_000003_create_vehicle_photos_table'));
 
 SELECT 'products.track_stock', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME = 'track_stock'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'products' AND COLUMN_NAME = 'track_stock'
 UNION ALL
 SELECT 'transactions.payment_method qris', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'payment_method'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'payment_method'
     AND COLUMN_TYPE LIKE '%qris%'
 UNION ALL
 SELECT 'fnb_sales.payment_method qris', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fnb_sales' AND COLUMN_NAME = 'payment_method'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'fnb_sales' AND COLUMN_NAME = 'payment_method'
     AND COLUMN_TYPE LIKE '%qris%'
 UNION ALL
 SELECT 'transactions.customer_name', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'customer_name'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'customer_name'
 UNION ALL
 SELECT 'transactions.customer_phone', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'customer_phone'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'customer_phone'
 UNION ALL
 SELECT 'transaction_drafts.customer_name', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaction_drafts' AND COLUMN_NAME = 'customer_name'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transaction_drafts' AND COLUMN_NAME = 'customer_name'
 UNION ALL
 SELECT 'transaction_drafts.customer_phone', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaction_drafts' AND COLUMN_NAME = 'customer_phone'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transaction_drafts' AND COLUMN_NAME = 'customer_phone'
 UNION ALL
 SELECT 'tabel worker_compensations', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'worker_compensations'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'worker_compensations'
 UNION ALL
 SELECT 'worker_compensations.rule_id', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'worker_compensations' AND COLUMN_NAME = 'rule_id'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'worker_compensations' AND COLUMN_NAME = 'rule_id'
 UNION ALL
 SELECT 'tabel daily_rules', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rules'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rules'
 UNION ALL
 SELECT 'daily_rules.all_workers', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'all_workers'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'all_workers'
 UNION ALL
 SELECT 'daily_rules.worker_id (harus hilang)', IF(COUNT(*) = 0, 'OK', 'MASIH ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'worker_id'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'worker_id'
 UNION ALL
 SELECT 'tabel daily_rule_worker', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rule_worker'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rule_worker'
 UNION ALL
 SELECT 'tabel daily_rule_skips', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rule_skips'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rule_skips'
 UNION ALL
 SELECT 'wage_adjustments.rule_id', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wage_adjustments' AND COLUMN_NAME = 'rule_id'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'wage_adjustments' AND COLUMN_NAME = 'rule_id'
 UNION ALL
 SELECT 'tabel monthly_wage_periods', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'monthly_wage_periods'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'monthly_wage_periods'
 UNION ALL
 SELECT 'tabel worker_salaries', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'worker_salaries'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'worker_salaries'
 UNION ALL
 SELECT 'transactions.promo_discount', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_discount'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_discount'
 UNION ALL
 SELECT 'transactions.promo_rule', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_rule'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_rule'
 UNION ALL
 SELECT 'transactions.promo_wage', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_wage'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_wage'
 UNION ALL
 SELECT 'tabel vehicle_aliases', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicle_aliases'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicle_aliases'
 UNION ALL
 SELECT 'vehicles.corrected_at', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'corrected_at'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'corrected_at'
 UNION ALL
 SELECT 'tabel vehicle_photos', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vehicle_photos'
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicle_photos'
 UNION ALL
-SELECT 'catatan migrasi (10 baris)', IF(COUNT(*) = 10, 'OK', CONCAT('baru ', COUNT(*))) FROM `migrations`
-  WHERE `migration` IN ('2026_10_09_000001_add_track_stock_to_products_table', '2026_10_10_000001_add_qris_to_payment_methods', '2026_10_11_000001_add_customer_to_transactions', '2026_10_11_000002_create_worker_compensations_table', '2026_10_11_000003_create_daily_rules_tables', '2026_10_11_000004_add_workers_to_daily_rules', '2026_10_11_000005_create_monthly_wage_tables', '2026_10_16_000001_add_promo_to_transactions', '2026_10_16_000002_create_vehicle_aliases_table', '2026_10_16_000003_create_vehicle_photos_table');
+SELECT 'catatan migrasi (10 baris)', IF(@mig = 10, 'OK', CONCAT('baru ', @mig));
