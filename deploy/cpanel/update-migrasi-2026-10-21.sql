@@ -11,7 +11,7 @@
 --  Kode baru yang naik sebelum SQL ini dijalankan tetap bisa mencatat
 --  cucian; hanya menu Barang yang menampilkan galat sampai tabelnya ada.
 --
---  HASIL: tabel terakhir berisi 4 baris pemeriksaan, semuanya "OK".
+--  HASIL: tabel terakhir berisi 4 baris, kolom hasil semuanya "OK".
 -- ===================================================================
 
 CREATE TABLE IF NOT EXISTS `supplies` (
@@ -68,16 +68,11 @@ SELECT '2026_10_21_000001_create_supplies_tables', (SELECT COALESCE(MAX(`batch`)
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM `migrations` WHERE `migration` = '2026_10_21_000001_create_supplies_tables');
 
-SET @db = DATABASE();
-SET @mig = (SELECT COUNT(*) FROM `migrations` WHERE `migration` = '2026_10_21_000001_create_supplies_tables');
-
-SELECT 'tabel supplies', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supplies'
-UNION ALL
-SELECT 'tabel supply_movements', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supply_movements'
-UNION ALL
-SELECT 'tabel supply_usage_rules', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supply_usage_rules'
-UNION ALL
-SELECT 'catatan migrasi', IF(@mig = 1, 'OK', 'BELUM ADA');
+-- Pemeriksaan TANPA information_schema: phpMyAdmin yang melihat kata itu
+-- menjalankan SELURUH script di database information_schema (#1044 di demo,
+-- 21-10). Tabel yang gagal dibuat langsung memunculkan galat "doesn't exist".
+SELECT 'supplies' AS tabel, COUNT(*) AS isi, 'OK' AS hasil FROM `supplies`
+UNION ALL SELECT 'supply_movements', COUNT(*), 'OK' FROM `supply_movements`
+UNION ALL SELECT 'supply_usage_rules', COUNT(*), 'OK' FROM `supply_usage_rules`
+UNION ALL SELECT 'catatan migrasi', COUNT(*), IF(COUNT(*) = 1, 'OK', 'BELUM') FROM `migrations`
+  WHERE `migration` = '2026_10_21_000001_create_supplies_tables';
