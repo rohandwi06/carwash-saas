@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\FotoKendaraanService;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -26,4 +27,17 @@ class TransactionDraft extends Model
         // lihat catatan lengkap di App\Models\CashBook.
         'date'       => 'date:Y-m-d',
     ];
+
+    /** Nama berkas foto kondisi yang diambil sebelum draft disimpan. */
+    protected $appends = ['photos'];
+
+    public function getPhotosAttribute(): array
+    {
+        return $this->id ? FotoKendaraanService::fotoDraft($this->id) : [];
+    }
+
+    protected static function booted(): void
+    {
+        static::deleted(fn (self $d) => FotoKendaraanService::hapusDraft($d->id));
+    }
 }

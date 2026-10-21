@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\TransactionDraft;
+use App\Services\FotoKendaraanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 
 /**
@@ -47,6 +49,32 @@ class TransactionDraftController extends Controller
         $draft->delete();
 
         return response()->json(['data' => null]);
+    }
+
+    /** POST /api/drafts/{draft}/photos {image: data URL} — foto kondisi sebelum dibayar */
+    public function storePhoto(Request $request, TransactionDraft $draft, FotoKendaraanService $foto): JsonResponse
+    {
+        $data = $request->validate(['image' => ['required', 'string', 'max:6000000']]);
+        $nama = $foto->simpanDraft($draft, $data['image']);
+
+        return response()->json(['data' => ['name' => $nama, 'photos' => FotoKendaraanService::fotoDraft($draft->id)]], 201);
+    }
+
+    /** GET /api/drafts/{draft}/photos/{nama} — gambarnya sendiri */
+    public function showPhoto(TransactionDraft $draft, string $nama, FotoKendaraanService $foto): Response
+    {
+        $isi = $foto->isiDraft($draft->id, $nama);
+        abort_if($isi === null, 404, 'Foto draft sudah tidak ada.');
+
+        return response($isi['byte'], 200, ['Content-Type' => $isi['mime'], 'Cache-Control' => 'private, max-age=86400']);
+    }
+
+    /** DELETE /api/drafts/{draft}/photos — kosongkan; layar mengunggah ulang yang masih dipakai */
+    public function clearPhotos(TransactionDraft $draft): JsonResponse
+    {
+        FotoKendaraanService::hapusDraft($draft->id);
+
+        return response()->json(['data' => []]);
     }
 
     private function validated(Request $request, bool $sometimes = false): array

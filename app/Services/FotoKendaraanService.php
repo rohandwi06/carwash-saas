@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Transaction;
+use App\Models\TransactionDraft;
 use App\Models\VehiclePhoto;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -117,6 +118,75 @@ class FotoKendaraanService
     {
         @unlink(self::lokasi($foto->path));
         $foto->delete();
+    }
+
+    /* ---------- Foto draft ----------
+       Draft belum punya transaksi, jadi fotonya tidak bisa jadi baris
+       vehicle_photos (transaction_id wajib). Disimpan sebagai berkas saja di
+       photos/draft/<id>/ — tanpa tabel baru, jadi tanpa SQL tambahan di
+       hosting. Saat draft dibayar, layar kasir mengunggahnya ulang ke
+       transaksinya seperti foto biasa, lalu folder draft ikut terhapus
+       bersama draftnya (TransactionDraft::booted). */
+
+    /** @return list<string> nama berkas foto draft, urut waktu simpan */
+    public static function fotoDraft(int $idDraft): array
+    {
+        $folder = self::lokasi('photos/draft/'.$idDraft);
+        if (! is_dir($folder)) {
+            return [];
+        }
+        $nama = array_values(array_filter(scandir($folder) ?: [], fn ($n) => self::namaDraftSah($n)));
+        usort($nama, fn ($a, $b) => filemtime($folder.DIRECTORY_SEPARATOR.$a) <=> filemtime($folder.DIRECTORY_SEPARATOR.$b) ?: strcmp($a, $b));
+
+        return $nama;
+    }
+
+    public function simpanDraft(TransactionDraft $draft, string $data): string
+    {
+        if (count(self::fotoDraft($draft->id)) >= self::MAKS_PER_TRANSAKSI) {
+            throw new RuntimeException('Satu cucian paling banyak '.self::MAKS_PER_TRANSAKSI.' foto.');
+        }
+        $gambar = self::urai($data);
+        $nama = Str::random(24).'.'.$gambar['ext'];
+        $penuh = self::lokasi('photos/draft/'.$draft->id.'/'.$nama);
+        if (! is_dir(dirname($penuh))) {
+            @mkdir(dirname($penuh), 0755, true);
+        }
+        if (@file_put_contents($penuh, $gambar['byte']) === false) {
+            throw new RuntimeException('Foto gagal disimpan di server. Periksa izin folder storage.');
+        }
+
+        return $nama;
+    }
+
+    /** @return array{byte:string, mime:string}|null */
+    public function isiDraft(int $idDraft, string $nama): ?array
+    {
+        if (! self::namaDraftSah($nama)) {
+            return null;
+        }
+        $penuh = self::lokasi('photos/draft/'.$idDraft.'/'.$nama);
+        $byte = is_file($penuh) ? file_get_contents($penuh) : false;
+        if ($byte === false) {
+            return null;
+        }
+
+        return ['byte' => $byte, 'mime' => array_search(pathinfo($nama, PATHINFO_EXTENSION), self::JENIS, true) ?: 'image/jpeg'];
+    }
+
+    /** Hapus semua foto satu draft (dan foldernya). */
+    public static function hapusDraft(int $idDraft): void
+    {
+        $folder = self::lokasi('photos/draft/'.$idDraft);
+        foreach (self::fotoDraft($idDraft) as $nama) {
+            @unlink($folder.DIRECTORY_SEPARATOR.$nama);
+        }
+        @rmdir($folder);
+    }
+
+    private static function namaDraftSah(string $nama): bool
+    {
+        return (bool) preg_match('/^[A-Za-z0-9]{24}\.(jpg|png|webp)$/', $nama);
     }
 
     /** @return array{byte:string, mime:string}|null */

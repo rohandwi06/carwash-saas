@@ -98,6 +98,10 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/drafts', [TransactionDraftController::class, 'store'])->middleware('langganan');
         Route::patch('/drafts/{draft}', [TransactionDraftController::class, 'update'])->middleware('langganan');
         Route::delete('/drafts/{draft}', [TransactionDraftController::class, 'destroy']);
+        Route::post('/drafts/{draft}/photos', [TransactionDraftController::class, 'storePhoto'])
+            ->middleware(['langganan', 'throttle:60,1']);
+        Route::get('/drafts/{draft}/photos/{nama}', [TransactionDraftController::class, 'showPhoto']);
+        Route::delete('/drafts/{draft}/photos', [TransactionDraftController::class, 'clearPhotos']);
 
         // Pekerja & upah. Kasir hanya MELIHAT daftarnya (untuk memilih siapa
         // yang mengerjakan cucian) dan versi yang ia terima sudah dipangkas

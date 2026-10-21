@@ -131,7 +131,9 @@ class TransactionService
 
             // Draft sudah "naik kelas" jadi transaksi — hapus dari daftar tunggu.
             if (! empty($data['draft_id'])) {
-                TransactionDraft::whereKey($data['draft_id'])->delete();
+                // Lewat model, bukan query: foto draft ikut terhapus
+                // (layar kasir sudah mengunggahnya ulang ke transaksi ini).
+                TransactionDraft::find($data['draft_id'])?->delete();
             }
 
             return $transaction->load('workers', 'addons', 'fnbSales.items');

@@ -1393,7 +1393,8 @@ async function renderDrafts(){
       +     (kt? ' &middot; '+esc(kt.label) : '')
       +     (pk? ' &middot; &#128119; '+esc(pk) : '')
       +     (jmlFnbDraft(d)? ' &middot; &#127860; '+jmlFnbDraft(d)+' item' : '')
-      +     (d.tip? ' &middot; tip '+rp(d.tip) : '')+'</span>'
+      +     (d.tip? ' &middot; tip '+rp(d.tip) : '')
+      +     ((d.photos||[]).length? ' &middot; &#128247; '+d.photos.length : '')+'</span>'
       +   (d.note? '<span class="draft-note">&#128221; '+esc(d.note)+'</span>' : '')
       +   '<span class="draft-jam">'+jam(d.created_at)+(d.created_by? ' &middot; '+esc(d.created_by):'')+'</span>'
       + '</button>'
@@ -1425,16 +1426,61 @@ async function simpanDraft(){
     fnb_items: Object.entries(fnbCuci).map(([id,qty])=>({product_id:+id, qty})),
     tip: Math.max(0, parseInt($("inTip").value,10)||0),
   };
+  const foto = fotoCuci.slice();   // transaksiBaru() mengosongkan fotoCuci
   try{
     // Draft yang sedang dibuka cukup diperbarui, jangan sampai jadi dua baris.
-    if(draftAktif) await api("/drafts/"+draftAktif,{method:"PATCH",body});
-    else           await api("/drafts",{method:"POST",body});
+    const d = draftAktif ? await api("/drafts/"+draftAktif,{method:"PATCH",body})
+                         : await api("/drafts",{method:"POST",body});
+    const fotoGagal = await simpanFotoDraft(d, foto);
+    const tadinya = draftAktif;
     transaksiBaru();
     await renderDrafts();
+    if(fotoGagal){
+      Swal.fire({icon:"warning", title:"Draft tersimpan, "+fotoGagal+" foto gagal",
+        text:"Foto yang gagal tidak ikut tersimpan. Potret ulang saat melanjutkan draft.", confirmButtonColor:"#1B9E62"});
+      return;
+    }
     Swal.fire({toast:true, position:"top-end", icon:"success",
-      title: draftAktif? "Draft diperbarui" : "Tersimpan sebagai draft",
+      title: tadinya? "Draft diperbarui" : "Tersimpan sebagai draft",
+      text: foto.length ? foto.length+" foto ikut tersimpan" : "",
       showConfirmButton:false, timer:2000});
   }catch(e){ gagal(e); }
+}
+
+/* Foto kondisi ikut draft (laporan owner 21/10: dulu hilang). Server
+   menyimpannya sebagai berkas per draft; di sini diganti seluruhnya —
+   dikosongkan lalu diunggah lagi yang masih ada di layar — supaya foto yang
+   dihapus kasir tidak tertinggal. Draft lama tanpa foto & tanpa foto baru
+   tidak menyentuh server sama sekali. Mengembalikan jumlah yang gagal. */
+async function simpanFotoDraft(d, foto){
+  if(!d || (!foto.length && !(d.photos||[]).length)) return 0;
+  let gagalN = 0;
+  try{ if((d.photos||[]).length) await api("/drafts/"+d.id+"/photos",{method:"DELETE"}); }
+  catch(e){ return foto.length; }
+  for(const f of foto){
+    try{ await api("/drafts/"+d.id+"/photos",{method:"POST", body:{image:f}}); }
+    catch(e){ gagalN++; }
+  }
+  return gagalN;
+}
+/* Foto draft dibaca sebagai data URL: bentuk yang sama dengan foto yang baru
+   dipotret, jadi saat dibayar ikut terunggah ke transaksinya seperti biasa. */
+async function muatFotoDraft(d){
+  const hasil = [];
+  for(const nama of (d.photos||[])){
+    try{
+      const res = await fetch(API+"/drafts/"+d.id+"/photos/"+encodeURIComponent(nama),
+        {headers:{"Authorization":"Bearer "+TOKEN}});
+      if(!res.ok) continue;
+      const blob = await res.blob();
+      hasil.push(await new Promise((ok, tolak) => {
+        const r = new FileReader();
+        r.onload = () => ok(r.result); r.onerror = tolak;
+        r.readAsDataURL(blob);
+      }));
+    }catch(e){ /* foto yang gagal dimuat dilewati */ }
+  }
+  return hasil;
 }
 
 function lanjutDraft(id){
@@ -1467,6 +1513,15 @@ function lanjutDraft(id){
   });
   renderConfirm();
   tampilkan("layarConfirm");
+  // Foto draft dimuat menyusul; kasir yang sudah pindah ke cucian lain
+  // (draftAktif berganti) tidak kebagian foto draft ini.
+  if((d.photos||[]).length){
+    muatFotoDraft(d).then(f => {
+      if(draftAktif !== d.id) return;
+      fotoCuci = f.concat(fotoCuci).slice(0, FOTO_MAKS);
+      gambarFotoCuci();
+    });
+  }
   if(hilangFnb){
     Swal.fire({icon:"warning", title:"Sebagian menu tidak ada lagi",
       text:hilangFnb+" item makanan/minuman di draft ini sudah dihapus dari daftar menu dan tidak ikut dimuat.",
