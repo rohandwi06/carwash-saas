@@ -28,6 +28,7 @@ use App\Http\Controllers\WageAdjustmentController;
 use App\Http\Controllers\WageRateController;
 use App\Http\Controllers\WageSharingController;
 use App\Http\Controllers\WashCategoryController;
+use App\Http\Controllers\SupplyController;
 use App\Http\Controllers\WashServiceController;
 use App\Http\Controllers\WorkerController;
 use Illuminate\Support\Facades\Route;
@@ -133,6 +134,14 @@ Route::middleware('pin.auth')->group(function () {
         Route::get('/expenses', [ExpenseController::class, 'index']);
         Route::post('/expenses', [ExpenseController::class, 'store'])->middleware('langganan');
 
+        // Barang perlengkapan (sabun, semir, lap) — kasir boleh mencatat
+        // pakai, beli, dan hitung sisa; mengatur jenis barang owner.
+        Route::get('/supplies', [SupplyController::class, 'index']);
+        Route::get('/supplies/{supply}/movements', [SupplyController::class, 'movements']);
+        Route::post('/supplies/{supply}/use', [SupplyController::class, 'use'])->middleware('langganan');
+        Route::post('/supplies/{supply}/purchase', [SupplyController::class, 'purchase'])->middleware('langganan');
+        Route::post('/supplies/{supply}/count', [SupplyController::class, 'count'])->middleware('langganan');
+
         // AI (Gemini) — hanya untuk kendaraan yang tidak ditemukan search lokal.
         //
         // Sejak AI menyatu dengan kolom pencarian, permintaan ke sini tidak lagi
@@ -201,6 +210,9 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/products', [ProductController::class, 'store']);
         Route::patch('/products/{product}', [ProductController::class, 'update']);
         Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+        Route::post('/supplies', [SupplyController::class, 'store']);
+        Route::patch('/supplies/{supply}', [SupplyController::class, 'update']);
+        Route::delete('/supplies/{supply}', [SupplyController::class, 'destroy']);
 
         // Koreksi isi transaksi yang salah input (menu Pembukuan). Owner-only
         // karena mengubah omzet & upah pekerja hari yang sudah lewat — sama

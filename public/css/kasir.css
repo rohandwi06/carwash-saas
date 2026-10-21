@@ -1304,3 +1304,32 @@
     .bu-label{font-size:18px}
     .susulan-bayar{grid-column:1 / -1}
   }
+
+  /* ---------- Barang (sabun, semir, lap) ---------- */
+  #daftarBarang{display:flex;flex-direction:column;gap:12px}
+  .brg-petunjuk{font-size:13.5px;font-weight:600;color:var(--ink2);line-height:1.45}
+  .brg-kosong{font-weight:700;color:var(--ink2)}
+  .brg-kartu.menipis{border-color:var(--danger);background:#FFF8F4}
+  .brg-atas{display:flex;align-items:flex-start;gap:12px}
+  .brg-info{flex:1;min-width:0}
+  .brg-nama{font-size:17px;font-weight:900;overflow-wrap:anywhere}
+  .brg-detail{font-size:12.5px;font-weight:600;color:var(--ink2);margin-top:2px;overflow-wrap:anywhere}
+  .brg-stok{font-size:24px;font-weight:900;text-align:right;max-width:55%;overflow-wrap:anywhere;line-height:1.1}
+  .brg-stok span{font-size:14px;font-weight:800;color:var(--ink2)}
+  .brg-stok.minus{color:var(--danger)}
+  .brg-peringatan{margin-top:8px;font-size:13px;font-weight:900;color:var(--danger)}
+  .brg-takaran{margin-top:8px}
+  .brg-aksi{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .brg-aksi button{flex:1 1 auto;min-width:0;font-size:14px;font-weight:900;padding:9px 10px;border-radius:10px;
+    border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+  .brg-aksi button:first-child{border-color:var(--go);color:var(--go-dk)}
+  .brg-riwayat{text-align:left;max-height:60vh;overflow-y:auto}
+  .brg-gerak{display:flex;gap:10px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--line)}
+  .brg-gerak-info{flex:1;min-width:0;font-size:14px}
+  .brg-gerak-qty{font-size:15px;font-weight:900;color:var(--go-dk);white-space:nowrap}
+  .brg-gerak-qty.keluar{color:var(--danger)}
+  .brg-takaran-baris{border:2px solid var(--line);border-radius:12px;padding:8px;margin-top:8px;text-align:left}
+  .brg-takaran-jml{display:flex;align-items:center;gap:8px}
+  .swal2-popup .brg-takaran-jml .swal2-input{flex:1;min-width:0;margin:0}
+  .brg-takaran-jml span{font-weight:800;color:var(--ink2);white-space:nowrap}
+  .brg-takaran-hapus{border:none;background:none;color:var(--danger);font-size:18px;font-weight:900;padding:6px 8px;cursor:pointer}

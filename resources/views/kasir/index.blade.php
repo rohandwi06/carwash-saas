@@ -40,6 +40,9 @@
     <!-- ============ PENGELUARAN ============ -->
     @include('kasir.partials.layar-pengeluaran')
 
+    <!-- ============ BARANG ============ -->
+    @include('kasir.partials.layar-barang')
+
     <!-- ============ PEMBUKUAN HARIAN ============ -->
     @include('kasir.partials.layar-buku')
 

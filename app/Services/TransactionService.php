@@ -25,6 +25,7 @@ class TransactionService
         private DailyRuleService $aturan,
         private PromoService $promo,
         private VehicleMemoryService $ingatan,
+        private SupplyService $barang,
     ) {}
 
     /**
@@ -105,6 +106,7 @@ class TransactionService
 
             $this->wages->attachWorkers($transaction, $data['worker_ids'] ?? []);
             $this->sinkronAturan($date);
+            $this->potongBarang($transaction);
 
             // Ejaan yang diketik kasir untuk mobil ini diingat. Gagal mengingat
             // tidak boleh menggagalkan cucian yang sudah dibayar.
@@ -222,6 +224,9 @@ class TransactionService
                     $a['id'] => ['name' => $a['name'], 'price' => $a['price']],
                 ])->all()
             );
+
+            // Jenis, layanan, atau add-on bisa berubah — takaran barangnya ikut.
+            $this->potongBarang($trx);
 
             if (array_key_exists('worker_ids', $data)) {
                 // attachWorkers() PULANG LEBIH AWAL kalau daftarnya kosong —
@@ -355,6 +360,10 @@ class TransactionService
 
                 $this->wages->attachWorkers($trx, $workerIds);
 
+                // Barang TIDAK dipotong untuk cucian susulan: sabun hari itu
+                // sudah terpakai sebelum dicatat, dan hitung sisa (opname)
+                // sesudahnya sudah memuatnya — memotong lagi = dihitung dua kali.
+
                 $hasil[] = $trx->load('workers', 'addons', 'fnbSales.items');
             }
 
@@ -397,6 +406,20 @@ class TransactionService
 
             return $hasil;
         });
+    }
+
+    /**
+     * Takaran barang otomatis. Kegagalan di sini tidak boleh menggagalkan
+     * cucian yang sudah dibayar — termasuk situs yang kodenya sudah baru
+     * tapi SQL tabel barangnya belum dijalankan.
+     */
+    private function potongBarang(Transaction $trx): void
+    {
+        try {
+            $this->barang->sesuaikanCucian($trx);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function nextQueueNo(string $date): int
@@ -456,6 +479,9 @@ class TransactionService
             // Makanan/minuman yang ikut dibatalkan: stoknya dikembalikan.
             // Uangnya sendiri otomatis keluar dari rekap lewat FnbSale::valid().
             $this->fnb->restoreStock($terkunci->fnbSales()->with('items')->get());
+
+            // Barang yang terpotong otomatis dikembalikan.
+            $this->potongBarang($terkunci->refresh());
 
             // Pekerja yang cuciannya tinggal ini tidak lagi "kerja hari itu".
             $this->sinkronAturan($terkunci->date->toDateString());

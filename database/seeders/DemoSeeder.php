@@ -8,6 +8,7 @@ use App\Models\Consignor;
 use App\Models\Expense;
 use App\Models\FnbSale;
 use App\Models\Product;
+use App\Models\Supply;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -18,6 +19,7 @@ use App\Models\Worker;
 use App\Services\CashBookService;
 use App\Services\ConsignmentService;
 use App\Services\FnbService;
+use App\Services\SupplyService;
 use App\Services\TransactionService;
 use App\Services\WageService;
 use Carbon\CarbonImmutable;
@@ -102,6 +104,7 @@ class DemoSeeder extends Seeder
         private CashBookService $buku,
         private ConsignmentService $titipan,
         private WageService $upah,
+        private SupplyService $barang,
     ) {}
 
     public function run(): void
@@ -126,6 +129,7 @@ class DemoSeeder extends Seeder
         [$pekerja, $this->trainee] = $this->siapkanOrang();
         [$penitip, $kue]     = $this->siapkanTitipan($awal);
         $menu = Product::where('is_active', true)->whereNull('consignor_id')->get();
+        $sabun = $this->siapkanBarang($awal);
 
         $hitung = ['cuci' => 0, 'fnb' => 0, 'batal' => 0];
         $bukuSore = null;   // buku shift sore kemarin, disetujui owner pagi ini
@@ -212,6 +216,17 @@ class DemoSeeder extends Seeder
                         fn () => $this->buku->requestDeposit($this->buku->current(), 'Rizal'));
                 }
 
+                // Sabun dibeli Kamis kalau sisanya tinggal sedikit; tiap Minggu
+                // malam kasir menghitung sisa (selisih kecil dari takaran)
+                // supaya riwayat punya contoh opname.
+                if ($hari->isThursday() && $sabun->fresh()->stock < 12) {
+                    $this->pada($hari->setTime(8, 15), fn () => $this->barang->beli($sabun->fresh(), 20, 185000, null, 'Dina'));
+                }
+                if ($hari->isSunday() && ! $hariIni) {
+                    $this->pada($hari->setTime(21, 0), fn () => $this->barang->hitung(
+                        $sabun->fresh(), max(0, round($sabun->fresh()->stock - mt_rand(2, 8) / 10, 1)), null, 'Rizal'));
+                }
+
                 // Penitip kue: stok diantar tiap Senin, utang dibayar tiap Sabtu.
                 if ($hari->isMonday() && $h > 0) {
                     $this->pada($hari->setTime(7, 40), fn () => $this->titipan->terima($kue->fresh(), 25, 'Antar mingguan', 'Owner'));
@@ -295,6 +310,35 @@ class DemoSeeder extends Seeder
         $this->pada($awal->setTime(7, 40), fn () => $this->titipan->terima($kue, 25, 'Antar pertama', 'Owner'));
 
         return [$penitip, $kue->fresh()];
+    }
+
+    /** Sabun & semir terpotong otomatis tiap cucian; lap dicatat manual. */
+    private function siapkanBarang(CarbonImmutable $awal): Supply
+    {
+        $semir = Addon::where('name', 'like', '%semir%')->value('id');
+
+        $sabun = Supply::create(['name' => 'Sabun cuci', 'unit' => 'liter', 'min_stock' => 5, 'sort_order' => 1]);
+        $sabun->rules()->createMany([
+            ['qty' => 0.02, 'category_slug' => 'motor'],
+            ['qty' => 0.05, 'category_slug' => 'kecil'],
+            ['qty' => 0.06, 'category_slug' => 'sedang'],
+            ['qty' => 0.08, 'category_slug' => 'besar'],
+        ]);
+        $semirBan = Supply::create(['name' => 'Semir ban', 'unit' => 'liter', 'min_stock' => 1, 'sort_order' => 2]);
+        if ($semir) {
+            $semirBan->rules()->create(['qty' => 0.03, 'addon_id' => $semir]);
+        }
+        $lap = Supply::create(['name' => 'Lap microfiber', 'unit' => 'pcs', 'min_stock' => 8, 'sort_order' => 3]);
+
+        $this->pada($awal->setTime(7, 30), function () use ($sabun, $semirBan, $lap) {
+            $this->barang->hitung($sabun, 25, 'Stok awal', 'Owner');
+            $this->barang->hitung($semirBan, 3, 'Stok awal', 'Owner');
+            $this->barang->hitung($lap, 20, 'Stok awal', 'Owner');
+        });
+        $this->pada($awal->addDays(9)->setTime(10, 0), fn () => $this->barang->pakai($lap->fresh(), 6, 'Sobek, diganti', 'Rizal'));
+        $this->pada($awal->addDays(20)->setTime(10, 0), fn () => $this->barang->pakai($lap->fresh(), 8, 'Sobek, diganti', 'Dina'));
+
+        return $sabun;
     }
 
     private function satuCucian(string $kasir, array $hadir, $menu, Product $kue): Transaction

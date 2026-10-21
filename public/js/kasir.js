@@ -512,7 +512,7 @@ function rapikanPlat(el){
 
 /* ---------- NAV ---------- */
 const $ = id => document.getElementById(id);
-const layarIds = ["layarHome","layarConfirm","layarDone","layarFnb","layarMenuFnb","layarPekerja","layarRekap","layarPengeluaran","layarBuku","layarDashboard","layarPanduan"];
+const layarIds = ["layarHome","layarConfirm","layarDone","layarFnb","layarMenuFnb","layarPekerja","layarRekap","layarPengeluaran","layarBarang","layarBuku","layarDashboard","layarPanduan"];
 /* Nama halaman yang tampil di pojok kiri atas, di bawah header. */
 const JUDUL_LAYAR = {
   layarHome:      "Kasir",
@@ -523,6 +523,7 @@ const JUDUL_LAYAR = {
   layarPekerja:   "Pekerja &amp; Upah",
   layarRekap:     "Rekap Hari Ini",
   layarPengeluaran: "Pengeluaran",
+  layarBarang:    "Barang",
   layarBuku:      "Pembukuan",
   layarDashboard: "Dashboard",
   layarPanduan:   "Panduan",
@@ -571,6 +572,7 @@ function pergi(id){
     $("keluarRangeHasil").innerHTML = "";
     renderPengeluaran();
   }
+  if(id==="layarBarang") renderBarang();
   if(id==="layarBuku") renderBuku();
   if(id==="layarDashboard") renderDashboard();
   tampilkan(id);
@@ -7923,6 +7925,274 @@ async function muatLangganan(){
     pita.classList.toggle("hidden", !(s && !s.aktif));
   }catch(e){ pita.classList.add("hidden"); }
 }
+/* ---------- BARANG (sabun, semir, lap) ----------
+   Perlengkapan cuci yang habis dipakai — terpisah dari menu F&B karena
+   tidak dijual. Stok boleh desimal ("3,5 liter") dan boleh minus: cucian
+   yang sudah dibayar tetap memotong takarannya walau angka di sistem habis,
+   dan minus itu tanda sudah waktunya Hitung sisa. */
+let barang = [];
+
+/* Takaran sabun ditulis "50 ml", bukan "0,05 liter": satuan kecil dipakai
+   di isian takaran, lalu disimpan dalam satuan barangnya. */
+const SATUAN_KECIL = {liter: ["ml", 1000], l: ["ml", 1000], kg: ["gram", 1000]};
+function satuanTakaran(unit){ return SATUAN_KECIL[String(unit||"").toLowerCase()] || [unit, 1]; }
+
+/* "3,5" dan "3.5" sama-sama 3,5. Kalau ada koma, titik dianggap pemisah ribuan. */
+function angkaDesimal(teks){
+  let s = String(teks??"").trim().replace(/\s/g, "");
+  if(s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  return s === "" ? NaN : Number(s);
+}
+const fmtJml = n => Number(n||0).toLocaleString("id-ID", {maximumFractionDigits: 3});
+
+function gambarTandaBarang(){
+  const n = barang.filter(b => b.is_low).length;
+  const el = $("drTandaBarang");
+  el.textContent = n;
+  el.classList.toggle("hidden", n === 0);
+}
+async function muatTandaBarang(){
+  try{ barang = await api("/supplies"); gambarTandaBarang(); }catch(e){ /* tabel belum ada: tanda dibiarkan */ }
+}
+
+function ringkasTakaran(b){
+  if(!b.rules || !b.rules.length) return "";
+  const [kecil, kali] = satuanTakaran(b.unit);
+  const addon = id => ((CFG && CFG.addons) || []).find(a => a.id === id);
+  return b.rules.map(r => {
+    let untuk;
+    if(r.addon_id){ untuk = "add-on "+((addon(r.addon_id)||{}).name || "?"); }
+    else {
+      const kat = r.category_slug ? ((CFG && CFG.categories[r.category_slug]) || {}).label || r.category_slug : "";
+      const svc = r.service_slug ? ((CFG && CFG.services[r.service_slug]) || {}).label || r.service_slug : "";
+      untuk = [kat, svc].filter(Boolean).join(" · ") || "semua cucian";
+    }
+    return fmtJml(r.qty * kali)+" "+esc(kecil)+" tiap "+esc(untuk);
+  }).join("; ");
+}
+
+async function renderBarang(){
+  $("btnBarangBaru").classList.toggle("hidden", ROLE !== "owner");
+  const wadah = $("daftarBarang");
+  try{
+    barang = await api("/supplies");
+  }catch(e){ wadah.innerHTML = '<div class="cat-blok">'+esc(e.message)+'</div>'; return; }
+  gambarTandaBarang();
+  if(!barang.length){
+    wadah.innerHTML = '<div class="cat-blok brg-kosong">Belum ada barang.'
+      + (ROLE === "owner" ? ' Tekan <b>+ Barang baru</b> untuk mulai.' : ' Minta owner menambahkannya.')+'</div>';
+    return;
+  }
+  wadah.innerHTML = barang.map(b => {
+    const minus = b.stock < 0;
+    const takaran = ringkasTakaran(b);
+    return '<div class="cat-blok brg-kartu'+(b.is_low ? " menipis" : "")+'">'
+      + '<div class="brg-atas">'
+      +   '<div class="brg-info"><div class="brg-nama">'+esc(b.name)+'</div>'
+      +     (b.min_stock != null ? '<div class="brg-detail">Menipis di '+fmtJml(b.min_stock)+' '+esc(b.unit)+'</div>' : '')
+      +   '</div>'
+      +   '<div class="brg-stok'+(minus ? " minus" : "")+'">'+fmtJml(b.stock)+' <span>'+esc(b.unit)+'</span></div>'
+      + '</div>'
+      + (b.is_low ? '<div class="brg-peringatan">'+(minus ? "Stok minus — hitung sisa yang sebenarnya" : "Stok menipis — waktunya beli")+'</div>' : '')
+      + (takaran ? '<div class="brg-detail brg-takaran">Otomatis: '+takaran+'</div>' : '')
+      + '<div class="brg-aksi">'
+      +   '<button onclick="pakaiBarang('+b.id+')">Pakai</button>'
+      +   '<button onclick="beliBarang('+b.id+')">Beli</button>'
+      +   '<button onclick="hitungBarang('+b.id+')">Hitung sisa</button>'
+      +   '<button onclick="riwayatBarang('+b.id+')">Riwayat</button>'
+      +   (ROLE === "owner" ? '<button onclick="aturBarang('+b.id+')">Atur</button>' : '')
+      + '</div></div>';
+  }).join("");
+}
+
+/* Satu dialog angka untuk Pakai / Beli / Hitung sisa — bedanya cuma judul,
+   label, dan (untuk Beli) isian harga. */
+async function dialogJumlahBarang(b, opsi){
+  const {value: hasil} = await Swal.fire({
+    title: opsi.judul+" "+esc(b.name),
+    html:
+      '<div class="sw-field-label">Stok tercatat</div>'
+      + '<div class="sw-stok-kini">'+fmtJml(b.stock)+' '+esc(b.unit)+'</div>'
+      + ruasBiodata("swBrgJml", opsi.label+" ("+esc(b.unit)+") *", "", "text", 'inputmode="decimal" autocomplete="off"')
+      + (opsi.harga ? ruasBiodata("swBrgHarga", "Harga total (Rp) — diisi = jadi pengeluaran", "", "number", 'inputmode="numeric" min="0"') : "")
+      + ruasBiodata("swBrgCatatan", "Catatan", "", "text", 'maxlength="100"'),
+    focusConfirm: false,
+    showCancelButton: true, confirmButtonText: "Simpan", cancelButtonText: "Batal",
+    confirmButtonColor: "#1B9E62",
+    didOpen: () => document.getElementById("swBrgJml").focus(),
+    preConfirm: () => {
+      const n = angkaDesimal(document.getElementById("swBrgJml").value);
+      if(isNaN(n)) return Swal.showValidationMessage("Jumlah harus diisi angka");
+      if(opsi.bolehNol ? n < 0 : n <= 0) return Swal.showValidationMessage(opsi.bolehNol ? "Tidak boleh minus" : "Jumlah harus lebih dari 0");
+      if(n > 1000000) return Swal.showValidationMessage("Jumlah kelewat besar");
+      const isi = {catatan: document.getElementById("swBrgCatatan").value.trim(), n};
+      if(opsi.harga){
+        const h = document.getElementById("swBrgHarga").value;
+        isi.harga = h === "" ? null : parseInt(h, 10);
+        if(isi.harga !== null && (isNaN(isi.harga) || isi.harga < 0 || isi.harga > 100000000))
+          return Swal.showValidationMessage("Harga tidak masuk akal");
+      }
+      return isi;
+    },
+  });
+  return hasil;
+}
+
+async function kirimBarang(id, jalur, body, pesan){
+  try{
+    await api("/supplies/"+id+"/"+jalur, {method: "POST", body});
+    await renderBarang();
+    Swal.fire({toast:true, position:"top-end", icon:"success", title: pesan,
+      showConfirmButton:false, timer:1800});
+  }catch(e){ gagal(e); }
+}
+
+async function pakaiBarang(id){
+  const b = barang.find(x => x.id === id); if(!b) return;
+  const h = await dialogJumlahBarang(b, {judul: "Pakai", label: "Jumlah dipakai"});
+  if(h) kirimBarang(id, "use", {qty: h.n, note: h.catatan || null}, "Pemakaian dicatat");
+}
+async function beliBarang(id){
+  const b = barang.find(x => x.id === id); if(!b) return;
+  const h = await dialogJumlahBarang(b, {judul: "Beli", label: "Jumlah dibeli", harga: true});
+  if(h) kirimBarang(id, "purchase", {qty: h.n, price: h.harga, note: h.catatan || null},
+    h.harga ? "Stok bertambah, pengeluaran "+rp(h.harga)+" dicatat" : "Stok bertambah");
+}
+async function hitungBarang(id){
+  const b = barang.find(x => x.id === id); if(!b) return;
+  const h = await dialogJumlahBarang(b, {judul: "Hitung sisa", label: "Sisa sebenarnya", bolehNol: true});
+  if(h) kirimBarang(id, "count", {stock: h.n, note: h.catatan || null}, "Sisa dicatat");
+}
+
+const JENIS_GERAK = {beli: "Beli", pakai: "Pakai", hitung: "Hitung sisa", cuci: "Cucian"};
+async function riwayatBarang(id){
+  const b = barang.find(x => x.id === id); if(!b) return;
+  let list;
+  try{ list = await api("/supplies/"+id+"/movements"); }catch(e){ gagal(e); return; }
+  const baris = list.map(m => {
+    const tanda = m.qty > 0 ? "+" : "";
+    let ket = m.kind === "cuci" ? m.washes+" cucian" : (m.note ? esc(m.note) : "");
+    if(m.kind === "hitung") ket = "sisa "+fmtJml(m.stock_after)+(ket ? " · "+ket : "");
+    if(m.price) ket += (ket ? " · " : "")+rp(m.price);
+    if(m.created_by) ket += (ket ? " · " : "")+esc(m.created_by);
+    return '<div class="brg-gerak">'
+      + '<div class="brg-gerak-info"><b>'+JENIS_GERAK[m.kind]+'</b> <span class="waktu">'+fmtTglPendek(tglSaja(m.date))+'</span>'
+      +   (ket ? '<div class="brg-detail">'+ket+'</div>' : '')
+      + '</div>'
+      + '<div class="brg-gerak-qty'+(m.qty < 0 ? " keluar" : "")+'">'+tanda+fmtJml(m.qty)+'</div>'
+      + '</div>';
+  }).join("");
+  Swal.fire({
+    title: "Riwayat "+esc(b.name),
+    html: baris ? '<div class="brg-riwayat">'+baris+'</div>' : "Belum ada catatan.",
+    confirmButtonText: "Tutup", confirmButtonColor: "#1B9E62",
+  });
+}
+
+/* ---------- Atur barang (owner): nama, satuan, batas, takaran ---------- */
+function opsiTakaranUntuk(r){
+  const pilih = r.addon_id ? "a"+r.addon_id : (r.category_slug ? "k"+r.category_slug : "");
+  let html = '<option value="">Semua kendaraan</option>';
+  Object.entries((CFG && CFG.categories) || {}).forEach(([slug, k]) =>
+    html += '<option value="k'+esc(slug)+'"'+(pilih === "k"+slug ? " selected" : "")+'>'+esc(k.label)+'</option>');
+  ((CFG && CFG.addons) || []).forEach(a =>
+    html += '<option value="a'+a.id+'"'+(pilih === "a"+a.id ? " selected" : "")+'>Add-on: '+esc(a.name)+'</option>');
+  return html;
+}
+function opsiTakaranLayanan(r){
+  let html = '<option value="">Semua layanan</option>';
+  Object.entries((CFG && CFG.services) || {}).forEach(([slug, s]) =>
+    html += '<option value="'+esc(slug)+'"'+(r.service_slug === slug ? " selected" : "")+'>'+esc(s.label)+'</option>');
+  return html;
+}
+function barisTakaran(r, kecil, kali){
+  return '<div class="brg-takaran-baris">'
+    + '<div class="brg-takaran-jml"><input class="swal2-input" inputmode="decimal" autocomplete="off" data-t="qty" value="'
+    +   (r.qty != null ? fmtJml(r.qty * kali) : "")+'" placeholder="0"><span data-t="satuan">'+esc(kecil)+'</span>'
+    +   '<button type="button" class="brg-takaran-hapus" aria-label="Hapus takaran" onclick="this.closest(\'.brg-takaran-baris\').remove()">&#10005;</button></div>'
+    + '<select class="sw-select" data-t="untuk" onchange="this.nextElementSibling.classList.toggle(\'hidden\', this.value.startsWith(\'a\'))">'+opsiTakaranUntuk(r)+'</select>'
+    + '<select class="sw-select'+(r.addon_id ? " hidden" : "")+'" data-t="layanan">'+opsiTakaranLayanan(r)+'</select>'
+    + '</div>';
+}
+function tambahBarisTakaran(){
+  const [kecil, kali] = satuanTakaran(document.getElementById("swBrgUnit").value.trim());
+  document.getElementById("swBrgTakaran").insertAdjacentHTML("beforeend", barisTakaran({}, kecil, kali));
+}
+/* Satuan diganti (liter -> pcs): label takaran ikut, angkanya dibiarkan. */
+function gantiSatuanTakaran(){
+  const [kecil] = satuanTakaran(document.getElementById("swBrgUnit").value.trim());
+  document.querySelectorAll('#swBrgTakaran [data-t="satuan"]').forEach(el => el.textContent = kecil);
+}
+
+async function aturBarang(id){
+  const b = id ? barang.find(x => x.id === id) : {name: "", unit: "liter", min_stock: null, rules: []};
+  if(!b) return;
+  const [kecil, kali] = satuanTakaran(b.unit);
+  const {value: hasil, isDenied} = await Swal.fire({
+    title: id ? "Atur "+esc(b.name) : "Barang baru",
+    html:
+      ruasBiodata("swBrgNama", "Nama barang *", b.name, "text", 'maxlength="60" placeholder="mis. Sabun cuci"')
+      + ruasBiodata("swBrgUnit", "Satuan *", b.unit, "text", 'maxlength="20" list="swBrgUnitDaftar" oninput="gantiSatuanTakaran()"')
+      + '<datalist id="swBrgUnitDaftar"><option value="liter"><option value="kg"><option value="pcs"><option value="botol"><option value="jeriken"><option value="sachet"></datalist>'
+      + (id ? "" : ruasBiodata("swBrgStok", "Stok sekarang", "", "text", 'inputmode="decimal" autocomplete="off"'))
+      + ruasBiodata("swBrgMin", "Tandai menipis bila sisa", b.min_stock != null ? fmtJml(b.min_stock) : "", "text", 'inputmode="decimal" autocomplete="off" placeholder="kosong = tidak ditandai"')
+      + '<div class="sw-judul">Takaran otomatis tiap cucian</div>'
+      + '<div class="brg-detail" style="text-align:left">Kosongkan bila tidak dipotong otomatis. Beberapa takaran yang cocok dijumlahkan.</div>'
+      + '<div id="swBrgTakaran">'+(b.rules || []).map(r => barisTakaran(r, kecil, kali)).join("")+'</div>'
+      + '<button type="button" class="kat-pilih-aksi" style="margin-top:8px" onclick="tambahBarisTakaran()">+ Takaran</button>',
+    focusConfirm: false,
+    showCancelButton: true, confirmButtonText: "Simpan", cancelButtonText: "Batal",
+    showDenyButton: !!id, denyButtonText: "Hapus barang",
+    confirmButtonColor: "#1B9E62",
+    width: 480,
+    preConfirm: () => {
+      const nama = document.getElementById("swBrgNama").value.trim();
+      const unit = document.getElementById("swBrgUnit").value.trim();
+      if(!nama) return Swal.showValidationMessage("Nama barang tidak boleh kosong");
+      if(!unit) return Swal.showValidationMessage("Satuan tidak boleh kosong");
+      const minTeks = document.getElementById("swBrgMin").value.trim();
+      const min = minTeks === "" ? null : angkaDesimal(minTeks);
+      if(min !== null && (isNaN(min) || min < 0)) return Swal.showValidationMessage("Batas menipis harus angka");
+      const isi = {name: nama, unit, min_stock: min};
+      if(!id){
+        const st = document.getElementById("swBrgStok").value.trim();
+        const n = st === "" ? 0 : angkaDesimal(st);
+        if(isNaN(n) || n < 0) return Swal.showValidationMessage("Stok harus angka");
+        isi.stock = n;
+      }
+      const [, kaliBaru] = satuanTakaran(unit);
+      const rules = [];
+      for(const el of document.querySelectorAll("#swBrgTakaran .brg-takaran-baris")){
+        const q = angkaDesimal(el.querySelector('[data-t="qty"]').value);
+        if(isNaN(q) || q <= 0) return Swal.showValidationMessage("Isi jumlah tiap takaran, atau hapus barisnya");
+        const untuk = el.querySelector('[data-t="untuk"]').value;
+        const layanan = el.querySelector('[data-t="layanan"]').value;
+        rules.push(untuk.startsWith("a")
+          ? {qty: q / kaliBaru, addon_id: parseInt(untuk.slice(1), 10)}
+          : {qty: q / kaliBaru, category_slug: untuk ? untuk.slice(1) : null, service_slug: layanan || null});
+      }
+      isi.rules = rules;
+      return isi;
+    },
+  });
+  if(isDenied){ hapusBarang(id); return; }
+  if(!hasil) return;
+  try{
+    await api(id ? "/supplies/"+id : "/supplies", {method: id ? "PATCH" : "POST", body: hasil});
+    await renderBarang();
+    Swal.fire({toast:true, position:"top-end", icon:"success", title: id ? "Barang disimpan" : "Barang ditambahkan",
+      showConfirmButton:false, timer:1800});
+  }catch(e){ gagal(e); }
+}
+
+async function hapusBarang(id){
+  if(!await konfirmasiHapus()) return;
+  try{
+    await api("/supplies/"+id, {method: "DELETE"});
+    await renderBarang();
+  }catch(e){ gagal(e); }
+}
+
 async function mulaiAplikasi(){
   try{
     // Status shift diambil DULU: kalau kasir di luar jam operasional, layar
@@ -7941,6 +8211,7 @@ async function mulaiAplikasi(){
     CFG = cfg; pekerja = pk; produk = pr;
     renderGrid();
     gambarTandaKatalog();
+    muatTandaBarang();
     renderDrafts();
     $("inputCari").addEventListener("input", jadwalCari);
   }catch(e){

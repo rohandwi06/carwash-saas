@@ -1,5 +1,5 @@
 -- ===================================================================
---  UPDATE DATABASE KUMULATIF (s/d 16 Oktober 2026)
+--  UPDATE DATABASE KUMULATIF (s/d 21 Oktober 2026)
 --  Untuk situs mana pun yang databasenya belum tentu lengkap.
 --
 --  cPanel -> phpMyAdmin -> klik database situsnya di kiri
@@ -13,15 +13,16 @@
 --                                      aturan harian, upah per bulan
 --    C. update-migrasi-2026-10-16.sql  promo pelanggan setia, ejaan kendaraan
 --                                      yang dipelajari AI, foto kendaraan
+--    D. update-migrasi-2026-10-21.sql  barang (stok sabun, semir, lap)
 --
 --  Tidak perlu tahu mana yang sudah pernah dijalankan: semua langkah
 --  memakai IF NOT EXISTS, jadi bagian yang sudah ada dilewati. AMAN
 --  DIJALANKAN ULANG. Tidak ada data yang dihapus. Sintaks khusus MariaDB.
 --
---  Fitur sesudah 16 Oktober (login email, kunci langganan, AI mobil
---  sejenis) TIDAK butuh perubahan database.
+--  Fitur 17-20 Oktober (login email, kunci langganan, AI mobil sejenis)
+--  TIDAK butuh perubahan database.
 --
---  HASIL: tabel terakhir yang tampil di phpMyAdmin berisi 24 baris
+--  HASIL: tabel terakhir yang tampil di phpMyAdmin berisi 27 baris
 --  pemeriksaan. Semua kolom kedua harus "OK".
 -- ===================================================================
 
@@ -220,7 +221,61 @@ CREATE TABLE IF NOT EXISTS `vehicle_photos` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 
--- ================= D. Tandai migrasi sudah jalan =================
+-- ================= D. Barang (21-10) =================
+-- Perlengkapan cuci (sabun, semir, lap), gerak stoknya, dan takaran
+-- otomatis per cucian.
+
+CREATE TABLE IF NOT EXISTS `supplies` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(60) NOT NULL,
+  `unit` VARCHAR(20) NOT NULL,
+  `stock` DECIMAL(12,3) NOT NULL DEFAULT '0.000',
+  `min_stock` DECIMAL(12,3) NULL,
+  `sort_order` INT UNSIGNED NOT NULL DEFAULT '0',
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `supply_movements` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `supply_id` BIGINT UNSIGNED NOT NULL,
+  `kind` VARCHAR(10) NOT NULL,
+  `qty` DECIMAL(12,3) NOT NULL,
+  `stock_after` DECIMAL(12,3) NOT NULL,
+  `price` INT UNSIGNED NULL,
+  `expense_id` BIGINT UNSIGNED NULL,
+  `transaction_id` BIGINT UNSIGNED NULL,
+  `note` VARCHAR(160) NULL,
+  `date` DATE NOT NULL,
+  `created_by` VARCHAR(255) NULL,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL,
+  INDEX `supply_movements_supply_id_date_index` (`supply_id`, `date`),
+  CONSTRAINT `supply_movements_supply_id_foreign`
+    FOREIGN KEY (`supply_id`) REFERENCES `supplies` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `supply_movements_expense_id_foreign`
+    FOREIGN KEY (`expense_id`) REFERENCES `expenses` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `supply_movements_transaction_id_foreign`
+    FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`) ON DELETE SET NULL
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `supply_usage_rules` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `supply_id` BIGINT UNSIGNED NOT NULL,
+  `qty` DECIMAL(12,3) NOT NULL,
+  `category_slug` VARCHAR(255) NULL,
+  `service_slug` VARCHAR(255) NULL,
+  `addon_id` BIGINT UNSIGNED NULL,
+  `created_at` TIMESTAMP NULL,
+  `updated_at` TIMESTAMP NULL,
+  CONSTRAINT `supply_usage_rules_supply_id_foreign`
+    FOREIGN KEY (`supply_id`) REFERENCES `supplies` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `supply_usage_rules_addon_id_foreign`
+    FOREIGN KEY (`addon_id`) REFERENCES `addons` (`id`) ON DELETE CASCADE
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+
+-- ================= E. Tandai migrasi sudah jalan =================
 
 SET @batch = (SELECT COALESCE(MAX(`batch`), 0) + 1 FROM `migrations`);
 
@@ -237,19 +292,20 @@ FROM (
     UNION ALL SELECT '2026_10_16_000001_add_promo_to_transactions'
     UNION ALL SELECT '2026_10_16_000002_create_vehicle_aliases_table'
     UNION ALL SELECT '2026_10_16_000003_create_vehicle_photos_table'
+    UNION ALL SELECT '2026_10_21_000001_create_supplies_tables'
 ) m
 WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 
 
--- ================= E. Pemeriksaan akhir =================
--- Satu tabel, 24 baris. Semua kolom kedua harus OK.
+-- ================= F. Pemeriksaan akhir =================
+-- Satu tabel, 27 baris. Semua kolom kedua harus OK.
 -- Nama database & jumlah migrasi dicatat ke variabel DULU: phpMyAdmin
 -- menjalankan SELECT yang diawali information_schema DI DALAM database
 -- information_schema, sehingga DATABASE() dan tabel `migrations` di
 -- kueri itu sendiri menunjuk ke tempat yang salah (#1109, 20-10).
 
 SET @db = DATABASE();
-SET @mig = (SELECT COUNT(*) FROM `migrations` WHERE `migration` IN ('2026_10_09_000001_add_track_stock_to_products_table', '2026_10_10_000001_add_qris_to_payment_methods', '2026_10_11_000001_add_customer_to_transactions', '2026_10_11_000002_create_worker_compensations_table', '2026_10_11_000003_create_daily_rules_tables', '2026_10_11_000004_add_workers_to_daily_rules', '2026_10_11_000005_create_monthly_wage_tables', '2026_10_16_000001_add_promo_to_transactions', '2026_10_16_000002_create_vehicle_aliases_table', '2026_10_16_000003_create_vehicle_photos_table'));
+SET @mig = (SELECT COUNT(*) FROM `migrations` WHERE `migration` IN ('2026_10_09_000001_add_track_stock_to_products_table', '2026_10_10_000001_add_qris_to_payment_methods', '2026_10_11_000001_add_customer_to_transactions', '2026_10_11_000002_create_worker_compensations_table', '2026_10_11_000003_create_daily_rules_tables', '2026_10_11_000004_add_workers_to_daily_rules', '2026_10_11_000005_create_monthly_wage_tables', '2026_10_16_000001_add_promo_to_transactions', '2026_10_16_000002_create_vehicle_aliases_table', '2026_10_16_000003_create_vehicle_photos_table', '2026_10_21_000001_create_supplies_tables'));
 
 SELECT 'products.track_stock', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'products' AND COLUMN_NAME = 'track_stock'
@@ -322,4 +378,13 @@ UNION ALL
 SELECT 'tabel vehicle_photos', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
   WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicle_photos'
 UNION ALL
-SELECT 'catatan migrasi (10 baris)', IF(@mig = 10, 'OK', CONCAT('baru ', @mig));
+SELECT 'tabel supplies', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supplies'
+UNION ALL
+SELECT 'tabel supply_movements', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supply_movements'
+UNION ALL
+SELECT 'tabel supply_usage_rules', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supply_usage_rules'
+UNION ALL
+SELECT 'catatan migrasi (11 baris)', IF(@mig = 11, 'OK', CONCAT('baru ', @mig));

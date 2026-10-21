@@ -14,6 +14,8 @@
       <div class="dr-sep"></div>
       <button class="dr-item" data-layar="layarRekap" onclick="pergi('layarRekap')"><span class="ikon">&#128218;</span> Rekap Hari Ini</button>
       <button class="dr-item" data-layar="layarPengeluaran" onclick="pergi('layarPengeluaran')"><span class="ikon">&#128184;</span> Pengeluaran</button>
+      {{-- Tandanya = jumlah barang yang sudah di bawah batas menipis. --}}
+      <button class="dr-item" data-layar="layarBarang" onclick="pergi('layarBarang')"><span class="ikon">&#129532;</span> Barang<span class="dr-tanda hidden" id="drTandaBarang"></span></button>
       <button class="dr-item" data-layar="layarBuku" onclick="pergi('layarBuku')"><span class="ikon">&#128197;</span> Pembukuan</button>
       <div class="dr-sep"></div>
       {{-- Pekerja & Upah owner-only: disembunyikan terapkanBatasRole() untuk

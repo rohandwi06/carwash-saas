@@ -223,6 +223,23 @@
           <h3>&#128663; Kasir sehari-hari</h3>
 
           <details class="pd-item">
+            <summary>Bagaimana mencatat stok sabun, semir, dan lap?</summary>
+            <div class="pd-isi">
+              <p>Buka <b>Barang</b>. Tiap barang punya empat tombol:</p>
+              <p><b>Pakai</b> &mdash; ambil barang dari gudang, misalnya 2 lap. <b>Beli</b> &mdash; stok
+                 bertambah; kalau harganya diisi, sekalian tercatat sebagai pengeluaran hari ini.
+                 <b>Hitung sisa</b> &mdash; ketik sisa yang sebenarnya (misalnya sabun di jeriken tinggal
+                 3,5 liter); selisihnya tercatat sebagai pemakaian. <b>Riwayat</b> &mdash; semua catatan barang itu.</p>
+              <p>Owner bisa mengatur <b>takaran otomatis</b> lewat tombol <b>Atur</b>, misalnya 50 ml sabun
+                 tiap cucian mobil kecil. Stok lalu terpotong sendiri setiap cucian dicatat, dan kembali
+                 kalau cuciannya dibatalkan. Cucian susulan (tanggal lampau) tidak memotong stok.</p>
+              <p>Barang yang sisanya di bawah batas &ldquo;menipis&rdquo; diberi tanda merah di menu.
+                 Angka minus berarti takarannya kebanyakan atau ada pemakaian yang tidak dicatat &mdash;
+                 lakukan Hitung sisa.</p>
+            </div>
+          </details>
+
+          <details class="pd-item">
             <summary>Resi pelanggan hilang atau lupa dicetak. Bisa dicetak lagi?</summary>
             <div class="pd-isi">
               <p>Bisa, oleh kasir maupun owner. Buka <b>Rekap Hari Ini</b> (atau <b>Pembukuan</b>
