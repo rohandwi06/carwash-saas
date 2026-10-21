@@ -2612,7 +2612,22 @@ function barisFnbBayar(metode, label, total, kelas, fnb){
     return '<div class="cat-baris"><span>'+label+'</span><b class="'+kelas+'">kosong</b></div>';
   }
   return barisBuka("fnb-"+metode, label+' <span class="waktu">'+rows.length+'x</span>', rp(total), kelas,
-    tombolDetailRekap("fnb-"+metode, "Detail penjualan", "F&amp;B "+rows.length));
+    rincianMenuFnb(rows)
+    + tombolDetailRekap("fnb-"+metode, "Detail penjualan", "F&amp;B "+rows.length));
+}
+/* Menu yang terjual dalam sekumpulan penjualan F&B, dijumlah per menu:
+   "Es Teh 3x  Rp 15.000". Menjawab "TF-nya untuk apa saja" tanpa membuka
+   jendela detail. */
+function rincianMenuFnb(rows){
+  const per = new Map();
+  rows.forEach(sl => (sl.items||[]).forEach(i => {
+    const x = per.get(i.product_name) || {qty:0, rp:0};
+    x.qty += i.qty; x.rp += i.subtotal;
+    per.set(i.product_name, x);
+  }));
+  return [...per].map(([nama, x]) =>
+    '<div class="cat-baris"><span>'+esc(nama)+' <span class="waktu">'+x.qty+'x</span></span><b>'+rp(x.rp)+'</b></div>'
+  ).join("");
 }
 
 let rekapBayarBuka = new Set();   // cara bayar yang dropdown-nya sedang terbuka
@@ -4190,7 +4205,9 @@ async function renderBuku(){
       // Cuci Motor, Cuci Mobil, dan Tip bisa dibuka: dipisah per cara bayar.
       +barisPisahBayar("buku-motor", "Cuci Motor", pisah.motor)
       +barisPisahBayar("buku-mobil", "Cuci Mobil", pisah.mobil)
-      +'<div class="cat-baris"><span>F&amp;B</span><b>'+(h.fnb_total?rp(h.fnb_total):"kosong")+'</b></div>'
+      // F&B juga dipisah per cara bayar (permintaan owner 21/10), sama
+      // dengan Cuci Motor & Cuci Mobil di atasnya.
+      +barisPisahBayar("buku-fnb", "F&amp;B", pisah.fnb)
       // Total = cucian + F&B (koreksi owner 09/10); tip punya barisnya sendiri.
       +'<div class="cat-baris"><span>Total <span class="waktu">cucian + F&amp;B</span></span><b>'+rp((h.total||0) + (h.fnb_total||0))+'</b></div>'
       +barisPisahBayar("buku-tip", "Tip", pisah.tip)
@@ -4696,7 +4713,7 @@ async function simpanSusulan(){
    cash_motor / cash_mobil di server. */
 function pisahBayarHari(trx, fnb){
   const kosong = () => ({cash:{n:0, rp:0}, tf:{n:0, rp:0}, qris:{n:0, rp:0}});
-  const hasil = {tip: kosong(), motor: kosong(), mobil: kosong()};
+  const hasil = {tip: kosong(), motor: kosong(), mobil: kosong(), fnb: kosong()};
   const tambah = (ember, metode, nominal) => {
     const e = ember[kodeBayar(metode)];
     e.n++; e.rp += nominal;
@@ -4708,6 +4725,7 @@ function pisahBayarHari(trx, fnb){
     if(r.tip > 0) tambah(hasil.tip, r.payment_method, r.tip);
   });
   fnb.filter(fnbSah).forEach(sl => {
+    tambah(hasil.fnb, sl.payment_method, sl.total);
     if(sl.tip > 0) tambah(hasil.tip, sl.payment_method, sl.tip);
   });
   return hasil;
@@ -4809,7 +4827,7 @@ function kartuBuku(g){
          : '<div class="cat-baris"><span class="waktu">Catatan di luar buku kas</span></div>')
     + '<div class="cat-baris"><span>Cuci <span class="waktu">'+sah.length+'x</span></span><b>'+rp(cuci)+'</b></div>'
     + '<div class="cat-baris"><span>Tip</span><b>'+(tip ? rp(tip) : "kosong")+'</b></div>'
-    + '<div class="cat-baris"><span>F&amp;B</span><b>'+(fnbT ? rp(fnbT) : "kosong")+'</b></div>'
+    + barisPisahBayar("kb-fnb-"+g.kunci, "F&amp;B", pisahBayarHari([], g.fnb).fnb)
     + (upah!==null ? '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(upah)+'</b></div>' : '')
     + '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">'+(kel ? '-'+rp(kel) : rp(0))+'</b></div>'
     + '<div class="cat-baris tebal"><span>'+(upah!==null ? 'Laba buku' : 'Selisih')+'</span><b class="'+(hasil>=0?"hijau":"merah")+'">'+rp(hasil)+'</b></div>'
