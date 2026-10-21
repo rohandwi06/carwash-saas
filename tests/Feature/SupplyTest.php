@@ -166,6 +166,16 @@ class SupplyTest extends TestCase
         $this->assertSame(20.0, $s->fresh()->stock);
     }
 
+    public function test_takaran_bisa_dikosongkan(): void
+    {
+        $s = $this->sabun([['qty' => 0.5]]);
+        $this->patchJson("/api/supplies/{$s->id}", ['name' => 'Sabun', 'rules' => []], $this->header())
+            ->assertOk()->assertJsonCount(0, 'data.rules');
+
+        $this->cuci();
+        $this->assertSame(20.0, $s->fresh()->stock);
+    }
+
     public function test_kasir_tidak_boleh_mengatur_barang(): void
     {
         $s = $this->sabun();
