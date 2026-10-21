@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Supply;
 use App\Models\SupplyMovement;
+use App\Models\Transaction;
 use App\Services\SupplyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -55,6 +56,19 @@ class SupplyController extends Controller
             ->values()->take(60);
 
         return response()->json(['data' => $semua]);
+    }
+
+    /**
+     * GET /api/transactions/{transaction}/supplies — owner, untuk isian
+     * Barang dipakai di Koreksi transaksi. Rute terpisah (bukan ikut daftar
+     * transaksi) supaya situs yang belum menjalankan SQL barang tetap bisa
+     * membuka rekap.
+     */
+    public function forTransaction(Transaction $transaction): JsonResponse
+    {
+        return response()->json(['data' => SupplyMovement::where('transaction_id', $transaction->id)
+            ->where('kind', 'cuci')->get()
+            ->map(fn ($m) => ['supply_id' => $m->supply_id, 'qty' => round(-$m->qty, 3)])->values()]);
     }
 
     /** POST /api/supplies/{supply}/use */

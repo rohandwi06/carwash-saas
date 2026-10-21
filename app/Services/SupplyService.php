@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\DB;
  */
 class SupplyService
 {
+    /** Penanda baris 'cuci' yang jumlahnya diubah kasir, bukan dari takaran. */
+    public const DIATUR_KASIR = 'diatur kasir';
+
     public function __construct(private CashBookService $books) {}
 
     /** Kasir/owner mencatat pemakaian manual ("ambil 2 lap"). */
@@ -72,13 +75,32 @@ class SupplyService
      * cucian itu sudah ada hitung sisa: opname itu sudah mencatat sisa yang
      * sebenarnya, jadi mengembalikan lagi berarti menghitung dua kali.
      */
-    public function sesuaikanCucian(Transaction $trx): void
+    public function sesuaikanCucian(Transaction $trx, ?array $diaturKasir = null): void
     {
-        DB::transaction(function () use ($trx) {
-            $butuh = $trx->voided_at !== null ? [] : $this->takaran($trx);
-
+        DB::transaction(function () use ($trx, $diaturKasir) {
             $lama = SupplyMovement::where('transaction_id', $trx->id)->where('kind', 'cuci')
                 ->get()->keyBy('supply_id');
+
+            // Jumlah yang diubah kasir di layar Kasir menang atas takaran, dan
+            // tetap dipakai saat cuciannya dikoreksi owner — hanya pembatalan
+            // yang mengembalikannya.
+            $diatur = $lama->contains('note', self::DIATUR_KASIR);
+            if ($trx->voided_at !== null) {
+                $butuh = [];
+            } elseif ($diaturKasir !== null) {
+                $butuh = [];
+                foreach ($diaturKasir as $r) {
+                    if ((float) $r['qty'] > 0) {
+                        $butuh[(int) $r['supply_id']] = round((float) $r['qty'], 3);
+                    }
+                }
+                $diatur = $butuh != $this->takaran($trx);
+            } elseif ($diatur) {
+                return;
+            } else {
+                $butuh = $this->takaran($trx);
+            }
+            $catatan = $diatur ? self::DIATUR_KASIR : null;
 
             foreach (array_unique(array_merge(array_keys($butuh), $lama->keys()->all())) as $supplyId) {
                 $s = Supply::whereKey($supplyId)->lockForUpdate()->first();
@@ -102,12 +124,16 @@ class SupplyService
 
                 $selisih = round($perlu - $terpakai, 3);
                 if ($selisih == 0) {
+                    if ($baris && $baris->note !== $catatan) {
+                        $baris->update(['note' => $catatan]);
+                    }
+
                     continue;
                 }
                 $s->update(['stock' => round($s->stock - $selisih, 3)]);
 
                 if ($baris) {
-                    $baris->update(['qty' => -$perlu, 'stock_after' => $s->stock]);
+                    $baris->update(['qty' => -$perlu, 'stock_after' => $s->stock, 'note' => $catatan]);
                 } else {
                     SupplyMovement::create([
                         'supply_id'      => $s->id,
@@ -115,6 +141,7 @@ class SupplyService
                         'qty'            => -$perlu,
                         'stock_after'    => $s->stock,
                         'transaction_id' => $trx->id,
+                        'note'           => $catatan,
                         'date'           => $trx->date,
                         'created_by'     => $trx->created_by,
                     ]);

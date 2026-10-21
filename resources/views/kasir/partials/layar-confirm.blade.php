@@ -46,6 +46,16 @@
         <div class="fnb-mini-total hidden" id="totalFnbCuci"></div>
       </div>
 
+      {{-- Barang yang dipakai cucian ini (sabun, semir, lap). Terisi dari
+           takaran otomatis jenis kendaraan + layanan + add-on yang dipilih;
+           kasir tinggal mengubah angkanya kalau pemakaiannya beda. Sembunyi
+           kalau belum ada barang sama sekali. --}}
+      <div id="blokBarangCuci" class="hidden" style="margin-bottom:18px">
+        <div class="sec-label">Barang dipakai</div>
+        <div class="brg-cuci-list" id="listBarangCuci"></div>
+        <select class="sw-select hidden" id="pilihBarangLain" onchange="tambahBarangCuci(this.value)"></select>
+      </div>
+
       {{-- Foto kondisi kendaraan: bukti saat ada komplain lecet. Opsional;
            diperkecil di layar lalu diunggah sesudah transaksinya tersimpan.
            Disimpan 60 hari. --}}

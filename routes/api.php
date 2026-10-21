@@ -218,6 +218,7 @@ Route::middleware('pin.auth')->group(function () {
         // karena mengubah omzet & upah pekerja hari yang sudah lewat — sama
         // alasannya dengan wage-adjustments di bawah.
         Route::patch('/transactions/{transaction}', [TransactionController::class, 'update']);
+        Route::get('/transactions/{transaction}/supplies', [SupplyController::class, 'forTransaction']);
         // Cucian tanggal lampau (isi banyak baris dari Pembukuan)
         Route::post('/transactions/backdated', [TransactionController::class, 'storeBackdated'])->middleware('langganan');
 

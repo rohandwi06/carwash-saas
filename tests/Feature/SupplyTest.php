@@ -63,12 +63,12 @@ class SupplyTest extends TestCase
         return Supply::findOrFail($id);
     }
 
-    private function cuci(string $kat = 'ujimobil', string $svc = 'reguler', array $addons = []): Transaction
+    private function cuci(string $kat = 'ujimobil', string $svc = 'reguler', array $addons = [], ?array $barang = null): Transaction
     {
         $id = $this->postJson('/api/transactions', [
             'vehicle_name' => 'Avanza', 'category' => $kat, 'service' => $svc,
             'payment_method' => 'cash', 'addon_ids' => $addons,
-        ], $this->header('kasir'))->assertCreated()->json('data.id');
+        ] + ($barang === null ? [] : ['supplies' => $barang]), $this->header('kasir'))->assertCreated()->json('data.id');
 
         return Transaction::findOrFail($id);
     }
@@ -164,6 +164,59 @@ class SupplyTest extends TestCase
         ], $this->header())->assertCreated();
 
         $this->assertSame(20.0, $s->fresh()->stock);
+    }
+
+    public function test_kasir_mengubah_jumlah_barang_di_kasir(): void
+    {
+        $s = $this->sabun([['qty' => 0.05], ['qty' => 0.2, 'service_slug' => 'komplit']]);
+        $lap = Supply::create(['name' => 'Lap', 'unit' => 'pcs', 'stock' => 10]);
+
+        // Mobil sangat kotor: sabun 0,12 liter, plus 1 lap sobek.
+        $t = $this->cuci('ujimobil', 'reguler', [], [
+            ['supply_id' => $s->id, 'qty' => 0.12],
+            ['supply_id' => $lap->id, 'qty' => 1],
+        ]);
+        $this->assertEqualsWithDelta(19.88, $s->fresh()->stock, 0.0001);
+        $this->assertEqualsWithDelta(9.0, $lap->fresh()->stock, 0.0001);
+
+        // Koreksi owner tidak menimpa jumlah yang diatur kasir.
+        $this->patchJson("/api/transactions/{$t->id}", ['service' => 'komplit', 'edit_reason' => 'salah'], $this->header())
+            ->assertOk();
+        $this->assertEqualsWithDelta(19.88, $s->fresh()->stock, 0.0001);
+
+        // Batal mengembalikan semuanya.
+        app(TransactionService::class)->void($t->fresh(), 'salah input', 'Owner Uji');
+        $this->assertEqualsWithDelta(20.0, $s->fresh()->stock, 0.0001);
+        $this->assertEqualsWithDelta(10.0, $lap->fresh()->stock, 0.0001);
+    }
+
+    public function test_jumlah_sama_dengan_takaran_tetap_ikut_koreksi(): void
+    {
+        $s = $this->sabun([['qty' => 0.05], ['qty' => 0.2, 'service_slug' => 'komplit']]);
+        $t = $this->cuci('ujimobil', 'reguler', [], [['supply_id' => $s->id, 'qty' => 0.05]]);
+
+        $this->patchJson("/api/transactions/{$t->id}", ['service' => 'komplit', 'edit_reason' => 'salah'], $this->header())
+            ->assertOk();
+        $this->assertEqualsWithDelta(19.75, $s->fresh()->stock, 0.0001);
+    }
+
+    public function test_owner_mengoreksi_barang_cucian(): void
+    {
+        $s = $this->sabun([['qty' => 0.05]]);
+        $lap = Supply::create(['name' => 'Lap', 'unit' => 'pcs', 'stock' => 10]);
+        $t = $this->cuci();
+
+        $this->getJson("/api/transactions/{$t->id}/supplies", $this->header())
+            ->assertOk()->assertJsonPath('data.0.qty', 0.05);
+        $this->getJson("/api/transactions/{$t->id}/supplies", $this->header('kasir'))->assertForbidden();
+
+        $this->patchJson("/api/transactions/{$t->id}", [
+            'edit_reason' => 'sabun kurang dicatat',
+            'supplies' => [['supply_id' => $s->id, 'qty' => 0.1], ['supply_id' => $lap->id, 'qty' => 2]],
+        ], $this->header())->assertOk();
+
+        $this->assertEqualsWithDelta(19.9, $s->fresh()->stock, 0.0001);
+        $this->assertEqualsWithDelta(8.0, $lap->fresh()->stock, 0.0001);
     }
 
     public function test_takaran_bisa_dikosongkan(): void

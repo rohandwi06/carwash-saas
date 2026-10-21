@@ -106,7 +106,7 @@ class TransactionService
 
             $this->wages->attachWorkers($transaction, $data['worker_ids'] ?? []);
             $this->sinkronAturan($date);
-            $this->potongBarang($transaction);
+            $this->potongBarang($transaction, array_key_exists('supplies', $data) ? $data['supplies'] : null);
 
             // Ejaan yang diketik kasir untuk mobil ini diingat. Gagal mengingat
             // tidak boleh menggagalkan cucian yang sudah dibayar.
@@ -225,8 +225,9 @@ class TransactionService
                 ])->all()
             );
 
-            // Jenis, layanan, atau add-on bisa berubah — takaran barangnya ikut.
-            $this->potongBarang($trx);
+            // Jenis, layanan, atau add-on bisa berubah — takaran barangnya ikut,
+            // kecuali owner mengirim jumlah barangnya sendiri.
+            $this->potongBarang($trx, array_key_exists('supplies', $data) ? $data['supplies'] : null);
 
             if (array_key_exists('worker_ids', $data)) {
                 // attachWorkers() PULANG LEBIH AWAL kalau daftarnya kosong —
@@ -413,10 +414,10 @@ class TransactionService
      * cucian yang sudah dibayar — termasuk situs yang kodenya sudah baru
      * tapi SQL tabel barangnya belum dijalankan.
      */
-    private function potongBarang(Transaction $trx): void
+    private function potongBarang(Transaction $trx, ?array $diaturKasir = null): void
     {
         try {
-            $this->barang->sesuaikanCucian($trx);
+            $this->barang->sesuaikanCucian($trx, $diaturKasir);
         } catch (\Throwable $e) {
             report($e);
         }

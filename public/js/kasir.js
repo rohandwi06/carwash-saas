@@ -661,6 +661,7 @@ function resetConfirm(){
   $("inPelanggan").value=""; $("inTelepon").value="";
   cariDipakai = "";
   fotoCuci = []; aiDariFoto = null; gambarFotoCuci();
+  barangCuci = {};
   clearTimeout(promoTimer); promoCek = null; promoPakai = false; gambarPromo();
   tutupFnbModal();   // jangan sampai modal menu ikut terbawa ke cucian berikutnya
 }
@@ -756,6 +757,7 @@ function renderConfirm(){
       ).join("");
 
   gambarFnbCuci();
+  gambarBarangCuci();
 
   $("btnCash").classList.toggle("aktif", metode==="cash");
   $("btnTf").classList.toggle("aktif", metode==="tf");
@@ -1118,6 +1120,9 @@ async function konfirmasi(){
       pakai_promo: !!(promoPakai && promoCek && promoCek.berhak),
       search_query: cariDipakai || null,
     };
+    // Barang selalu dikirim kalau ada: server membandingkannya sendiri
+    // dengan takaran untuk tahu apakah kasir mengubahnya.
+    if(barang.length) body.supplies = barangCuciDikirim();
     if(draftAktif) body.draft_id = draftAktif; // draft ikut terhapus di server
     const trx = await api("/transactions", { method:"POST", body });
     draftAktif = null; // draftnya sudah tidak ada — jangan dipakai lagi
@@ -1135,6 +1140,7 @@ async function konfirmasi(){
       + (foto && foto.gagal ? "<br><b class='merah'>&#9888; "+foto.gagal+" foto gagal diunggah</b>" : "");
     tampilkan("layarDone");
     produk = await api("/products?active=1"); // stok sudah berkurang di server
+    muatTandaBarang();                        // stok barang juga
   }catch(e){ gagal(e); }
   finally{ btns.forEach(b=>b.disabled=false); }
 }
@@ -3656,7 +3662,7 @@ const trxTampil = new Map();
 /**
  * @param opsi {batal, koreksi} — tombol mana yang boleh muncul di baris ini.
  *   batal   : Rekap Hari Ini (kasir mengajukan, owner membatalkan langsung)
- *   koreksi : Pembukuan (owner saja; membetulkan isi tanpa membatalkan)
+ *   koreksi : Rekap Hari Ini & Pembukuan (owner saja; membetulkan isi tanpa membatalkan)
  * Keduanya mati kalau tidak disebut — itulah sebabnya riwayat di Pembukuan
  * selama ini tidak punya tombol apa pun.
  */
@@ -3831,6 +3837,13 @@ async function editTrx(id){
   // hilang beserta harganya — owner harus tahu itu SEBELUM menekan Simpan,
   // bukan menemukannya sendiri dari total yang tiba-tiba mengecil.
   const adHilang = (r.addons||[]).filter(a => !addonAktif.some(c => c.id === a.id));
+
+  // Barang yang terpotong cucian ini. Gagal dimuat (server belum punya
+  // tabel barang) = bagiannya tidak ditampilkan, koreksi lain tetap jalan.
+  let barangTrx = null;
+  if(barang.length){
+    try{ barangTrx = await api("/transactions/"+id+"/supplies"); }catch(e){ barangTrx = null; }
+  }
   const peringatan = adHilang.length
     ? '<div style="margin-top:6px;color:var(--danger);font-weight:800">&#9888; '
       + adHilang.map(a=>esc(a.pivot?a.pivot.name:a.name)).join(", ")
@@ -3883,6 +3896,13 @@ async function editTrx(id){
                 +(p.is_trainee?'<span class="waktu">training</span>':'')+'</label>').join("")
             : '<div class="cat-kosong">Tidak ada pekerja terdaftar.</div>')
       + '</div>'
+      + (barangTrx ? '<div class="sw-field-label">Barang dipakai</div>'
+          + '<div class="brg-cuci-list" id="swTrxBarang">'
+          +   barangTrx.map(x => barisBarangKoreksi(x.supply_id, x.qty)).join("")
+          + '</div>'
+          + '<select class="sw-select" id="swTrxBarangLain" onchange="tambahBarangKoreksi(this)"></select>'
+          + '<div class="waktu" style="text-align:left;margin-top:4px">Tidak diubah = takaran ikut jenis &amp; layanan yang baru.</div>'
+        : '')
       + '<div class="sw-total-pratinjau" id="swTrxTotal"></div>'
       + '<div class="sw-field-label">Alasan koreksi *</div>'
       + '<input id="swTrxAlasan" class="swal2-input" maxlength="120" placeholder="mis. salah pilih jenis kendaraan">',
@@ -3923,6 +3943,7 @@ async function editTrx(id){
       svc.addEventListener("change", hitung);
       if(kotakAd) kotakAd.addEventListener("change", hitung);
       hitung();
+      if(barangTrx) isiPilihanBarangKoreksi();
     },
     preConfirm: () => {
       const ambil = i => document.getElementById(i).value.trim();
@@ -3950,6 +3971,9 @@ async function editTrx(id){
         addon_ids:      tercentang("#swTrxAddon input:checked"),
         worker_ids:     tercentang("#swTrxPekerja input:checked"),
         edit_reason:    alasan,
+        // Hanya dikirim kalau barangnya disentuh; kalau tidak, server memakai
+        // takaran untuk jenis/layanan yang baru (atau jumlah lama dari kasir).
+        ...(barangTrx && document.getElementById("swTrxBarang").dataset.diubah ? {supplies: barangKoreksiDikirim()} : {}),
       };
     },
   });
@@ -3958,6 +3982,7 @@ async function editTrx(id){
   try{
     await api("/transactions/"+id,{method:"PATCH",body:hasil});
     await muatUlangTrx();
+    if(barang.length) muatTandaBarang();   // stok barang bisa ikut berubah
     // Jenis kendaraannya dibetulkan: tawarkan supaya Daftar mobil (dan AI)
     // ikut belajar, bukan cuma transaksi ini.
     if(hasil.category !== r.category && await tawarkanUbahKatalog(hasil.vehicle_name, hasil.category, r.category)) return;
@@ -4014,6 +4039,42 @@ async function tawarkanUbahKatalog(nama, kat, katTrxLama){
 
 /* Sama alasannya dengan muatUlangKeluar: yang berubah bukan cuma baris itu —
    omzet, upah, dan angka buku kas hari itu ikut bergeser. */
+/* ---------- Barang di Koreksi transaksi ---------- */
+function barisBarangKoreksi(id, qty){
+  const b = barang.find(x => x.id === id);
+  if(!b) return "";
+  const [kecil, kali] = satuanTakaran(b.unit);
+  return '<div class="brg-cuci-baris" data-id="'+b.id+'">'
+    + '<div class="brg-cuci-nama">'+esc(b.name)+'</div>'
+    + '<input inputmode="decimal" autocomplete="off" aria-label="Jumlah '+esc(b.name)+'" value="'+(qty ? fmtJml(qty * kali) : "")+'"'
+    +   ' placeholder="0" oninput="document.getElementById(\'swTrxBarang\').dataset.diubah=1">'
+    + '<span class="brg-cuci-satuan">'+esc(kecil)+'</span>'
+    + '</div>';
+}
+function isiPilihanBarangKoreksi(){
+  const ada = new Set([...document.querySelectorAll("#swTrxBarang [data-id]")].map(el => +el.dataset.id));
+  const lain = barang.filter(b => !ada.has(b.id));
+  const sel = document.getElementById("swTrxBarangLain");
+  sel.classList.toggle("hidden", lain.length === 0);
+  sel.innerHTML = '<option value="">+ Barang lain&hellip;</option>'
+    + lain.map(b => '<option value="'+b.id+'">'+esc(b.name)+'</option>').join("");
+}
+function tambahBarangKoreksi(sel){
+  if(!sel.value) return;
+  const kotak = document.getElementById("swTrxBarang");
+  kotak.insertAdjacentHTML("beforeend", barisBarangKoreksi(+sel.value, 0));
+  kotak.dataset.diubah = 1;
+  isiPilihanBarangKoreksi();
+  kotak.lastElementChild.querySelector("input").focus();
+}
+function barangKoreksiDikirim(){
+  return [...document.querySelectorAll("#swTrxBarang [data-id]")].map(el => {
+    const b = barang.find(x => x.id === +el.dataset.id);
+    const n = angkaDesimal(el.querySelector("input").value);
+    return {supply_id: b.id, qty: isNaN(n) || n < 0 ? 0 : Math.round(n / satuanTakaran(b.unit)[1] * 1000) / 1000};
+  }).filter(r => r.qty > 0);
+}
+
 async function muatUlangTrx(){
   if(!$("layarBuku").classList.contains("hidden")){ await renderBuku(); return; }
   await renderRekap();
@@ -4878,7 +4939,9 @@ function bukaDetailBuku(kunci){
 /** Rekap Hari Ini: jenis = cuci | tip | <cara bayar> | fnb-<cara bayar> (kunci dropdown-nya). */
 function bukaDetailRekap(jenis){
   bukaJendelaDetail(() => {
-    const d = {sub: fmtTgl(hariIni()), opsi: {batal:true, ringkas:true}};
+    // Koreksi juga di sini (permintaan owner 21/10), bukan hanya di
+    // Pembukuan: salah input paling sering ketahuan di hari yang sama.
+    const d = {sub: fmtTgl(hariIni()), opsi: {batal:true, koreksi:true, ringkas:true}};
     if(jenis === "cuci")      return {...d, judul:"Total Cuci", trx: rekapHari.trx, fnb: rekapHari.fnb};
     if(jenis === "tip")       return {...d, judul:"Tip", tip: rekapHari.tip};
     if(jenis.startsWith("fnb-")){
@@ -7951,6 +8014,66 @@ function gambarTandaBarang(){
   el.textContent = n;
   el.classList.toggle("hidden", n === 0);
 }
+/* ---------- Barang di Detail Cucian ----------
+   Terisi dari takaran (jenis kendaraan + layanan + add-on yang sedang
+   dipilih), jadi ikut berubah saat pilihan itu diganti. Angka yang diubah
+   kasir disimpan di barangCuci dan menang atas takaran. */
+let barangCuci = {};   // {supply_id: jumlah dalam satuan barang} — yang diubah/ditambah kasir
+
+function takaranCucian(){
+  const hasil = {};
+  barang.forEach(b => (b.rules || []).forEach(r => {
+    const cocok = r.addon_id
+      ? addonPilih.has(r.addon_id)
+      : (!r.category_slug || r.category_slug === pilihan.kat) && (!r.service_slug || r.service_slug === layananAktif);
+    if(cocok) hasil[b.id] = Math.round(((hasil[b.id] || 0) + r.qty) * 1000) / 1000;
+  }));
+  return hasil;
+}
+function jumlahBarangCuci(id, takaran){ return id in barangCuci ? barangCuci[id] : (takaran[id] || 0); }
+
+function gambarBarangCuci(){
+  $("blokBarangCuci").classList.toggle("hidden", barang.length === 0);
+  if(!barang.length) return;
+  const takaran = takaranCucian();
+  const tampil = barang.filter(b => takaran[b.id] > 0 || b.id in barangCuci);
+  $("listBarangCuci").innerHTML = tampil.length ? tampil.map(b => {
+    const [kecil, kali] = satuanTakaran(b.unit);
+    const n = jumlahBarangCuci(b.id, takaran);
+    const tanda = !(b.id in barangCuci) || n === (takaran[b.id] || 0) ? (takaran[b.id] ? "takaran" : "")
+      : (takaran[b.id] ? "diubah" : "tambahan");
+    return '<div class="brg-cuci-baris">'
+      + '<div class="brg-cuci-nama">'+esc(b.name)+(tanda ? ' <span class="waktu">'+tanda+'</span>' : '')+'</div>'
+      + '<input inputmode="decimal" autocomplete="off" aria-label="Jumlah '+esc(b.name)+'" value="'+(n ? fmtJml(n * kali) : "")+'"'
+      +   ' placeholder="0" oninput="ubahBarangCuci('+b.id+', this.value)">'
+      + '<span class="brg-cuci-satuan">'+esc(kecil)+'</span>'
+      + '</div>';
+  }).join("") : '<div class="cat-kosong">Tidak ada takaran untuk cucian ini.</div>';
+
+  const lain = barang.filter(b => !tampil.includes(b));
+  $("pilihBarangLain").classList.toggle("hidden", lain.length === 0);
+  $("pilihBarangLain").innerHTML = '<option value="">+ Barang lain&hellip;</option>'
+    + lain.map(b => '<option value="'+b.id+'">'+esc(b.name)+'</option>').join("");
+}
+/* Tidak menggambar ulang: kolom yang sedang diketik tidak boleh hilang fokus. */
+function ubahBarangCuci(id, teks){
+  const b = barang.find(x => x.id === id); if(!b) return;
+  const n = angkaDesimal(teks);
+  barangCuci[id] = isNaN(n) || n < 0 ? 0 : Math.round(n / satuanTakaran(b.unit)[1] * 1000) / 1000;
+}
+function tambahBarangCuci(id){
+  if(!id) return;
+  barangCuci[+id] = 0;
+  gambarBarangCuci();
+  const kolom = $("listBarangCuci").querySelectorAll("input");
+  const idx = barang.filter(b => takaranCucian()[b.id] > 0 || b.id in barangCuci).findIndex(b => b.id === +id);
+  if(kolom[idx]) kolom[idx].focus();
+}
+function barangCuciDikirim(){
+  const takaran = takaranCucian();
+  return barang.map(b => ({supply_id: b.id, qty: jumlahBarangCuci(b.id, takaran)})).filter(r => r.qty > 0);
+}
+
 async function muatTandaBarang(){
   try{ barang = await api("/supplies"); gambarTandaBarang(); }catch(e){ /* tabel belum ada: tanda dibiarkan */ }
 }

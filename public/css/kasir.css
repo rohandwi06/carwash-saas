@@ -1306,6 +1306,14 @@
   }
 
   /* ---------- Barang (sabun, semir, lap) ---------- */
+  .brg-cuci-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+  .brg-cuci-baris{display:flex;align-items:center;gap:8px;border:2px solid var(--line);border-radius:12px;
+    padding:8px 10px;background:var(--card)}
+  .brg-cuci-nama{flex:1;min-width:0;font-size:14.5px;font-weight:800;overflow-wrap:anywhere}
+  .brg-cuci-baris input{width:84px;flex:none;font-size:16px;font-weight:800;padding:8px 10px;text-align:right;
+    border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+  .brg-cuci-baris input:focus{outline:none;border-color:var(--water)}
+  .brg-cuci-satuan{font-size:13px;font-weight:800;color:var(--ink2);min-width:34px}
   #daftarBarang{display:flex;flex-direction:column;gap:12px}
   .brg-petunjuk{font-size:13.5px;font-weight:600;color:var(--ink2);line-height:1.45}
   .brg-kosong{font-weight:700;color:var(--ink2)}

@@ -33,6 +33,11 @@ class StoreTransactionRequest extends FormRequest
             'fnb_items'              => ['sometimes', 'array'],
             'fnb_items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'fnb_items.*.qty'        => ['required', 'integer', 'min:1', 'max:100'],
+            // Barang yang dipakai cucian ini, diisi kasir dari takaran otomatis
+            // yang bisa diubah. Tidak dikirim = takaran otomatis (aplikasi lama).
+            'supplies'             => ['sometimes', 'array', 'max:20'],
+            'supplies.*.supply_id' => ['required', 'integer', 'distinct', 'exists:supplies,id'],
+            'supplies.*.qty'       => ['required', 'numeric', 'min:0', 'max:1000000'],
             // Draft yang dipakai; dihapus otomatis setelah transaksi tersimpan.
             'draft_id'       => ['sometimes', 'integer', 'exists:transaction_drafts,id'],
             // Kasir memilih memakai promo pelanggan setia. Hanya permintaan:

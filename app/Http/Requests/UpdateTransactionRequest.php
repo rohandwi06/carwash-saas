@@ -42,6 +42,11 @@ class UpdateTransactionRequest extends FormRequest
             'worker_ids.*'   => ['integer', 'exists:workers,id'],
             'addon_ids'      => ['sometimes', 'array'],
             'addon_ids.*'    => ['integer', 'exists:addons,id'],
+            // Barang yang dipakai cucian ini. Dikirim = menggantikan potongan
+            // lama; tidak dikirim = takaran/jumlah lama dipertahankan.
+            'supplies'             => ['sometimes', 'array', 'max:20'],
+            'supplies.*.supply_id' => ['required', 'integer', 'distinct', 'exists:supplies,id'],
+            'supplies.*.qty'       => ['required', 'numeric', 'min:0', 'max:1000000'],
             // Wajib, sepanjang alasan pembatalan. Koreksi mengubah angka omzet
             // tanpa meninggalkan bekas yang terlihat di riwayat (tidak seperti
             // void yang barisnya tercoret), jadi alasannya justru lebih perlu.
