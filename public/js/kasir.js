@@ -3428,9 +3428,15 @@ async function renderApproval(){
   if(!blok) return;
   if(ROLE!=="owner"){ blok.classList.add("hidden"); return; }
   try{
-    const list = await api("/transactions/void-requests");
-    blok.classList.toggle("hidden", list.length===0);
-    $("approvalJumlah").textContent = list.length ? list.length : "";
+    // Pengajuan batal penjualan F&B ikut di sini (23/10): dulu kasir bisa
+    // mengajukan, tapi owner tidak punya tombol untuk memutuskannya.
+    const [list, fnb] = await Promise.all([
+      api("/transactions/void-requests"),
+      api("/fnb-sales/void-requests").catch(() => []),
+    ]);
+    const jumlah = list.length + fnb.length;
+    blok.classList.toggle("hidden", jumlah===0);
+    $("approvalJumlah").textContent = jumlah ? jumlah : "";
     $("daftarApproval").innerHTML = list.map(r =>
       '<div class="app-baris">'
       + '<div class="app-info">'
@@ -3444,7 +3450,44 @@ async function renderApproval(){
       +   '<button class="btn-setuju" onclick="setujuiVoid('+r.id+')">&#10003; Setujui</button>'
       +   '<button class="btn-tolak" onclick="tolakVoid('+r.id+')">&#10005; Tolak</button>'
       + '</div>'
+      + '</div>').join("")
+      + fnb.map(sl =>
+      '<div class="app-baris">'
+      + '<div class="app-info">'
+      +   '<div class="app-judul">&#127860; '+esc((sl.items||[]).map(i=>i.product_name+' x'+i.qty).join(", "))
+      +     ' <b>'+rp(sl.total)+'</b></div>'
+      +   '<div class="app-sub">&#128100; '+esc(sl.void_requested_by||"kasir")
+      +     ' &middot; '+fmtTglPendek(tglSaja(sl.date))+' '+jam(sl.void_requested_at)+'</div>'
+      +   '<div class="app-alasan">&#128172; '+esc(sl.void_request_reason||"tanpa alasan")+'</div>'
+      + '</div>'
+      + '<div class="app-aksi">'
+      +   '<button class="btn-setuju" onclick="setujuiVoidFnb('+sl.id+')">&#10003; Setujui</button>'
+      +   '<button class="btn-tolak" onclick="tolakVoidFnb('+sl.id+')">&#10005; Tolak</button>'
+      + '</div>'
       + '</div>').join("");
+  }catch(e){ gagal(e); }
+}
+async function setujuiVoidFnb(id){
+  const r = await Swal.fire({title:"Setujui pembatalan F&B?", icon:"warning",
+    text:"Penjualan dikeluarkan dari rekap dan stok menunya dikembalikan.",
+    showCancelButton:true, confirmButtonText:"Ya, batalkan", cancelButtonText:"Batal", confirmButtonColor:"#d33"});
+  if(!r.isConfirmed) return;
+  try{
+    await api("/fnb-sales/"+id+"/void/approve",{method:"POST"});
+    renderRekap();
+  }catch(e){ gagal(e); }
+}
+async function tolakVoidFnb(id){
+  const {value: alasan} = await Swal.fire({
+    title:"Tolak pembatalan F&B", input:"text", inputPlaceholder:"Alasan menolak...",
+    inputAttributes:{maxlength:120},
+    showCancelButton:true, confirmButtonText:"Tolak", cancelButtonText:"Batal", confirmButtonColor:"#1B9E62",
+    inputValidator: v => !v || !v.trim() ? "Alasan wajib diisi" : undefined,
+  });
+  if(alasan===undefined) return;
+  try{
+    await api("/fnb-sales/"+id+"/void/reject",{method:"POST",body:{reason:alasan.trim()}});
+    renderRekap();
   }catch(e){ gagal(e); }
 }
 async function setujuiVoid(id){
