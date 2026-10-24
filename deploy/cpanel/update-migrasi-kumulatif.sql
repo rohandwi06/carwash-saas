@@ -22,8 +22,9 @@
 --  Fitur 17-20 Oktober (login email, kunci langganan, AI mobil sejenis)
 --  TIDAK butuh perubahan database.
 --
---  HASIL: tabel terakhir yang tampil di phpMyAdmin berisi 27 baris
---  pemeriksaan. Semua kolom kedua harus "OK".
+--  HASIL: tabel terakhir yang tampil di phpMyAdmin berisi 24 baris
+--  pemeriksaan. Kolom "hasil" semuanya "OK". Kalau ada langkah yang
+--  gagal, phpMyAdmin berhenti di langkah itu dan menampilkan galatnya.
 -- ===================================================================
 
 -- ================= A. Menu tanpa stok (09-10) =================
@@ -103,29 +104,19 @@ CREATE TABLE IF NOT EXISTS `daily_rule_worker` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Peralihan dari bentuk pertama tabel ini (11/10 siang: satu pekerja per
--- aturan, di kolom `worker_id`). Hanya berpengaruh di database yang sempat
--- menjalankan versi itu: aturannya dipindah ke bentuk baru, lalu kolom
--- lamanya dibuang. Di database lain, semua langkah di bawah tidak mengubah
--- apa pun.
+-- aturan, di kolom `worker_id`). Kolom itu ditambahkan dulu bila belum ada
+-- (isinya kosong semua), supaya pemindahan di bawah tidak perlu memeriksa
+-- bentuk tabel. Di database yang sempat menjalankan versi itu, aturannya
+-- dipindah ke bentuk baru; di database lain tidak ada baris yang ikut.
+-- Sesudahnya kolom itu dibuang.
 ALTER TABLE `daily_rules`
-  ADD COLUMN IF NOT EXISTS `all_workers` TINYINT(1) NOT NULL DEFAULT '1' AFTER `type`;
+  ADD COLUMN IF NOT EXISTS `all_workers` TINYINT(1) NOT NULL DEFAULT '1' AFTER `type`,
+  ADD COLUMN IF NOT EXISTS `worker_id` BIGINT UNSIGNED NULL;
 
-SET @lama = (SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'worker_id');
+INSERT IGNORE INTO `daily_rule_worker` (`daily_rule_id`, `worker_id`)
+  SELECT `id`, `worker_id` FROM `daily_rules` WHERE `worker_id` IS NOT NULL;
 
-SET @langkah = IF(@lama > 0,
-  'INSERT IGNORE INTO `daily_rule_worker` (`daily_rule_id`, `worker_id`) SELECT `id`, `worker_id` FROM `daily_rules` WHERE `worker_id` IS NOT NULL',
-  'DO 0');
-PREPARE jalankan FROM @langkah;
-EXECUTE jalankan;
-DEALLOCATE PREPARE jalankan;
-
-SET @langkah = IF(@lama > 0,
-  'UPDATE `daily_rules` SET `all_workers` = 0 WHERE `worker_id` IS NOT NULL',
-  'DO 0');
-PREPARE jalankan FROM @langkah;
-EXECUTE jalankan;
-DEALLOCATE PREPARE jalankan;
+UPDATE `daily_rules` SET `all_workers` = 0 WHERE `worker_id` IS NOT NULL;
 
 ALTER TABLE `daily_rules` DROP FOREIGN KEY IF EXISTS `daily_rules_worker_id_foreign`;
 ALTER TABLE `daily_rules` DROP COLUMN IF EXISTS `worker_id`;
@@ -298,93 +289,38 @@ WHERE m.nama NOT IN (SELECT `migration` FROM `migrations`);
 
 
 -- ================= F. Pemeriksaan akhir =================
--- Satu tabel, 27 baris. Semua kolom kedua harus OK.
--- Nama database & jumlah migrasi dicatat ke variabel DULU: phpMyAdmin
--- menjalankan SELECT yang diawali information_schema DI DALAM database
--- information_schema, sehingga DATABASE() dan tabel `migrations` di
--- kueri itu sendiri menunjuk ke tempat yang salah (#1109, 20-10).
+-- Satu tabel, 24 baris. Kolom "hasil" semuanya harus OK.
+-- Tabel & kolom dibaca LANGSUNG, tidak lewat daftar tabel bawaan MySQL:
+-- phpMyAdmin yang melihat nama database daftar itu di script menjalankan
+-- SELURUH script di database tersebut, sehingga langkah pertama pun ditolak
+-- (#1044 di demo, 21-10). Tabel atau kolom yang tidak ada langsung membuat
+-- phpMyAdmin berhenti dengan galat "doesn't exist" / "Unknown column".
+-- Pilihan 'qris' dan hilangnya daily_rules.worker_id tidak diperiksa lagi
+-- di sini: langkahnya di atas selalu dijalankan, dan kalau gagal,
+-- phpMyAdmin sudah berhenti di sana.
 
-SET @db = DATABASE();
-SET @mig = (SELECT COUNT(*) FROM `migrations` WHERE `migration` IN ('2026_10_09_000001_add_track_stock_to_products_table', '2026_10_10_000001_add_qris_to_payment_methods', '2026_10_11_000001_add_customer_to_transactions', '2026_10_11_000002_create_worker_compensations_table', '2026_10_11_000003_create_daily_rules_tables', '2026_10_11_000004_add_workers_to_daily_rules', '2026_10_11_000005_create_monthly_wage_tables', '2026_10_16_000001_add_promo_to_transactions', '2026_10_16_000002_create_vehicle_aliases_table', '2026_10_16_000003_create_vehicle_photos_table', '2026_10_21_000001_create_supplies_tables'));
-
-SELECT 'products.track_stock', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'products' AND COLUMN_NAME = 'track_stock'
-UNION ALL
-SELECT 'transactions.payment_method qris', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'payment_method'
-    AND COLUMN_TYPE LIKE '%qris%'
-UNION ALL
-SELECT 'fnb_sales.payment_method qris', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'fnb_sales' AND COLUMN_NAME = 'payment_method'
-    AND COLUMN_TYPE LIKE '%qris%'
-UNION ALL
-SELECT 'transactions.customer_name', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'customer_name'
-UNION ALL
-SELECT 'transactions.customer_phone', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'customer_phone'
-UNION ALL
-SELECT 'transaction_drafts.customer_name', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transaction_drafts' AND COLUMN_NAME = 'customer_name'
-UNION ALL
-SELECT 'transaction_drafts.customer_phone', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transaction_drafts' AND COLUMN_NAME = 'customer_phone'
-UNION ALL
-SELECT 'tabel worker_compensations', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'worker_compensations'
-UNION ALL
-SELECT 'worker_compensations.rule_id', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'worker_compensations' AND COLUMN_NAME = 'rule_id'
-UNION ALL
-SELECT 'tabel daily_rules', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rules'
-UNION ALL
-SELECT 'daily_rules.all_workers', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'all_workers'
-UNION ALL
-SELECT 'daily_rules.worker_id (harus hilang)', IF(COUNT(*) = 0, 'OK', 'MASIH ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'worker_id'
-UNION ALL
-SELECT 'tabel daily_rule_worker', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rule_worker'
-UNION ALL
-SELECT 'tabel daily_rule_skips', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'daily_rule_skips'
-UNION ALL
-SELECT 'wage_adjustments.rule_id', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'wage_adjustments' AND COLUMN_NAME = 'rule_id'
-UNION ALL
-SELECT 'tabel monthly_wage_periods', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'monthly_wage_periods'
-UNION ALL
-SELECT 'tabel worker_salaries', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'worker_salaries'
-UNION ALL
-SELECT 'transactions.promo_discount', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_discount'
-UNION ALL
-SELECT 'transactions.promo_rule', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_rule'
-UNION ALL
-SELECT 'transactions.promo_wage', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'transactions' AND COLUMN_NAME = 'promo_wage'
-UNION ALL
-SELECT 'tabel vehicle_aliases', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicle_aliases'
-UNION ALL
-SELECT 'vehicles.corrected_at', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'corrected_at'
-UNION ALL
-SELECT 'tabel vehicle_photos', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'vehicle_photos'
-UNION ALL
-SELECT 'tabel supplies', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supplies'
-UNION ALL
-SELECT 'tabel supply_movements', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supply_movements'
-UNION ALL
-SELECT 'tabel supply_usage_rules', IF(COUNT(*) = 1, 'OK', 'BELUM ADA') FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'supply_usage_rules'
-UNION ALL
-SELECT 'catatan migrasi (11 baris)', IF(@mig = 11, 'OK', CONCAT('baru ', @mig));
+SELECT 'products.track_stock' AS bagian, COUNT(`track_stock`) AS isi, 'OK' AS hasil FROM `products`
+UNION ALL SELECT 'transactions.customer_name', COUNT(`customer_name`), 'OK' FROM `transactions`
+UNION ALL SELECT 'transactions.customer_phone', COUNT(`customer_phone`), 'OK' FROM `transactions`
+UNION ALL SELECT 'transaction_drafts.customer_name', COUNT(`customer_name`), 'OK' FROM `transaction_drafts`
+UNION ALL SELECT 'transaction_drafts.customer_phone', COUNT(`customer_phone`), 'OK' FROM `transaction_drafts`
+UNION ALL SELECT 'tabel worker_compensations', COUNT(*), 'OK' FROM `worker_compensations`
+UNION ALL SELECT 'worker_compensations.rule_id', COUNT(`rule_id`), 'OK' FROM `worker_compensations`
+UNION ALL SELECT 'tabel daily_rules', COUNT(*), 'OK' FROM `daily_rules`
+UNION ALL SELECT 'daily_rules.all_workers', COUNT(`all_workers`), 'OK' FROM `daily_rules`
+UNION ALL SELECT 'tabel daily_rule_worker', COUNT(*), 'OK' FROM `daily_rule_worker`
+UNION ALL SELECT 'tabel daily_rule_skips', COUNT(*), 'OK' FROM `daily_rule_skips`
+UNION ALL SELECT 'wage_adjustments.rule_id', COUNT(`rule_id`), 'OK' FROM `wage_adjustments`
+UNION ALL SELECT 'tabel monthly_wage_periods', COUNT(*), 'OK' FROM `monthly_wage_periods`
+UNION ALL SELECT 'tabel worker_salaries', COUNT(*), 'OK' FROM `worker_salaries`
+UNION ALL SELECT 'transactions.promo_discount', COUNT(`promo_discount`), 'OK' FROM `transactions`
+UNION ALL SELECT 'transactions.promo_rule', COUNT(`promo_rule`), 'OK' FROM `transactions`
+UNION ALL SELECT 'transactions.promo_wage', COUNT(`promo_wage`), 'OK' FROM `transactions`
+UNION ALL SELECT 'tabel vehicle_aliases', COUNT(*), 'OK' FROM `vehicle_aliases`
+UNION ALL SELECT 'vehicles.corrected_at', COUNT(`corrected_at`), 'OK' FROM `vehicles`
+UNION ALL SELECT 'tabel vehicle_photos', COUNT(*), 'OK' FROM `vehicle_photos`
+UNION ALL SELECT 'tabel supplies', COUNT(*), 'OK' FROM `supplies`
+UNION ALL SELECT 'tabel supply_movements', COUNT(*), 'OK' FROM `supply_movements`
+UNION ALL SELECT 'tabel supply_usage_rules', COUNT(*), 'OK' FROM `supply_usage_rules`
+UNION ALL SELECT 'catatan migrasi (11 baris)', COUNT(*), IF(COUNT(*) = 11, 'OK', 'BELUM') FROM `migrations`
+  WHERE `migration` IN ('2026_10_09_000001_add_track_stock_to_products_table', '2026_10_10_000001_add_qris_to_payment_methods', '2026_10_11_000001_add_customer_to_transactions', '2026_10_11_000002_create_worker_compensations_table', '2026_10_11_000003_create_daily_rules_tables', '2026_10_11_000004_add_workers_to_daily_rules', '2026_10_11_000005_create_monthly_wage_tables', '2026_10_16_000001_add_promo_to_transactions', '2026_10_16_000002_create_vehicle_aliases_table', '2026_10_16_000003_create_vehicle_photos_table', '2026_10_21_000001_create_supplies_tables');

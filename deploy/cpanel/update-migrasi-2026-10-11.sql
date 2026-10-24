@@ -101,29 +101,19 @@ CREATE TABLE IF NOT EXISTS `daily_rule_worker` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Peralihan dari bentuk pertama tabel ini (11/10 siang: satu pekerja per
--- aturan, di kolom `worker_id`). Hanya berpengaruh di database yang sempat
--- menjalankan versi itu: aturannya dipindah ke bentuk baru, lalu kolom
--- lamanya dibuang. Di database lain, semua langkah di bawah tidak mengubah
--- apa pun.
+-- aturan, di kolom `worker_id`). Kolom itu ditambahkan dulu bila belum ada
+-- (isinya kosong semua), supaya pemindahan di bawah tidak perlu memeriksa
+-- bentuk tabel. Di database yang sempat menjalankan versi itu, aturannya
+-- dipindah ke bentuk baru; di database lain tidak ada baris yang ikut.
+-- Sesudahnya kolom itu dibuang.
 ALTER TABLE `daily_rules`
-  ADD COLUMN IF NOT EXISTS `all_workers` TINYINT(1) NOT NULL DEFAULT '1' AFTER `type`;
+  ADD COLUMN IF NOT EXISTS `all_workers` TINYINT(1) NOT NULL DEFAULT '1' AFTER `type`,
+  ADD COLUMN IF NOT EXISTS `worker_id` BIGINT UNSIGNED NULL;
 
-SET @lama = (SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_rules' AND COLUMN_NAME = 'worker_id');
+INSERT IGNORE INTO `daily_rule_worker` (`daily_rule_id`, `worker_id`)
+  SELECT `id`, `worker_id` FROM `daily_rules` WHERE `worker_id` IS NOT NULL;
 
-SET @langkah = IF(@lama > 0,
-  'INSERT IGNORE INTO `daily_rule_worker` (`daily_rule_id`, `worker_id`) SELECT `id`, `worker_id` FROM `daily_rules` WHERE `worker_id` IS NOT NULL',
-  'DO 0');
-PREPARE jalankan FROM @langkah;
-EXECUTE jalankan;
-DEALLOCATE PREPARE jalankan;
-
-SET @langkah = IF(@lama > 0,
-  'UPDATE `daily_rules` SET `all_workers` = 0 WHERE `worker_id` IS NOT NULL',
-  'DO 0');
-PREPARE jalankan FROM @langkah;
-EXECUTE jalankan;
-DEALLOCATE PREPARE jalankan;
+UPDATE `daily_rules` SET `all_workers` = 0 WHERE `worker_id` IS NOT NULL;
 
 ALTER TABLE `daily_rules` DROP FOREIGN KEY IF EXISTS `daily_rules_worker_id_foreign`;
 ALTER TABLE `daily_rules` DROP COLUMN IF EXISTS `worker_id`;
