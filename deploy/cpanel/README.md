@@ -138,10 +138,11 @@ Pemasangannya sama dengan Bagian 3–8, dengan tiga beda:
   owner & kasir, dan akun owner/kasir tidak bisa diubah atau dihapus —
   akunnya dipakai bersama semua pengunjung.
 - `database.sql` sudah berisi data contoh 30 hari.
-- Cron-nya **bukan** `schedule:run`, melainkan satu baris pada jam sepi:
+- Cron-nya **bukan** `schedule:run`, melainkan satu baris pada jam sepi
+  (tempel utuh di kolom Command, ganti `USER`):
 
   ```
-  0 3 * * * /usr/local/bin/php /home/USER/rapiin-app/artisan demo:reset >> /dev/null 2>&1
+  0 3 * * * cd /home/USER/rapiin-app && for php in /opt/cpanel/ea-php8[2-9]/root/usr/bin/php /opt/alt/php8[2-9]/usr/bin/php /usr/local/bin/php; do [ -x "$php" ] && "$php" -r 'exit(PHP_VERSION_ID >= 80200 ? 0 : 1);' && break; php=; done; (date; echo "PHP: ${php:-tidak ada PHP 8.2}"; [ -n "$php" ] && "$php" artisan demo:reset --no-ansi) > storage/logs/demo-reset.log 2>&1
   ```
 
   `demo:reset` menghapus seluruh database lalu membangun ulang data 30 hari
@@ -149,6 +150,22 @@ Pemasangannya sama dengan Bagian 3–8, dengan tiga beda:
   pengunjung hilang besok paginya. Jam cron mengikuti zona waktu server
   (cek di cPanel → Cron Jobs). Perintah ini menolak jalan bila `APP_ENV`
   bukan `demo`, jadi tidak bisa terpasang tak sengaja di akun cucian.
+
+  Kenapa tidak `/usr/local/bin/php artisan demo:reset` saja: di cron,
+  `/usr/local/bin/php` bisa memakai PHP bawaan server, bukan versi MultiPHP
+  domainnya. Kalau bawaannya di bawah 8.2, Laravel berhenti sebelum
+  apa pun terjadi. Baris lama membuang pesannya ke `/dev/null`, dan demo
+  tidak ter-reset sejak sekitar 21-09-2026 tanpa ketahuan (sebabnya
+  belum pasti; itu dugaan terkuat). Baris di atas
+  mencari PHP 8.2+ (EasyApache `ea-php`, CloudLinux `alt-php`) dan
+  menulis hasil reset terakhir ke `storage/logs/demo-reset.log`.
+
+  **Cek cron sesudah dipasang:** ubah sementara jadwalnya ke "Once Per
+  Minute" (`* * * * *`), tunggu 2 menit, lalu buka
+  `rapiin-app/storage/logs/demo-reset.log` di File Manager. Baris terakhir
+  "Data demo 30 hari + hari ini: ..." = jalan. Lalu kembalikan ke
+  `0 3 * * *`. Log kosong / tidak ada = cron-nya tidak jalan sama sekali.
+  "tidak ada PHP 8.2" = kirim isi MultiPHP Manager.
 
 ## Memperbarui cucian yang sudah jalan
 
