@@ -52,7 +52,7 @@
              mengerjakan cucian hari itu, supaya tidak diinput satu-satu.
              Satu blok untuk dua halaman — isinya (judul, daftar aturan)
              digambar renderAturan() menurut halaman yang sedang dibuka. --}}
-        <div class="cat-blok" id="blokAturan" data-pk="potongan kompensasi">
+        <div class="cat-blok" id="blokAturan" data-pk="potongan kompensasi" data-modul="aturan_harian">
           <h3 id="aturanJudul">&#128260; Otomatis harian</h3>
           <div class="peny-ket" id="aturanKet"></div>
           <div id="daftarAturan"></div>

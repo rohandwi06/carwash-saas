@@ -4,14 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Setting;
 use App\Services\LanggananService;
+use App\Services\PaketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LanggananController extends Controller
 {
-    public function __construct(private LanggananService $langganan) {}
+    public function __construct(private LanggananService $langganan, private PaketService $paket) {}
 
-    /** Status untuk aplikasi & web: menampilkan pita "belum aktif". */
+    /**
+     * Status untuk aplikasi & web: pita "belum aktif", dan paket + modul
+     * yang menentukan menu mana yang tampil. Modul yang tidak ada di
+     * `modul` (atau server lama tanpa kunci ini) dianggap nyala.
+     */
     public function show(Request $request): JsonResponse
     {
         $status = $this->langganan->status();
@@ -19,17 +24,18 @@ class LanggananController extends Controller
 
         return response()->json(['data' => $status + [
             'pesan' => $status['aktif'] ? null : ($owner ? LanggananService::PESAN_OWNER : LanggananService::PESAN_KASIR),
-        ]]);
+        ] + $this->paket->status()]);
     }
 
     /**
      * Dipanggil PUSAT pendaftaran (byrapiin.my.id) setelah pembayaran lunas.
      *
-     * Badan JSON {pesanan, hari, waktu} ditandatangani HMAC-SHA256 dengan
-     * LANGGANAN_KUNCI (sama di pusat & server ini) di header X-Tanda. Tanpa
-     * kunci di .env, rute ini pura-pura tidak ada. `pesanan` (nomor order
-     * gateway) dicatat supaya notifikasi yang terkirim dua kali tidak
-     * menambah masa aktif dua kali.
+     * Badan JSON {pesanan, hari, waktu, paket?} ditandatangani HMAC-SHA256
+     * dengan LANGGANAN_KUNCI (sama di pusat & server ini) di header X-Tanda.
+     * Tanpa kunci di .env, rute ini pura-pura tidak ada. `pesanan` (nomor
+     * order gateway) dicatat supaya notifikasi yang terkirim dua kali tidak
+     * menambah masa aktif dua kali. `paket` (kasir|usaha|juragan) ikut
+     * diganti bila dikirim; hari 0 + paket = ganti paket di tengah masa aktif.
      */
     public function perpanjang(Request $request): JsonResponse
     {
@@ -48,20 +54,31 @@ class LanggananController extends Controller
         $pesanan = is_array($isi) ? trim((string) ($isi['pesanan'] ?? '')) : '';
         $hari = is_array($isi) ? (int) ($isi['hari'] ?? 0) : 0;
         $waktu = is_array($isi) ? (int) ($isi['waktu'] ?? 0) : 0;
+        $paket = is_array($isi) && isset($isi['paket']) ? (string) $isi['paket'] : null;
 
         if ($pesanan === '' || strlen($pesanan) > 80 || abs(time() - $waktu) > 600) {
             return response()->json(['message' => 'Permintaan tidak sah atau kedaluwarsa.'], 422);
         }
+        // Diperiksa sebelum apa pun diubah: paket salah ketik tidak boleh
+        // sempat menambah masa aktif lalu gagal di tengah.
+        if (($paket !== null && ! in_array($paket, $this->paket->urutan(), true)) || ($hari < 1 && $paket === null)) {
+            return response()->json(['message' => 'Paket atau jumlah hari tidak sah.'], 422);
+        }
 
         $tercatat = json_decode((string) Setting::get('langganan_pesanan'), true) ?: [];
         if (in_array($pesanan, $tercatat, true)) {
-            return response()->json(['data' => $this->langganan->status() + ['ulang' => true]]);
+            return response()->json(['data' => $this->langganan->status() + $this->paket->status() + ['ulang' => true]]);
         }
 
-        $this->langganan->perpanjang($hari);
+        if ($hari > 0) {
+            $this->langganan->perpanjang($hari);
+        }
+        if ($paket !== null) {
+            $this->paket->ganti($paket);
+        }
         $tercatat[] = $pesanan;
         Setting::put('langganan_pesanan', json_encode(array_slice($tercatat, -50)));
 
-        return response()->json(['data' => $this->langganan->status() + ['ulang' => false]]);
+        return response()->json(['data' => $this->langganan->status() + $this->paket->status() + ['ulang' => false]]);
     }
 }

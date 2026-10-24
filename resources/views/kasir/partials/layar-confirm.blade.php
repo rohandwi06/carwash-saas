@@ -50,7 +50,7 @@
            takaran otomatis jenis kendaraan + layanan + add-on yang dipilih;
            kasir tinggal mengubah angkanya kalau pemakaiannya beda. Sembunyi
            kalau belum ada barang sama sekali. --}}
-      <div id="blokBarangCuci" class="hidden" style="margin-bottom:18px">
+      <div id="blokBarangCuci" class="hidden" data-modul="barang" style="margin-bottom:18px">
         <div class="sec-label">Barang dipakai</div>
         <div class="brg-cuci-list" id="listBarangCuci"></div>
         <select class="sw-select hidden" id="pilihBarangLain" onchange="tambahBarangCuci(this.value)"></select>
@@ -59,7 +59,7 @@
       {{-- Foto kondisi kendaraan: bukti saat ada komplain lecet. Opsional;
            diperkecil di layar lalu diunggah sesudah transaksinya tersimpan.
            Disimpan 60 hari. --}}
-      <div style="margin-bottom:18px">
+      <div data-modul="foto" style="margin-bottom:18px">
         <div class="sec-label">Foto kondisi kendaraan (opsional)</div>
         <div class="foto-grid" id="fotoCuci"></div>
         <input type="file" id="inFotoCuci" accept="image/*" capture="environment" class="hidden"
@@ -104,7 +104,7 @@
 
       {{-- Promo pelanggan setia: muncul setelah plat atau nomor telepon
            diketik, kalau owner menyalakan promo. Diisi gambarPromo(). --}}
-      <div class="promo-kotak hidden" id="promoKotak"></div>
+      <div class="promo-kotak hidden" id="promoKotak" data-modul="promo"></div>
 
       <div class="total-bar" style="margin-bottom:18px">
         <div class="tb-label">TOTAL BAYAR</div>

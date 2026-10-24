@@ -26,6 +26,7 @@ class TransactionService
         private PromoService $promo,
         private VehicleMemoryService $ingatan,
         private SupplyService $barang,
+        private PaketService $paket,
     ) {}
 
     /**
@@ -37,9 +38,15 @@ class TransactionService
      * tetap bisa menerima uang walau otomatisasinya bermasalah. Galatnya
      * dilaporkan ke log; sinkron() sendiri membatalkan perubahannya yang
      * setengah jalan.
+     *
+     * Paket tanpa modul aturan harian: tidak dijalankan sama sekali. Catatan
+     * yang sudah dibuat semasa paketnya masih punya tetap seperti adanya.
      */
     private function sinkronAturan(string $date): void
     {
+        if (! $this->paket->punya('aturan_harian')) {
+            return;
+        }
         try {
             $this->aturan->sinkron($date);
         } catch (\Throwable $e) {
@@ -66,6 +73,11 @@ class TransactionService
             // layanan saja; add-on dan F&B tetap dibayar.
             $promo = [];
             if (! empty($data['pakai_promo'])) {
+                // Layar sudah menyembunyikan promo; ini untuk aplikasi versi
+                // lama. Ditolak, bukan diabaikan: kasir mengira harganya dipotong.
+                if (! $this->paket->punya('promo')) {
+                    throw new RuntimeException(PaketService::PESAN);
+                }
                 $cek = $this->promo->cek($data['plate'] ?? null, $data['customer_phone'] ?? null);
                 if (! $cek['berhak']) {
                     throw new RuntimeException('Pelanggan ini belum berhak promo. Periksa plat atau nomor teleponnya.');
@@ -415,9 +427,16 @@ class TransactionService
      * Takaran barang otomatis. Kegagalan di sini tidak boleh menggagalkan
      * cucian yang sudah dibayar — termasuk situs yang kodenya sudah baru
      * tapi SQL tabel barangnya belum dijalankan.
+     *
+     * Paket tanpa modul Barang: tidak ada yang dipotong. Pembatalan tetap
+     * jalan — untuk cucian batal, sesuaikanCucian() hanya mengembalikan
+     * potongan yang sudah ada (dari masa paketnya masih punya Barang).
      */
     private function potongBarang(Transaction $trx, ?array $diaturKasir = null): void
     {
+        if ($trx->voided_at === null && ! $this->paket->punya('barang')) {
+            return;
+        }
         try {
             $this->barang->sesuaikanCucian($trx, $diaturKasir);
         } catch (\Throwable $e) {

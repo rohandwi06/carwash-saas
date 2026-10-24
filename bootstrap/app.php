@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'shift'    => \App\Http\Middleware\ShiftGuard::class,
             'bukan.demo' => \App\Http\Middleware\BukanDemo::class,
             'langganan' => \App\Http\Middleware\LanggananAktif::class,
+            'modul' => \App\Http\Middleware\ModulPaket::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

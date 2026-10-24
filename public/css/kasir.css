@@ -50,6 +50,11 @@
   /* padding-bottom lega: isi paling bawah tidak tertutup tombol Tanya AI */
   .body{flex:1;padding:20px 20px 96px;display:flex;flex-direction:column;gap:18px;max-width:860px;width:100%;margin:0 auto}
   .hidden{display:none !important}
+  /* Modul di luar paket cucian ini (PaketService): disembunyikan di mana pun
+     ia digambar, dari blade maupun dari JS. Kelas tanpa-* dipasang
+     terapkanPaket() di kasir.js. */
+  .tanpa-barang [data-modul="barang"], .tanpa-promo [data-modul="promo"],
+  .tanpa-aturan_harian [data-modul="aturan_harian"], .tanpa-foto [data-modul="foto"]{display:none !important}
 
   .cari{position:relative}
   .cari input{width:100%;font-size:22px;font-weight:700;padding:18px 18px 18px 54px;

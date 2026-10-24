@@ -62,9 +62,11 @@ menampilkan **pesan netral**, tautan bayar dikirim **lewat email**.
   kas, setoran/gerak barang titipan. Laporan & semua pengaturan tetap jalan.
 - `GET /api/langganan` → pita kuning netral di web (`#pitaLangganan`) dan
   aplikasi (`PitaLangganan`). Tanpa harga, tanpa tautan.
-- `POST /api/langganan/perpanjang` dari pusat: badan `{pesanan, hari, waktu}`,
+- `POST /api/langganan/perpanjang` dari pusat: badan `{pesanan, hari, waktu, paket?}`,
   header `X-Tanda` = HMAC-SHA256 badan dengan `LANGGANAN_KUNCI`; waktu ±10 menit;
   nomor pesanan yang sama tidak dihitung dua kali. Tanpa kunci di `.env` = 404.
+  `paket` (kasir | usaha | juragan, 25-10) ikut diganti; `hari: 0` + `paket` =
+  naik/turun paket di tengah masa aktif. Paket salah ketik = 422, tidak ada yang berubah.
 - Bayar lebih awal disambung dari tanggal akhir; habis = terkunci lagi.
 - Manual (mis. transfer): `php artisan langganan tambah 30`, `... kunci`, `... lepas`.
 

@@ -75,6 +75,21 @@ return [
         'kunci' => env('LANGGANAN_KUNCI', ''),
     ],
 
+    // Paket langganan (PaketService). Urutan = tingkat: paket di kanan dapat
+    // semua modul paket di kirinya. Fitur yang TIDAK tercantum di 'modul' ada
+    // di semua paket — termasuk semua yang menyentuh uang: kasir, rekap,
+    // pembukuan, setoran, pengeluaran, upah, F&B, titip jual. Juragan sama
+    // dengan Usaha di sisi kode; bedanya layanan (pengawasan harian).
+    'paket' => [
+        'urutan' => ['kasir', 'usaha', 'juragan'],
+        'modul' => [
+            'barang'        => 'usaha',   // stok sabun/semir/lap + takaran otomatis
+            'promo'         => 'usaha',   // promo pelanggan setia
+            'aturan_harian' => 'usaha',   // potongan & kompensasi otomatis tiap hari
+            'foto'          => 'usaha',   // foto kondisi & kenali mobil dari foto
+        ],
+    ],
+
     // Integrasi Gemini (untuk kendaraan yang tidak ada di database)
     'gemini' => [
         'key'   => env('GEMINI_API_KEY'),

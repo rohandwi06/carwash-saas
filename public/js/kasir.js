@@ -124,6 +124,18 @@ const MENU_OWNER  = {layarDashboard: "drItemDashboard",
 /* Layar pembuka tiap role. Kasir mendarat di Kasir karena Dashboard —
    bekas layar pembuka lama — kini tertutup untuknya. */
 function layarAwal(){ return ROLE==="owner" ? "layarDashboard" : "layarHome"; }
+/* Paket langganan cucian (PaketService di server): modul yang mati
+   disembunyikan lewat kelas tanpa-<modul> di <body> — elemen ber-data-modul,
+   dari blade maupun dari JS, ikut hilang (kasir.css) — dan tidak dipanggil ke
+   server. Bawaannya semua nyala: server lama tanpa /langganan tetap utuh. */
+let MODUL_MATI = new Set();
+const punya = modul => !MODUL_MATI.has(modul);
+const LAYAR_MODUL = {layarBarang: "barang"};
+function terapkanPaket(modul){
+  MODUL_MATI = new Set(Object.keys(modul || {}).filter(m => !modul[m]));
+  [...document.body.classList].filter(k => k.startsWith("tanpa-")).forEach(k => document.body.classList.remove(k));
+  MODUL_MATI.forEach(m => document.body.classList.add("tanpa-"+m));
+}
 
 function terapkanBatasRole(){
   Object.values(MENU_OWNER).forEach(id => {
@@ -556,6 +568,8 @@ function pergi(id){
   // localStorage, jadi akun owner yang logout lalu diganti kasir akan
   // membuka layar owner. Dibelokkan ke layar awalnya, bukan dibiarkan kosong.
   if(LAYAR_OWNER.includes(id) && ROLE!=="owner") id = layarAwal();
+  // Sama untuk layar modul di luar paket cucian ini (mis. Barang).
+  if(LAYAR_MODUL[id] && !punya(LAYAR_MODUL[id])) id = layarAwal();
   if(id==="layarFnb") renderFnb();
   if(id==="layarMenuFnb"){ halPengaturan = "menu"; renderMenuFnb(true); }   // selalu mulai dari menunya
   // Kalender Upah & potongan digambar renderPekerja() -> renderPenyesuaian(),
@@ -1035,6 +1049,7 @@ let promoTimer = null;
 
 function jadwalCekPromo(){
   clearTimeout(promoTimer);
+  if(!punya("promo")) return;
   promoTimer = setTimeout(cekPromo, 400);   // jangan tanya server tiap huruf
 }
 async function cekPromo(){
@@ -1394,7 +1409,7 @@ async function renderDrafts(){
       +     (pk? ' &middot; &#128119; '+esc(pk) : '')
       +     (jmlFnbDraft(d)? ' &middot; &#127860; '+jmlFnbDraft(d)+' item' : '')
       +     (d.tip? ' &middot; tip '+rp(d.tip) : '')
-      +     ((d.photos||[]).length? ' &middot; &#128247; '+d.photos.length : '')+'</span>'
+      +     (punya("foto") && (d.photos||[]).length? ' &middot; &#128247; '+d.photos.length : '')+'</span>'
       +   (d.note? '<span class="draft-note">&#128221; '+esc(d.note)+'</span>' : '')
       +   '<span class="draft-jam">'+jam(d.created_at)+(d.created_by? ' &middot; '+esc(d.created_by):'')+'</span>'
       + '</button>'
@@ -1453,7 +1468,7 @@ async function simpanDraft(){
    dihapus kasir tidak tertinggal. Draft lama tanpa foto & tanpa foto baru
    tidak menyentuh server sama sekali. Mengembalikan jumlah yang gagal. */
 async function simpanFotoDraft(d, foto){
-  if(!d || (!foto.length && !(d.photos||[]).length)) return 0;
+  if(!d || !punya("foto") || (!foto.length && !(d.photos||[]).length)) return 0;
   let gagalN = 0;
   try{ if((d.photos||[]).length) await api("/drafts/"+d.id+"/photos",{method:"DELETE"}); }
   catch(e){ return foto.length; }
@@ -1515,7 +1530,7 @@ function lanjutDraft(id){
   tampilkan("layarConfirm");
   // Foto draft dimuat menyusul; kasir yang sudah pindah ke cucian lain
   // (draftAktif berganti) tidak kebagian foto draft ini.
-  if((d.photos||[]).length){
+  if(punya("foto") && (d.photos||[]).length){
     muatFotoDraft(d).then(f => {
       if(draftAktif !== d.id) return;
       fotoCuci = f.concat(fotoCuci).slice(0, FOTO_MAKS);
@@ -2283,7 +2298,7 @@ function jenisAturanHal(){
 
 async function renderAturan(){
   const jenis = jenisAturanHal();
-  if(!jenis || !$("blokAturan")) return;
+  if(!jenis || !$("blokAturan") || !punya("aturan_harian")) return;
   const komp = jenis === "kompensasi";
   $("aturanJudul").innerHTML = "&#128260; "+(komp ? "Kompensasi" : "Potongan")+" otomatis harian";
   $("aturanKet").innerHTML = komp
@@ -3832,7 +3847,7 @@ function trxHTML(r, opsi){
     ...(r.customer_phone ? [["Telepon", esc(r.customer_phone)]] : []),
     ["Jenis", kt? esc(kt.label) : esc(r.category)],
     ["Layanan", adalahMotor(r.category) ? "Cuci Motor" : (sv? esc(sv.label) : esc(r.service))],
-    ...((r.photos||[]).length ? [["Foto kondisi", tombolFoto(r)]] : []),
+    ...(punya("foto") && (r.photos||[]).length ? [["Foto kondisi", tombolFoto(r)]] : []),
     ...(r.promo_discount ? [["Promo pelanggan setia", esc(labelPromo(r.promo_rule))+" &middot; -"+rp(r.promo_discount)]] : []),
     ["Pembayaran", infoBayar(r.payment_method).panjang],
     ["Tip", r.tip? rp(r.tip) : "&mdash;"],
@@ -3954,7 +3969,7 @@ async function editTrx(id){
   // Barang yang terpotong cucian ini. Gagal dimuat (server belum punya
   // tabel barang) = bagiannya tidak ditampilkan, koreksi lain tetap jalan.
   let barangTrx = null;
-  if(barang.length){
+  if(punya("barang") && barang.length){
     try{ barangTrx = await api("/transactions/"+id+"/supplies"); }catch(e){ barangTrx = null; }
   }
   const peringatan = adHilang.length
@@ -7204,7 +7219,7 @@ const UPAH_PROMO = [
 ];
 
 async function renderPromoPengaturan(){
-  if(ROLE !== "owner" || !$("promoPengaturan")) return;
+  if(ROLE !== "owner" || !$("promoPengaturan") || !punya("promo")) return;
   const no = ++promoMuat;
   try{
     const d = await api("/promo");
@@ -8093,16 +8108,18 @@ async function hapusProduk(id){
 /* ---------- INIT ---------- */
 /* Langganan cucian yang mendaftar sendiri: sebelum aktif, server menolak
    pencatatan (HTTP 402) tapi pengaturan tetap boleh. Pita ini hanya
-   memberi tahu; pesannya dari server dan sengaja netral. Server lama tanpa
-   rute /langganan = 404 = tidak ada pita. */
+   memberi tahu; pesannya dari server dan sengaja netral. Jawaban yang sama
+   membawa modul paket cucian ini (terapkanPaket). Server lama tanpa rute
+   /langganan = 404 = tidak ada pita, semua modul nyala. */
 async function muatLangganan(){
   const pita = $("pitaLangganan");
-  if (!pita) return;
   try{
     const s = await api("/langganan");
+    terapkanPaket(s && s.modul);
+    if (!pita) return;
     pita.textContent = s && !s.aktif ? (s.pesan || "Langganan cucian ini belum aktif.") : "";
     pita.classList.toggle("hidden", !(s && !s.aktif));
-  }catch(e){ pita.classList.add("hidden"); }
+  }catch(e){ terapkanPaket(null); if (pita) pita.classList.add("hidden"); }
 }
 /* ---------- BARANG (sabun, semir, lap) ----------
    Perlengkapan cuci yang habis dipakai — terpisah dari menu F&B karena
@@ -8191,6 +8208,7 @@ function barangCuciDikirim(){
 }
 
 async function muatTandaBarang(){
+  if(!punya("barang")) return;
   try{ barang = await api("/supplies"); gambarTandaBarang(); }catch(e){ /* tabel belum ada: tanda dibiarkan */ }
 }
 
@@ -8435,9 +8453,9 @@ async function hapusBarang(id){
 async function mulaiAplikasi(){
   try{
     // Status shift diambil DULU: kalau kasir di luar jam operasional, layar
-    // terkunci muncul sebelum layar lain sempat memuat data.
-    await muatShift();
-    muatLangganan();
+    // terkunci muncul sebelum layar lain sempat memuat data. Paket dimuat
+    // bersamaan: menu modul yang mati sudah hilang sebelum layar pertama.
+    await Promise.all([muatShift(), muatLangganan()]);
 
     // Layar dibuka DULUAN supaya tidak ada layar kosong selama data dimuat —
     // isinya terisi sendiri begitu siap. pergi() yang membelokkan kalau

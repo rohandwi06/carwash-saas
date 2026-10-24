@@ -121,6 +121,37 @@ login tidak akan pernah nyangkut.
 **Error 500:** baca baris terbawah `rapiin-app/storage/logs/laravel.log`.
 Penyebab tersering: permission `storage` bukan 755, atau PHP di bawah 8.2.
 
+## 9. Paket cucian (kasir / usaha / juragan)
+
+Kodenya satu untuk semua paket; paket hanya satu baris `paket` di tabel
+`settings` cucian itu (`PaketService`, daftar modul di `config/carwash.php`).
+Tanpa baris itu = semua modul nyala, jadi cucian lama tidak berubah.
+
+| Paket | Modul barang, promo, aturan harian, foto |
+|---|---|
+| `kasir` | mati: menunya hilang, rutenya 403, takaran & aturan otomatis berhenti |
+| `usaha` | nyala |
+| `juragan` | nyala (bedanya layanan pengawasan, bukan kode) |
+
+Tanpa Terminal: phpMyAdmin → **klik database cucian itu dulu** → tab SQL →
+ganti `usaha` dengan paketnya → Go. Aman dijalankan ulang.
+
+```sql
+INSERT INTO `settings` (`key`, `value`, `created_at`, `updated_at`)
+VALUES ('paket', 'usaha', NOW(), NOW())
+ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_at` = NOW();
+```
+
+Kembali ke semua modul (tanpa setelan paket):
+
+```sql
+DELETE FROM `settings` WHERE `key` = 'paket';
+```
+
+Dengan Terminal: `php artisan langganan paket usaha` / `... paket semua`.
+Turun paket tidak menghapus data; pengguna perlu muat ulang halaman (web)
+atau masuk ulang (aplikasi) supaya menunya ikut berubah.
+
 ---
 
 ## Situs demo

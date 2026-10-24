@@ -98,10 +98,12 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/drafts', [TransactionDraftController::class, 'store'])->middleware('langganan');
         Route::patch('/drafts/{draft}', [TransactionDraftController::class, 'update'])->middleware('langganan');
         Route::delete('/drafts/{draft}', [TransactionDraftController::class, 'destroy']);
-        Route::post('/drafts/{draft}/photos', [TransactionDraftController::class, 'storePhoto'])
-            ->middleware(['langganan', 'throttle:60,1']);
-        Route::get('/drafts/{draft}/photos/{nama}', [TransactionDraftController::class, 'showPhoto']);
-        Route::delete('/drafts/{draft}/photos', [TransactionDraftController::class, 'clearPhotos']);
+        Route::middleware('modul:foto')->group(function () {
+            Route::post('/drafts/{draft}/photos', [TransactionDraftController::class, 'storePhoto'])
+                ->middleware(['langganan', 'throttle:60,1']);
+            Route::get('/drafts/{draft}/photos/{nama}', [TransactionDraftController::class, 'showPhoto']);
+            Route::delete('/drafts/{draft}/photos', [TransactionDraftController::class, 'clearPhotos']);
+        });
 
         // Pekerja & upah. Kasir hanya MELIHAT daftarnya (untuk memilih siapa
         // yang mengerjakan cucian) dan versi yang ia terima sudah dipangkas
@@ -126,7 +128,7 @@ Route::middleware('pin.auth')->group(function () {
         Route::get('/receipts/{jenis}/{id}/link', [ReceiptController::class, 'link'])->whereNumber('id');
 
         // Promo pelanggan setia: status satu pelanggan (plat/telepon) di layar kasir.
-        Route::get('/promo/check', [PromoController::class, 'check']);
+        Route::get('/promo/check', [PromoController::class, 'check'])->middleware('modul:promo');
 
         // Draft F&B: catat pesanan dulu, penjualannya disimpan belakangan
         Route::get('/fnb-drafts', [FnbDraftController::class, 'index']);
@@ -140,11 +142,13 @@ Route::middleware('pin.auth')->group(function () {
 
         // Barang perlengkapan (sabun, semir, lap) — kasir boleh mencatat
         // pakai, beli, dan hitung sisa; mengatur jenis barang owner.
-        Route::get('/supplies', [SupplyController::class, 'index']);
-        Route::get('/supplies/{supply}/movements', [SupplyController::class, 'movements']);
-        Route::post('/supplies/{supply}/use', [SupplyController::class, 'use'])->middleware('langganan');
-        Route::post('/supplies/{supply}/purchase', [SupplyController::class, 'purchase'])->middleware('langganan');
-        Route::post('/supplies/{supply}/count', [SupplyController::class, 'count'])->middleware('langganan');
+        Route::middleware('modul:barang')->group(function () {
+            Route::get('/supplies', [SupplyController::class, 'index']);
+            Route::get('/supplies/{supply}/movements', [SupplyController::class, 'movements']);
+            Route::post('/supplies/{supply}/use', [SupplyController::class, 'use'])->middleware('langganan');
+            Route::post('/supplies/{supply}/purchase', [SupplyController::class, 'purchase'])->middleware('langganan');
+            Route::post('/supplies/{supply}/count', [SupplyController::class, 'count'])->middleware('langganan');
+        });
 
         // AI (Gemini) — hanya untuk kendaraan yang tidak ditemukan search lokal.
         //
@@ -159,14 +163,16 @@ Route::middleware('pin.auth')->group(function () {
         // BARU dalam satu menit.
         Route::post('/ai/classify-vehicle', [AiVehicleController::class, 'classify'])
             ->middleware('throttle:20,1');
-        // Kenali dari foto: tanpa cache (tiap foto berbeda), jadi batasnya lebih ketat.
-        Route::post('/ai/classify-photo', [AiVehicleController::class, 'classifyPhoto'])
-            ->middleware('throttle:10,1');
+        Route::middleware('modul:foto')->group(function () {
+            // Kenali dari foto: tanpa cache (tiap foto berbeda), jadi batasnya lebih ketat.
+            Route::post('/ai/classify-photo', [AiVehicleController::class, 'classifyPhoto'])
+                ->middleware('throttle:10,1');
 
-        // Foto kondisi kendaraan: diunggah sesudah transaksinya tersimpan.
-        Route::post('/transactions/{transaction}/photos', [FotoKendaraanController::class, 'store'])
-            ->middleware('throttle:60,1');
-        Route::get('/photos/{vehiclePhoto}', [FotoKendaraanController::class, 'show']);
+            // Foto kondisi kendaraan: diunggah sesudah transaksinya tersimpan.
+            Route::post('/transactions/{transaction}/photos', [FotoKendaraanController::class, 'store'])
+                ->middleware('throttle:60,1');
+            Route::get('/photos/{vehiclePhoto}', [FotoKendaraanController::class, 'show']);
+        });
         Route::post('/ai/save-vehicle', [AiVehicleController::class, 'save']);
 
         // Laporan / pembukuan
@@ -202,8 +208,10 @@ Route::middleware('pin.auth')->group(function () {
         Route::put('/wage-sharing', [WageSharingController::class, 'update']);
 
         // Pengaturan promo pelanggan setia
-        Route::get('/promo', [PromoController::class, 'index']);
-        Route::put('/promo', [PromoController::class, 'update']);
+        Route::middleware('modul:promo')->group(function () {
+            Route::get('/promo', [PromoController::class, 'index']);
+            Route::put('/promo', [PromoController::class, 'update']);
+        });
 
         // Pekerja: tambah/ubah/hapus + biodata (NIK, alamat, tanggal lahir)
         Route::post('/workers', [WorkerController::class, 'store']);
@@ -214,15 +222,17 @@ Route::middleware('pin.auth')->group(function () {
         Route::post('/products', [ProductController::class, 'store']);
         Route::patch('/products/{product}', [ProductController::class, 'update']);
         Route::delete('/products/{product}', [ProductController::class, 'destroy']);
-        Route::post('/supplies', [SupplyController::class, 'store']);
-        Route::patch('/supplies/{supply}', [SupplyController::class, 'update']);
-        Route::delete('/supplies/{supply}', [SupplyController::class, 'destroy']);
+        Route::middleware('modul:barang')->group(function () {
+            Route::post('/supplies', [SupplyController::class, 'store']);
+            Route::patch('/supplies/{supply}', [SupplyController::class, 'update']);
+            Route::delete('/supplies/{supply}', [SupplyController::class, 'destroy']);
+        });
 
         // Koreksi isi transaksi yang salah input (menu Pembukuan). Owner-only
         // karena mengubah omzet & upah pekerja hari yang sudah lewat — sama
         // alasannya dengan wage-adjustments di bawah.
         Route::patch('/transactions/{transaction}', [TransactionController::class, 'update']);
-        Route::get('/transactions/{transaction}/supplies', [SupplyController::class, 'forTransaction']);
+        Route::get('/transactions/{transaction}/supplies', [SupplyController::class, 'forTransaction'])->middleware('modul:barang');
         // Cucian tanggal lampau (isi banyak baris dari Pembukuan)
         Route::post('/transactions/backdated', [TransactionController::class, 'storeBackdated'])->middleware('langganan');
 
@@ -278,7 +288,7 @@ Route::middleware('pin.auth')->group(function () {
         Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy']);
         // Ejaan kasir yang dipelajari aplikasi (VehicleMemoryService)
         Route::get('/vehicle-aliases', [VehicleController::class, 'aliases']);
-        Route::delete('/photos/{vehiclePhoto}', [FotoKendaraanController::class, 'destroy']);
+        Route::delete('/photos/{vehiclePhoto}', [FotoKendaraanController::class, 'destroy'])->middleware('modul:foto');
         Route::delete('/vehicle-aliases/{vehicleAlias}', [VehicleController::class, 'destroyAlias']);
 
         Route::get('/wash-services', [WashServiceController::class, 'index']);
@@ -324,10 +334,12 @@ Route::middleware('pin.auth')->group(function () {
 
         // Aturan otomatis harian (potongan & kompensasi untuk yang kerja hari
         // itu). Owner-only: menggerakkan uang pekerja & laba tiap hari.
-        Route::get('/daily-rules', [\App\Http\Controllers\DailyRuleController::class, 'index']);
-        Route::post('/daily-rules', [\App\Http\Controllers\DailyRuleController::class, 'store']);
-        Route::patch('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'update']);
-        Route::delete('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'destroy']);
+        Route::middleware('modul:aturan_harian')->group(function () {
+            Route::get('/daily-rules', [\App\Http\Controllers\DailyRuleController::class, 'index']);
+            Route::post('/daily-rules', [\App\Http\Controllers\DailyRuleController::class, 'store']);
+            Route::patch('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'update']);
+            Route::delete('/daily-rules/{dailyRule}', [\App\Http\Controllers\DailyRuleController::class, 'destroy']);
+        });
 
         // Gaji bulanan tiap pekerja (cara upah "per bulan"). Owner-only.
         Route::get('/worker-salaries', [\App\Http\Controllers\WorkerSalaryController::class, 'index']);

@@ -25,20 +25,26 @@ Artisan::command('photos:prune', function (\App\Services\FotoKendaraanService $f
 })->purpose('Hapus foto kondisi kendaraan yang lebih tua dari 60 hari');
 Schedule::command('photos:prune')->dailyAt('03:30');
 
-// Langganan cucian (LanggananService): lihat, kunci, aktifkan manual, lepas.
+// Langganan cucian (LanggananService) & paketnya (PaketService).
 //   php artisan langganan              -> status
 //   php artisan langganan kunci        -> server baru, belum bayar
 //   php artisan langganan tambah 30    -> tambah 30 hari (mis. bayar transfer)
 //   php artisan langganan lepas        -> kembali ke tagihan manual (tanpa kunci)
-Artisan::command('langganan {aksi=status} {hari=30}', function (\App\Services\LanggananService $l, string $aksi, int $hari) {
+//   php artisan langganan paket usaha  -> ganti paket: kasir | usaha | juragan
+//   php artisan langganan paket semua  -> tanpa setelan paket (semua modul)
+Artisan::command('langganan {aksi=status} {nilai?}', function (\App\Services\LanggananService $l, \App\Services\PaketService $p, string $aksi, ?string $nilai = null) {
     match ($aksi) {
         'kunci' => $l->mulaiTerkunci(),
-        'tambah' => $l->perpanjang($hari),
+        'tambah' => $l->perpanjang((int) ($nilai ?? 30)),
         'lepas' => $l->lepas(),
+        'paket' => $nilai === 'semua' ? $p->lepas() : $p->ganti((string) $nilai),
         'status' => null,
-        default => throw new \InvalidArgumentException('Aksi: status | kunci | tambah N | lepas'),
+        default => throw new \InvalidArgumentException('Aksi: status | kunci | tambah N | lepas | paket NAMA'),
     };
     $s = $l->status();
     $this->info(! $s['wajib'] ? 'Tanpa kunci langganan (tagihan manual).'
         : ($s['aktif'] ? "Aktif sampai {$s['sampai']} (sisa {$s['sisa_hari']} hari)." : 'Belum aktif / habis: pencatatan terkunci.'));
+    $mati = array_keys(array_filter($p->modul(), fn ($nyala) => ! $nyala));
+    $this->info('Paket: '.($p->paket() ?? 'tanpa setelan (semua modul)')
+        .($mati ? '. Modul mati: '.implode(', ', $mati).'.' : '.'));
 })->purpose('Status & aktivasi langganan cucian');

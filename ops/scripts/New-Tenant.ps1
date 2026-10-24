@@ -23,7 +23,9 @@ param(
     [Parameter(Mandatory)] [string]$Slug,
     [Parameter(Mandatory)] [string]$NamaBisnis,
     [Parameter(Mandatory)] [string]$Owner,
-    [ValidateSet('kecil', 'sedang', 'besar')] [string]$PaketHarga = 'kecil',
+    # Paket langganan (deploy\cpanel\README.md bagian 9). Cucian lama di
+    # tenants\ masih mencatat kecil/sedang/besar dari harga lama.
+    [ValidateSet('kasir', 'usaha', 'juragan')] [string]$PaketHarga = 'usaha',
     [string]$ZonaWaktu,
     [string]$OwnerUsername = 'owner',
     [switch]$Terapkan,
@@ -155,10 +157,13 @@ Write-Host "  1. deploy\cpanel\buat-paket.ps1 -FolderApp $($a.folder_app)$(if ($
 Write-Host "     Unggah app.zip ke ~/$($a.folder_app) dan public.zip ke ~/public_html, lalu ekstrak."
 Write-Host "  2. Salin secrets\$Slug.env menjadi ~/$($a.folder_app)/.env, permission 600."
 Write-Host "  3. phpMyAdmin -> $dbNama -> impor database.sql dari paket yang sama$(if ($Demo) { ' (buat dengan -Database demo)' })."
+if (-not $Demo -and $PaketHarga -eq 'kasir') {
+    Write-Host "     Paket kasir: jalankan juga SQL paket di deploy\cpanel\README.md bagian 9 (ganti 'usaha' -> 'kasir')."
+}
 
 Write-Host "  4. SSL/TLS Status -> Run AutoSSL untuk $domain."
 if ($Demo) {
-    Write-Host "  5. Cron: 0 3 * * * php ~/$($a.folder_app)/artisan demo:reset >/dev/null 2>&1   (reset data tiap malam)"
+    Write-Host "  5. Cron demo:reset jam 03.00: salin barisnya dari deploy\cpanel\README.md 'Situs demo' (mencari PHP 8.2+, menulis log)."
 } else {
     Write-Host "  5. Cron: * * * * * php ~/$($a.folder_app)/artisan schedule:run >/dev/null 2>&1"
 }

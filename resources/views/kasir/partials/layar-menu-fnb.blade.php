@@ -23,7 +23,7 @@
               <span class="mpk-sub">Cara hitung upah, karyawan training, dan status pekerja</span></span>
             <span class="mpk-panah">&#8250;</span>
           </button>
-          <button class="mpk-baris" data-tab="promo" onclick="setTabPengaturan('promo')">
+          <button class="mpk-baris" data-tab="promo" data-modul="promo" onclick="setTabPengaturan('promo')">
             <span class="mpk-ikon">&#11088;</span>
             <span class="mpk-teks"><span class="mpk-judul">Promo pelanggan setia</span>
               <span class="mpk-sub">Cuci gratis atau potongan untuk pelanggan yang sering datang</span></span>
@@ -205,7 +205,7 @@
         </div>
 
         {{-- ================= PROMO ================= --}}
-        <div class="set-grup" data-grup="promo">
+        <div class="set-grup" data-grup="promo" data-modul="promo">
           <div class="cat-blok">
             <h3>&#11088; Promo pelanggan setia</h3>
             <div id="promoPengaturan"></div>
