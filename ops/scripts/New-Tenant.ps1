@@ -84,6 +84,8 @@ $isiEnv = Expand-Template 'tenant.env' @{
     OWNER_PASSWORD = $ownerPw
     GEMINI_API_KEY = $gemini
     GEMINI_MODEL   = $a.gemini_model
+    # Satu kunci per cucian: bocornya satu kunci tidak membuka cucian lain.
+    LANGGANAN_KUNCI = (New-Secret 40)
 }
 Write-Utf8 $pRahasia $isiEnv
 
@@ -173,4 +175,8 @@ if ($Demo) {
     Write-Host "  6. Serahkan login owner: $OwnerUsername / (lihat secrets\$Slug.env) - minta langsung diganti."
 }
 Write-Host "  7. Isi versi & mulai di tenants\$Slug.json$(if (-not $Demo) { ', status -> percobaan' }), commit."
+if (-not $Demo) {
+    Write-Host "  8. Percobaan 30 hari (paket Usaha penuh), lalu pencatatan terkunci sendiri bila belum diperpanjang:"
+    Write-Host "     scripts\Set-Langganan.ps1 -Slug $Slug -Hari 30 -Paket usaha -Catatan 'percobaan'   (lihat PANDUAN-TAGIHAN.md)"
+}
 

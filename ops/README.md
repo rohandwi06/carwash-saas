@@ -29,6 +29,14 @@ Siapkan cucian baru (tanpa `-Terapkan` tidak menyentuh hosting sama sekali):
 powershell -ExecutionPolicy Bypass -File scripts\New-Tenant.ps1 -Slug budi -NamaBisnis "BUDI CARWASH" -Owner "Pak Budi"
 ```
 
+Aktifkan / perpanjang langganan atau ganti paket (tagihan manual, tanpa
+Terminal di cPanel) — alur lengkap & contoh pesan tagihan di
+[PANDUAN-TAGIHAN.md](PANDUAN-TAGIHAN.md):
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\Set-Langganan.ps1 -Slug budi -Hari 30 -Paket usaha -Catatan "transfer BCA 26/10"
+```
+
 Variabel lingkungan yang dibaca skrip (tidak pernah ditulis ke repo):
 
 | Variabel | Untuk |

@@ -13,9 +13,10 @@ class LanggananController extends Controller
     public function __construct(private LanggananService $langganan, private PaketService $paket) {}
 
     /**
-     * Status untuk aplikasi & web: pita "belum aktif", dan paket + modul
-     * yang menentukan menu mana yang tampil. Modul yang tidak ada di
-     * `modul` (atau server lama tanpa kunci ini) dianggap nyala.
+     * Status untuk aplikasi & web: pita "belum aktif" (atau pengingat tujuh
+     * hari terakhir, khusus owner), dan paket + modul yang menentukan menu
+     * mana yang tampil. Modul yang tidak ada di `modul` (atau server lama
+     * tanpa kunci ini) dianggap nyala.
      */
     public function show(Request $request): JsonResponse
     {
@@ -24,6 +25,7 @@ class LanggananController extends Controller
 
         return response()->json(['data' => $status + [
             'pesan' => $status['aktif'] ? null : ($owner ? LanggananService::PESAN_OWNER : LanggananService::PESAN_KASIR),
+            'pengingat' => $owner ? $this->langganan->pengingat() : null,
         ] + $this->paket->status()]);
     }
 

@@ -8108,7 +8108,8 @@ async function hapusProduk(id){
 /* ---------- INIT ---------- */
 /* Langganan cucian yang mendaftar sendiri: sebelum aktif, server menolak
    pencatatan (HTTP 402) tapi pengaturan tetap boleh. Pita ini hanya
-   memberi tahu; pesannya dari server dan sengaja netral. Jawaban yang sama
+   memberi tahu; pesannya dari server dan sengaja netral. Tujuh hari terakhir
+   masa aktif, owner melihat pengingatnya di pita yang sama. Jawaban yang sama
    membawa modul paket cucian ini (terapkanPaket). Server lama tanpa rute
    /langganan = 404 = tidak ada pita, semua modul nyala. */
 async function muatLangganan(){
@@ -8117,8 +8118,9 @@ async function muatLangganan(){
     const s = await api("/langganan");
     terapkanPaket(s && s.modul);
     if (!pita) return;
-    pita.textContent = s && !s.aktif ? (s.pesan || "Langganan cucian ini belum aktif.") : "";
-    pita.classList.toggle("hidden", !(s && !s.aktif));
+    const teks = !s ? "" : !s.aktif ? (s.pesan || "Langganan cucian ini belum aktif.") : (s.pengingat || "");
+    pita.textContent = teks;
+    pita.classList.toggle("hidden", !teks);
   }catch(e){ terapkanPaket(null); if (pita) pita.classList.add("hidden"); }
 }
 /* ---------- BARANG (sabun, semir, lap) ----------

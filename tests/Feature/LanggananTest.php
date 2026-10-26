@@ -107,4 +107,40 @@ class LanggananTest extends TestCase
         $this->postJson('/api/langganan/perpanjang', ['pesanan' => 'x', 'hari' => 30, 'waktu' => time()])
             ->assertStatus(404);
     }
+
+    /** Tagihan manual (26/10): owner diingatkan tujuh hari terakhir, kasir tidak. */
+    public function test_pengingat_tujuh_hari_terakhir_hanya_untuk_owner(): void
+    {
+        $pita = function (string $sekarang, string $peran = 'owner') {
+            CarbonImmutable::setTestNow($sekarang);
+            $t = app(AuthTokenService::class)->issue($peran, ucfirst($peran));
+
+            return $this->getJson('/api/langganan', ['Authorization' => 'Bearer '.$t['token']])->assertOk()->json('data');
+        };
+
+        $this->assertNull($pita('2026-10-19 10:00:00')['pengingat'], 'Cucian lama tanpa kunci langganan.');
+
+        CarbonImmutable::setTestNow('2026-10-19 10:00:00');
+        $this->l()->perpanjang(30); // aktif sampai 2026-11-17
+
+        $this->assertNull($pita('2026-11-09 08:00:00')['pengingat'], 'Sisa 8 hari: belum.');
+        $d = $pita('2026-11-10 08:00:00');
+        $this->assertSame('Langganan cucian ini berakhir 7 hari lagi (17 November 2026). Sesudahnya pencatatan terkunci; '
+            .'informasi perpanjangan dikirim ke email atau WhatsApp owner.', $d['pengingat']);
+        $this->assertNull($d['pesan']);
+        $this->assertNull($pita('2026-11-10 08:00:00', 'kasir')['pengingat']);
+        $this->assertStringContainsString('berakhir besok', $pita('2026-11-16 08:00:00')['pengingat']);
+        $this->assertStringContainsString('berakhir hari ini', $pita('2026-11-17 23:00:00')['pengingat']);
+
+        // Habis: pita kunci yang tampil, pengingatnya hilang.
+        $d = $pita('2026-11-18 08:00:00');
+        $this->assertFalse($d['aktif']);
+        $this->assertNull($d['pengingat']);
+        $this->assertSame(LanggananService::PESAN_OWNER, $d['pesan']);
+
+        // Netral: tanpa harga, tanpa tautan (aturan Play Store).
+        CarbonImmutable::setTestNow('2026-11-12 08:00:00');
+        $this->assertDoesNotMatchRegularExpression('/\brp\b|rp\s?\d|http|bayar|harga/i', (string) $this->l()->pengingat());
+        CarbonImmutable::setTestNow();
+    }
 }

@@ -23,9 +23,12 @@ class LanggananService
     public const KEY = 'langganan_sampai';
 
     public const PESAN_OWNER = 'Langganan cucian ini belum aktif. Pengaturan tetap bisa diubah; '
-        . 'informasi aktivasi sudah dikirim ke email owner.';
+        . 'informasi aktivasi sudah dikirim ke email atau WhatsApp owner.';
 
     public const PESAN_KASIR = 'Langganan cucian ini belum aktif. Hubungi owner cucian.';
+
+    /** Owner diingatkan sejak sekian hari sebelum masa aktif habis. */
+    public const HARI_PENGINGAT = 7;
 
     /** @return array{wajib: bool, aktif: bool, sampai: ?string, sisa_hari: ?int} */
     public function status(): array
@@ -54,6 +57,30 @@ class LanggananService
     public function aktif(): bool
     {
         return $this->status()['aktif'];
+    }
+
+    /**
+     * Pita pengingat untuk owner selama tujuh hari terakhir masa aktif, supaya
+     * tagihan manual sempat dibayar sebelum pencatatan terkunci. Netral seperti
+     * pesan kunci: tanpa harga dan tanpa tautan (aturan Play Store). null =
+     * belum waktunya, sudah habis (pita kunci yang tampil), atau cucian lama.
+     */
+    public function pengingat(): ?string
+    {
+        $s = $this->status();
+        if (! $s['wajib'] || ! $s['aktif'] || $s['sisa_hari'] > self::HARI_PENGINGAT) {
+            return null;
+        }
+
+        $kapan = match ($s['sisa_hari']) {
+            0 => 'hari ini',
+            1 => 'besok',
+            default => $s['sisa_hari'].' hari lagi',
+        };
+        $tanggal = CarbonImmutable::createFromFormat('!Y-m-d', $s['sampai'])->locale('id')->translatedFormat('j F Y');
+
+        return "Langganan cucian ini berakhir {$kapan} ({$tanggal}). Sesudahnya pencatatan terkunci; "
+            .'informasi perpanjangan dikirim ke email atau WhatsApp owner.';
     }
 
     /** Server baru dari pendaftaran mandiri: terkunci sampai dibayar. */
