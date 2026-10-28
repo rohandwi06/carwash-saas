@@ -97,8 +97,12 @@ class ReportController extends Controller
         $trx   = Transaction::with('workers:id,name', 'addons')
             ->whereDate('date', $date)->orderBy('queue_no')->get();
         $fnb   = FnbSale::valid()->with('items')->whereDate('date', $date)->orderBy('id')->get();
+        // Kasir (permintaan owner 28/10) cukup uang masuk & setoran: upah,
+        // kompensasi, dan laba bersih hanya di laporan owner. Sama dengan
+        // kartu Rekap Hari Ini yang disembunyikan dari kasir.
+        $owner = $request->attributes->get('auth_role') === 'owner';
 
-        return response()->streamDownload(function () use ($recap, $trx, $fnb, $usaha) {
+        return response()->streamDownload(function () use ($recap, $trx, $fnb, $usaha, $owner) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // BOM agar Excel baca UTF-8
 
@@ -155,10 +159,14 @@ class ReportController extends Controller
             fputcsv($out, ['F&B', $recap['fnb_total'] ?: 'kosong'], ';');
             fputcsv($out, ['Cash F&B', $recap['fnb_cash'] ?: 'kosong'], ';');
             fputcsv($out, ['Cash Total', $recap['cash_total']], ';');
-            fputcsv($out, ['Upah pekerja', $recap['wages']], ';');
+            if ($owner) {
+                fputcsv($out, ['Upah pekerja', $recap['wages']], ';');
+            }
             fputcsv($out, ['Pengeluaran', $recap['expenses']], ';');
-            fputcsv($out, ['Kompensasi karyawan', $recap['compensation'] ?: 'kosong'], ';');
-            fputcsv($out, ['LABA BERSIH', $recap['profit']], ';');
+            if ($owner) {
+                fputcsv($out, ['Kompensasi karyawan', $recap['compensation'] ?: 'kosong'], ';');
+                fputcsv($out, ['LABA BERSIH', $recap['profit']], ';');
+            }
 
             fclose($out);
         }, "laporan-{$slug}-{$date}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);

@@ -41,12 +41,14 @@
           <div class="sub-blok" id="rekapMasukTotal"></div>
         </div>
 
-        <div class="cat-blok">
+        {{-- Uang keluar & Laba bersih: owner saja (permintaan owner 28/10).
+             Kasir cukup uang masuk dan berapa yang disetor. --}}
+        <div class="cat-blok" id="blokRekapKeluar">
           <h3>&#128184; Uang keluar</h3>
           <div id="rekapKeluar"></div>
         </div>
 
-        <div class="cat-blok blok-laba">
+        <div class="cat-blok blok-laba" id="blokRekapLaba">
           <h3>&#9989; Laba bersih</h3>
           <div id="rekapLaba"></div>
         </div>
@@ -66,7 +68,7 @@
             <div class="rincian-omzet hidden" id="rincianOmzet"></div>
           </div>
           <div class="stat"><div class="s-label">Transaksi</div><div class="s-nilai" id="statTrx">0</div></div>
-          <div class="stat laba"><div class="s-label">Laba Bersih</div><div class="s-nilai" id="statLaba">Rp 0</div></div>
+          <div class="stat laba" id="statLabaKotak"><div class="s-label">Laba Bersih</div><div class="s-nilai" id="statLaba">Rp 0</div></div>
         </div>
         <button class="btn-export" onclick="unduhCSV()">&#128190; Unduh Laporan Hari Ini (CSV)</button>
       </div>

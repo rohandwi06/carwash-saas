@@ -2996,6 +2996,12 @@ async function renderRekap(){
 
     renderRekapBuku(h.books || []);
 
+    // Uang keluar (upah pekerja, pengeluaran) & Laba bersih hanya untuk owner
+    // (permintaan owner 28/10): kasir cukup melihat uang masuk dan berapa
+    // yang harus disetor. Kartunya disembunyikan DAN tidak diisi.
+    const owner = ROLE === "owner";
+    ["blokRekapKeluar", "blokRekapLaba", "statLabaKotak"].forEach(id => $(id).classList.toggle("hidden", !owner));
+
     // ---- 2. Uang keluar ----
     // Sama dengan potongan di BookkeepingService::dailyRecap(): setoran ke
     // penitip bukan biaya, hak penitip bukan pendapatan. Daftar pengeluaran
@@ -3004,7 +3010,7 @@ async function renderRekap(){
     const keluar = h.expense_list || [];
     const uangKeluar = (h.wages||0) + (h.expenses||0) - (h.consignor_payout||0) + (h.consignor_share||0)
       + (h.compensation||0);
-    $("rekapKeluar").innerHTML =
+    $("rekapKeluar").innerHTML = !owner ? "" :
       '<div class="cat-baris"><span>Upah pekerja</span><b class="merah">'+rpKeluar(h.wages)+'</b></div>'
       + (keluar.length===0
         ? '<div class="cat-baris"><span>Pengeluaran</span><b class="merah">-'+rp(0)+'</b></div>'
@@ -3020,7 +3026,7 @@ async function renderRekap(){
       +'<div class="cat-baris tebal"><span>UANG KELUAR</span><b class="merah">-'+rp(uangKeluar)+'</b></div>';
 
     // ---- 3. Laba bersih ----
-    $("rekapLaba").innerHTML =
+    $("rekapLaba").innerHTML = !owner ? "" :
       '<div class="cat-baris"><span>Uang masuk</span><b>'+rp(masuk)+'</b></div>'
       +'<div class="cat-baris"><span>Uang keluar</span><b class="merah">-'+rp(uangKeluar)+'</b></div>'
       +'<div class="cat-baris tebal"><span>LABA BERSIH</span><b class="'+(h.profit>=0?"hijau":"merah")+'">'+rp(h.profit)+'</b></div>';
@@ -3050,7 +3056,7 @@ async function renderRekap(){
     $("statMasuk").textContent = rp(omzetHari(h));
     gambarOmzetRekap(h, tipRows);
     $("statTrx").textContent = h.vehicles + " kendaraan";
-    $("statLaba").textContent = rp(h.profit);
+    $("statLaba").textContent = owner ? rp(h.profit) : "";
     renderApproval();
     renderApprovalSetoran();
     // Jendela detail yang sedang terbuka ikut disegarkan — mis. sesudah satu
